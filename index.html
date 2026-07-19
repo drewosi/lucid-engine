@@ -461,19 +461,19 @@
       <div class="caps">
         <div class="cap rv" style="--i:0"><span class="anno">// in your browser's RAM</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="3" y="3" width="20" height="20"/><rect x="8" y="8" width="10" height="10"/></svg>
-          <h3>Context Engine<span class="flag live">LIVE</span></h3><p>Drop a project folder into the workbench. Code, docs, decisions — read into memory, ready to be asked about.</p></div>
+          <h3>Context Engine<span class="flag live">LIVE</span></h3><p>Drop a project folder into the workbench. Smart selection scores every file and packs the most relevant into budget — with a project map, so large repos fit. Projects can be saved and reloaded.</p></div>
         <div class="cap rv" style="--i:1"><span class="anno">// trace.depth: full</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="6" cy="20" r="2.5"/><circle cx="13" cy="8" r="2.5"/><circle cx="21" cy="15" r="2.5"/><path d="M8 18l3.5-8M15 9.5l4 4"/></svg>
-          <h3>Trace<span class="flag live">LIVE</span></h3><p>Every answer shows its reasoning path. Expand any conclusion back to the evidence — the exact files and lines it stands on.</p></div>
+          <h3>Trace<span class="flag live">LIVE</span></h3><p>Every answer shows its reasoning path. Expand any conclusion back to the evidence — the exact files and lines it stands on. Export whole sessions as Markdown or self-contained HTML.</p></div>
         <div class="cap rv" style="--i:2"><span class="anno">// egress to us: 0 bytes</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="5" y="11" width="16" height="11"/><path d="M9 11V7a4 4 0 018 0v4"/></svg>
-          <h3>Private Core<span class="flag live">LIVE</span></h3><p>We run no servers. Your files and questions travel only from your browser to your AI provider, under your own key.</p></div>
+          <h3>Private Core<span class="flag live">LIVE</span></h3><p>We run no servers. Your files and questions travel only from your browser to your chosen provider — Anthropic, OpenAI, or your own OpenAI-compatible endpoint — under your own key.</p></div>
         <div class="cap road rv" style="--i:3"><span class="anno">// roadmap</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M2 13h5l3-8 4 16 3-8h7"/></svg>
           <h3>Signal Extraction<span class="flag">ROADMAP</span></h3><p>Will separate what matters from what's loud — surfacing the three things worth your attention, not thirty.</p></div>
-        <div class="cap road rv" style="--i:4"><span class="anno">// roadmap</span>
+        <div class="cap rv" style="--i:4"><span class="anno">// approval-gated, read-only</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="13" cy="13" r="10"/><path d="M13 6v7l5 3"/></svg>
-          <h3>Instruments<span class="flag">ROADMAP</span></h3><p>Will mount your tools — repos, terminals, trackers — and operate them precisely, with your approval. Not built yet.</p></div>
+          <h3>Instruments<span class="flag live">LIVE · V1</span></h3><p>The core proposes read-only actions — local search, file inspection, git commands to copy — and every one waits for your click. It never executes shell commands. Deeper mounting (terminals, trackers) is still on the bench.</p></div>
         <div class="cap road rv" style="--i:5"><span class="anno">// roadmap</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M3 20L10 8l5 7 3-4 5 9z"/></svg>
           <h3>Drift Watch<span class="flag">ROADMAP</span></h3><p>Will monitor your systems for slow change and flag it before it breaks. Not built yet.</p></div>
@@ -489,7 +489,7 @@
         <div>
           <div class="step rv lit" style="--i:0"><div class="k mono">STAGE 01</div><h3>Observe<span class="flag live">LIVE</span></h3><p>You load your repositories and documents straight into the workbench — read into your browser's memory, file by file, with you choosing exactly what's in scope.</p></div>
           <div class="step rv lit" style="--i:1"><div class="k mono">STAGE 02</div><h3>Reason<span class="flag live">LIVE</span></h3><p>Questions run against the loaded project. Every conclusion carries a trace — the path from evidence to answer stays inspectable, always.</p></div>
-          <div class="step rv" style="--i:2"><div class="k mono">STAGE 03</div><h3>Act<span class="flag">ROADMAP</span></h3><p>Next on the bench: with your approval, Meridian will operate mounted instruments — precise, logged, reversible. Not built yet; the diagram below shows the destination.</p></div>
+          <div class="step rv lit" style="--i:2"><div class="k mono">STAGE 03</div><h3>Act<span class="flag live">LIVE · V1</span></h3><p>First light: the core now proposes read-only actions — searches, file inspections, git commands to copy — each one approval-gated, none of them shell execution. Operating mounted instruments (terminals, trackers) remains the destination the diagram shows.</p></div>
         </div>
         <div class="diagram rv" style="--i:2" id="diagram">
           <svg viewBox="0 0 460 300" role="img" aria-label="System diagram: sources flow into the core, the core drives instruments">
@@ -552,14 +552,14 @@
           <span class="chip" style="border-color:var(--line-strong);color:var(--ink-3)">TODAY</span>
           <h3>Observer</h3>
           <div class="price">$0</div>
-          <ul><li>The full workbench, free in beta</li><li>Context engine + traces</li><li>Your own API key — Anthropic bills your usage</li><li>Zero egress to us</li></ul>
+          <ul><li>The full workbench, free in beta</li><li>Smart context engine + traces + exports</li><li>Instruments v1 (read-only, approval-gated)</li><li>Your own API key — your provider bills your usage</li><li>Zero egress to us</li></ul>
           <a href="app.html" class="btn btn-signal">Launch free beta</a>
         </div>
         <div class="tier hot rv" style="--i:1">
           <span class="chip"><span class="dot"></span>PLANNED</span>
           <h3>Operator</h3>
           <div class="price">$29<small>/mo</small></div>
-          <ul><li>Unlimited projects (roadmap)</li><li>Instruments (roadmap)</li><li>Drift Watch on 5 systems (roadmap)</li><li>Full trace history (roadmap)</li></ul>
+          <ul><li>Unlimited projects (roadmap)</li><li>Deeper instruments (roadmap)</li><li>Drift Watch on 5 systems (roadmap)</li><li>Full trace history (roadmap)</li></ul>
           <a href="#access" class="btn btn-hairline">Register interest</a>
         </div>
         <div class="tier rv" style="--i:2">
@@ -585,11 +585,11 @@
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.02</span>Where does my data live?<span class="x">+</span></button>
-          <div class="faq-a"><p>In your browser. We run no servers, so your files, questions, and API key never reach us — egress to us is zero bytes by architecture, not by policy. When you ask a question, your browser sends it (plus the files you selected) directly to Anthropic's API under your own account. Details in the <a href="privacy.html" class="trace">privacy policy</a>.</p></div>
+          <div class="faq-a"><p>In your browser. We run no servers, so your files, questions, and API key never reach us — egress to us is zero bytes by architecture, not by policy. When you ask a question, your browser sends it (plus the files the context engine selected) directly to your chosen provider's API — Anthropic by default; OpenAI or a custom OpenAI-compatible endpoint in settings — under your own account. Details in the <a href="privacy.html" class="trace">privacy policy</a>.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.03</span>What do I need to use it?<span class="x">+</span></button>
-          <div class="faq-a"><p>A modern browser and your own Anthropic API key. Meridian itself is free during the beta; your model usage is billed by Anthropic to you, at their rates. We recommend creating a key with a spend limit. The key is stored in your browser's localStorage and sent to exactly one place: api.anthropic.com.</p></div>
+          <div class="faq-a"><p>A modern browser and your own API key — Anthropic by default, or OpenAI / any OpenAI-compatible endpoint from settings. Meridian itself is free during the beta; your model usage is billed by your provider to you, at their rates. We recommend creating a key with a spend limit. Keys are stored in your browser's localStorage, one per provider, and sent to exactly one place: that provider's API endpoint.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.04</span>Can I read every trace?<span class="x">+</span></button>
@@ -597,7 +597,7 @@
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.05</span>Why join the list if the beta is free?<span class="x">+</span></button>
-          <div class="faq-a"><p>The list is how you hear about what ships next — Instruments, Drift Watch, and the planned paid tiers when they become real. It's small on purpose and written by a person, not a sequence.</p></div>
+          <div class="faq-a"><p>The list is how you hear about what ships next — deeper Instruments, Drift Watch, and the planned paid tiers when they become real. It's small on purpose and written by a person, not a sequence.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.06</span>What happens to my email?<span class="x">+</span></button>
