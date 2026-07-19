@@ -18,7 +18,9 @@
 
 A **browser-only AI workbench**. You bring your own API key (Anthropic, OpenAI, or any OpenAI-compatible endpoint), load a project folder into your browser's memory, and ask questions. Every answer streams back with a **trace** — the reasoning steps, pinned to the exact files and lines they stand on, as clickable evidence chips that open the cited file at the cited range.
 
-Don't want to use an API at all? A **LOCAL engine** (settings → PROVIDER → LOCAL) answers with **no key, no AI, and zero network** — questions run as deterministic keyword/symbol search over the loaded files and come back through the same trace + evidence-chip UI, honestly labeled `LOCAL · NO AI`.
+Underneath the chat, MERIDIAN is a **deterministic project-intelligence engine**: it understands the terrain of a project *before* a model enters the room. On load it indexes the project — symbols, import/importer edges, entry points, tests, packages — and shows a **PROJECT INTELLIGENCE** overview. The AI model is an optional reasoning layer on top of that understanding, not the foundation.
+
+Don't want to use an API at all? The **LOCAL engine** (settings → PROVIDER → LOCAL) answers with **no key, no AI, and zero network**. It routes each question by intent and runs a real investigation over the project index, returning findings through the same trace + evidence-chip UI, honestly labeled `LOCAL · NO AI`. Every answer carries a verdict — **KNOWN LOCALLY** (structure, definitions, references, imports/importers, related files, recent changes, evidence) or **REQUIRES MODEL REASONING** (root-cause, synthesis, architectural recommendations). When a model *is* connected, MERIDIAN sends only the relevant evidence, never the whole repo.
 
 The architecture *is* the privacy story:
 
@@ -38,7 +40,8 @@ Medium and large codebases no longer blow the context window. In **SMART** mode 
 
 ### Also on the bench
 
-- **LOCAL engine** *(no API)* — a provider that uses no key, no model, and no network. Questions run as deterministic search over the loaded files (plain-language ranking, plus `search` / `def` / `refs` / `dir` / `recent` commands) and answer through the same trace + evidence-chip UI, labeled `LOCAL · NO AI`. Fully offline; keeps the zero-third-party-scripts guarantee.
+- **Project intelligence engine** *(deterministic, no API)* — on load MERIDIAN builds a structured index of the project (symbols, import/importer edges, entry points, tests, configs, docs, packages) and surfaces a **PROJECT INTELLIGENCE** overview of the terrain. This index powers the LOCAL engine and is always available regardless of provider.
+- **LOCAL engine** *(no API)* — a provider that uses no key, no model, and no network. It routes each question by intent and runs a real investigation over the index: definitions (`def`), references (`refs`), importers/imports, related files, symbols, structure, tests, entry points, recent changes, plus `search` / `dir` / `recent` commands — all answered through the same trace + evidence-chip UI with a **KNOWN LOCALLY / REQUIRES MODEL REASONING** verdict, labeled `LOCAL · NO AI`. Interpretation questions honestly say a model is needed rather than fabricating an answer. Fully offline; keeps the zero-third-party-scripts guarantee.
 - **Project memory** — save named projects (tree + selection + ignore patterns + context prefs, never contents). Folders opened via the File System Access API reload from disk in one click.
 - **Ignore patterns** — per-project glob-lite filters applied at ingest.
 - **Propose Action** *(experimental)* — the model may suggest read-only actions: `search` (with optional path filter), `def` / `refs` symbol navigation, `dir` summaries, `recent` changes — all run locally against in-memory files after a click; `open` opens the viewer, `git` commands are display + copy only. Nothing ever executes without approval; shell is never executed.

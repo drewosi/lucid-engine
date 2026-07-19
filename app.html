@@ -331,11 +331,38 @@
   footer.strip a:hover { color: var(--accent); }
   @media (max-width: 720px) { footer.strip span.opt { display: none; } }
 
+  /* ============ PROJECT INTELLIGENCE OVERVIEW ============ */
+  #overview { border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); padding: 16px 18px; margin-bottom: 22px; }
+  .ov-hd { font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin-bottom: 14px; line-height: 1.6; }
+  .ov-hd b { color: var(--ink-2); font-weight: 500; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .stat-tile { background: var(--surface); border: none; text-align: left; padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 7px; transition: background var(--t-feedback) var(--ease-snap); }
+  .stat-tile:hover, .stat-tile:focus-visible { background: var(--surface-2); }
+  .stat-tile .sl { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .12em; color: var(--ink-3); }
+  .stat-tile .sv { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 26px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat-tile:hover .sv, .stat-tile:focus-visible .sv { color: var(--accent); }
+  .ov-langs { font-size: 10.5px; color: var(--ink-2); letter-spacing: .05em; margin-top: 12px; }
+  .ov-cap { font-size: 10px; color: var(--ink-3); letter-spacing: .04em; margin-top: 8px; line-height: 1.8; }
+
+  /* verdict badge — KNOWN LOCALLY vs REQUIRES MODEL REASONING */
+  .verdict { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 12px; margin-top: 14px; padding: 8px 12px; border-radius: 3px; border: 1px solid var(--line-strong); }
+  .verdict.ok { border-left: 2px solid var(--ok); }
+  .verdict.model { border-left: 2px solid var(--accent); }
+  .verdict .vk { font-size: 11px; letter-spacing: .1em; font-weight: 500; }
+  .verdict.ok .vk { color: var(--ok); }
+  .verdict.model .vk { color: var(--accent); }
+  .verdict .vt { font-size: 11px; color: var(--ink-3); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; letter-spacing: .03em; }
+
+  /* typed evidence marker (inference / uncertain) — evidence chips stay unmarked */
+  .ev .kind { color: var(--ink-3); border: 1px solid var(--line-strong); border-radius: 2px; padding: 0 4px; font-size: 8.5px; letter-spacing: .08em; margin-right: 5px; }
+  .ev .kind.inference { color: var(--accent); border-color: var(--accent); }
+  .ev .kind.uncertain { color: var(--err); border-color: var(--err); }
+
   /* Reduced motion */
   @media (prefers-reduced-motion: reduce) {
     .msg-a .bd .cursor, .trace-wait i { animation: none; }
     #drawer { transition: none; }
-    .toast, .btn, .budget-bar i { transition: none; }
+    .toast, .btn, .budget-bar i, .stat-tile { transition: none; }
   }
 </style>
 </head>
@@ -404,6 +431,7 @@
     <section class="stage" aria-label="Conversation">
       <div id="convo">
         <div class="convo-in">
+          <div id="overview" hidden aria-label="Project intelligence overview"></div>
           <div id="empty">
             <h2>The workbench is live.</h2>
             <p>Ask a question and the answer arrives with its trace — the reasoning steps, pinned to the exact files and lines they stand on.</p>
@@ -882,7 +910,7 @@
 
   function afterIngest() {
     applyPendingProject();
-    contextDirty = true; mapDirty = true;
+    contextDirty = true; mapDirty = true; indexDirty = true;
     renderTree(); renderBudget();
     renderProjects();
     var s = [];
@@ -897,6 +925,7 @@
     if (s.length) note.textContent = '// ' + totSkipped + ' skipped: ' + s.join(' · ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files.';
     $('skiprevrow').hidden = !skippedFiles.length;
     toast(files.size + ' file' + (files.size === 1 ? '' : 's') + ' loaded into memory' + (totSkipped ? ' · ' + totSkipped + ' skipped — review in the CONTEXT rail' : '') + '.');
+    renderOverview();
     setStatus('CORE IDLE — ' + files.size + ' files in memory');
     maybeAutoSmart();
   }
@@ -967,7 +996,7 @@
           var mine = paths.filter(function (q) { return (q.indexOf('/') === -1 ? '' : q.slice(0, q.lastIndexOf('/'))) === this.dataset.dir; }, this);
           var anyOff = mine.some(function (q) { return !files.get(q).checked; });
           mine.forEach(function (q) { files.get(q).checked = anyOff; });
-          contextDirty = true; mapDirty = true; renderTree(); renderBudget();
+          contextDirty = true; mapDirty = true; indexDirty = true; renderTree(); renderBudget();
         });
         tree.appendChild(d);
       }
@@ -977,7 +1006,7 @@
       var lab = document.createElement('label');
       var cb = document.createElement('input');
       cb.type = 'checkbox'; cb.checked = f.checked;
-      cb.addEventListener('change', function () { f.checked = cb.checked; contextDirty = true; mapDirty = true; renderBudget(); });
+      cb.addEventListener('change', function () { f.checked = cb.checked; contextDirty = true; mapDirty = true; indexDirty = true; renderBudget(); });
       var nm = document.createElement('span');
       nm.className = 'nm'; nm.textContent = p.slice(dir ? dir.length + 1 : 0);
       nm.title = p;
@@ -1012,12 +1041,13 @@
       : 'CTX ≈ <b>' + fmtTok(sel.tokens) + '</b> tokens · <b>' + sel.count + '</b> files';
   }
 
-  $('selall').addEventListener('click', function () { files.forEach(function (f) { f.checked = true; }); contextDirty = true; mapDirty = true; renderTree(); renderBudget(); });
-  $('selnone').addEventListener('click', function () { files.forEach(function (f) { f.checked = false; }); contextDirty = true; mapDirty = true; renderTree(); renderBudget(); });
+  $('selall').addEventListener('click', function () { files.forEach(function (f) { f.checked = true; }); contextDirty = true; mapDirty = true; indexDirty = true; renderTree(); renderBudget(); });
+  $('selnone').addEventListener('click', function () { files.forEach(function (f) { f.checked = false; }); contextDirty = true; mapDirty = true; indexDirty = true; renderTree(); renderBudget(); });
   $('clearctx').addEventListener('click', function () {
     files.clear(); skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
     skippedFiles.length = 0;
-    contextDirty = true; mapDirty = true; renderTree(); renderBudget();
+    contextDirty = true; mapDirty = true; indexDirty = true; renderTree(); renderBudget();
+    renderOverview();
     $('skipnote').hidden = true;
     $('skiprevrow').hidden = true;
     toast('Project unloaded from memory.');
@@ -1059,7 +1089,7 @@
               if (files.has(s.path)) {
                 var ix = skippedFiles.indexOf(s);
                 if (ix !== -1) skippedFiles.splice(ix, 1);
-                contextDirty = true; mapDirty = true;
+                contextDirty = true; mapDirty = true; indexDirty = true;
                 renderTree(); renderBudget();
                 row.remove();
                 $('skiprevrow').hidden = !skippedFiles.length;
@@ -1432,6 +1462,113 @@
     return mapCache;
   }
 
+  /* ============ PROJECT INTELLIGENCE INDEX ============
+     A deterministic, structured understanding of the loaded project, built in one
+     pass over the in-memory files: symbol definitions, import/importer edges, and
+     file classifications (entries, tests, configs, docs). This is the foundation the
+     LOCAL engine's investigations read — Meridian understands the terrain before a
+     model enters the room. Rebuilt lazily; invalidated (indexDirty) wherever the
+     loaded/checked set changes.                                                    */
+
+  var indexDirty = true, projectIndex = null;
+
+  /* definition-shaped lines across common languages — captures the declared name.
+     Practical regex, not a parser: covers declarations and `NAME = function|class|(=>)`. */
+  var DEF_DECL_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:public\s+|private\s+|protected\s+|static\s+|abstract\s+|final\s+)*(?:async\s+)?(function\*?|class|interface|type|struct|enum|trait|impl|def|fn|func|module|const|let|var|sub|proc)\s+([A-Za-z_$][\w$]*)/;
+  var DEF_ASSIGN_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:const|let|var|public|private|protected|static|readonly)?\s*([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s+)?(?:function\*?\b|\([^()]*\)\s*(?::[^={]+)?=>|class\b|\([^)]*\)\s*\{)/;
+  var IMPORT_RES = [
+    /\bimport\s+(?:[\w${},*\s]+\s+from\s+)?['"]([^'"]+)['"]/,   /* import x from 'm' | import 'm' */
+    /\bexport\s+(?:[\w${},*\s]+)\s+from\s+['"]([^'"]+)['"]/,     /* export … from 'm' */
+    /\brequire\(\s*['"]([^'"]+)['"]\s*\)/,                        /* require('m') */
+    /^\s*from\s+([\w.]+)\s+import\b/,                             /* py: from m import … */
+    /^\s*import\s+([\w.]+)/                                       /* py: import m */
+  ];
+  var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.rb', '.php', '.java', '.vue', '.svelte'];
+
+  function fileExt(path) {
+    var nm = path.slice(path.lastIndexOf('/') + 1);
+    return nm.indexOf('.') === -1 ? '' : nm.slice(nm.lastIndexOf('.') + 1).toLowerCase();
+  }
+  function dirOf(path) { return path.indexOf('/') === -1 ? '' : path.slice(0, path.lastIndexOf('/')); }
+
+  /* resolve a relative module specifier against the importer's directory to a real
+     loaded path; returns null for external/bare modules or unresolved paths. */
+  function resolveImport(fromFile, mod) {
+    if (!mod || (mod.charAt(0) !== '.' && mod.charAt(0) !== '/')) return null; /* bare/external */
+    var base = mod.charAt(0) === '/' ? mod.slice(1) : dirOf(fromFile);
+    var parts = (mod.charAt(0) === '/' ? mod.slice(1) : (base ? base + '/' : '') + mod).split('/');
+    var stack = [];
+    parts.forEach(function (seg) {
+      if (seg === '' || seg === '.') return;
+      if (seg === '..') { stack.pop(); return; }
+      stack.push(seg);
+    });
+    var cand = stack.join('/');
+    for (var i = 0; i < RESOLVE_EXTS.length; i++) {
+      if (files.has(cand + RESOLVE_EXTS[i])) return cand + RESOLVE_EXTS[i];
+    }
+    for (var j = 1; j < RESOLVE_EXTS.length; j++) {
+      if (files.has(cand + '/index' + RESOLVE_EXTS[j])) return cand + '/index' + RESOLVE_EXTS[j];
+    }
+    return null;
+  }
+
+  function buildIndex() {
+    var symbols = new Map();      /* name -> [{file, line, kind}] */
+    var importsByFile = new Map(); /* file -> [{raw, resolved, line}] */
+    var importedBy = new Map();    /* resolvedFile -> [{file, line}] */
+    var entries = [], tests = [], configs = [], docs = [], byExt = {};
+    var paths = sortedPaths(), symbolCount = 0;
+
+    paths.forEach(function (p) {
+      var f = files.get(p);
+      var name = p.slice(p.lastIndexOf('/') + 1), ext = fileExt(p);
+      byExt[ext || '·'] = (byExt[ext || '·'] || 0) + 1;
+      if (TEST_PATH.test(p)) tests.push(p);
+      if (CONFIG_NAMES.test(name)) configs.push(p);
+      if (README_NAMES.test(name) || DOCS_PATH.test(p) || /\.(md|mdx|rst)$/i.test(name)) docs.push(p);
+      if (ENTRY_NAMES.test(name) && !TEST_PATH.test(p)) entries.push(p);
+
+      var lines = f.content.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var ln = lines[i];
+        if (ln.length > 400) continue; /* skip minified/one-liners */
+        var md = DEF_DECL_RE.exec(ln), sym = null, kind = null;
+        if (md) { kind = md[1]; sym = md[2]; }
+        else { var ma = DEF_ASSIGN_RE.exec(ln); if (ma) { kind = 'assign'; sym = ma[1]; } }
+        if (sym && sym.length > 1) {
+          var arr = symbols.get(sym) || (symbols.set(sym, []), symbols.get(sym));
+          if (arr.length < 200) { arr.push({ file: p, line: i + 1, kind: kind }); symbolCount++; }
+        }
+        for (var r = 0; r < IMPORT_RES.length; r++) {
+          var im = IMPORT_RES[r].exec(ln);
+          if (im) {
+            var raw = im[1], resolved = resolveImport(p, raw);
+            (importsByFile.get(p) || (importsByFile.set(p, []), importsByFile.get(p))).push({ raw: raw, resolved: resolved, line: i + 1 });
+            if (resolved) (importedBy.get(resolved) || (importedBy.set(resolved, []), importedBy.get(resolved))).push({ file: p, line: i + 1 });
+            break; /* one import specifier per line */
+          }
+        }
+      }
+    });
+
+    return {
+      fileCount: paths.length, symbols: symbols, symbolCount: symbolCount,
+      importsByFile: importsByFile, importedBy: importedBy,
+      entries: entries, tests: tests, configs: configs, docs: docs,
+      byExt: byExt, packages: detectPackages(paths)
+    };
+  }
+
+  function getIndex() {
+    if (!indexDirty && projectIndex) return projectIndex;
+    setStatus('INDEXING — reading project structure…');
+    projectIndex = buildIndex();
+    indexDirty = false;
+    setStatus('CORE IDLE — ' + files.size + ' files in memory');
+    return projectIndex;
+  }
+
   function getBudget() {
     var cap = MODELS[model] ? MODELS[model].ctx : 200000;
     var v = parseInt(lsGet(LS.ctxbudget), 10);
@@ -1677,7 +1814,7 @@
     Array.from(files.keys()).forEach(function (p) {
       if (matchesIgnore(p)) { files.delete(p); removed++; }
     });
-    if (removed) { contextDirty = true; mapDirty = true; renderTree(); renderBudget(); }
+    if (removed) { contextDirty = true; mapDirty = true; indexDirty = true; renderTree(); renderBudget(); }
     toast(removed ? removed + ' loaded file' + (removed === 1 ? '' : 's') + ' removed by patterns.' : 'Ignore patterns saved.');
   });
   setIgnoreText(lsGet(LS.ignore) || '');
@@ -1845,8 +1982,16 @@
           var btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'ev mono' + (known ? '' : ' dead');
-          btn.innerHTML = '<span class="src"></span>';
-          btn.querySelector('.src').textContent = 'ctx://';
+          /* typed evidence: deterministic 'evidence' stays unmarked; inference/uncertain get a tag */
+          if (ev.kind && ev.kind !== 'evidence') {
+            var km = document.createElement('span');
+            km.className = 'kind ' + (ev.kind === 'inference' || ev.kind === 'uncertain' ? ev.kind : '');
+            km.textContent = ev.kind === 'inference' ? 'INFERENCE' : ev.kind === 'uncertain' ? 'UNCERTAIN' : String(ev.kind).toUpperCase();
+            btn.appendChild(km);
+          }
+          var srcSpan = document.createElement('span');
+          srcSpan.className = 'src'; srcSpan.textContent = 'ctx://';
+          btn.appendChild(srcSpan);
           btn.appendChild(document.createTextNode(ev.file + ':' + a + '–' + b));
           if (known) {
             btn.addEventListener('click', function () { openViewer(ev.file, a, b, ev.quote); });
@@ -2475,113 +2620,329 @@
   }
 
   /* ============ LOCAL ENGINE (NO API · NO AI) ============
-     Answers questions by deterministic search over the loaded in-memory files.
-     No key, no network, no model — every "answer" is really the search machinery
-     (localSearchData / dir / recent) surfaced through the same trace + evidence-chip
-     UI the AI providers use. Honestly labeled LOCAL · NO AI everywhere.        */
-  var LOCAL_HELP = 'The LOCAL engine searches your loaded files — no AI, no network. Commands: '
-    + '`search <text|regex>`, `def <symbol>`, `refs <symbol>`, `dir <path>`, `recent <n>`. '
-    + 'Or ask a plain question and it ranks the files whose contents best match your words. '
-    + 'For real AI answers, pick a provider (Anthropic, OpenAI, or a local server) in settings.';
+     The deterministic project-intelligence engine. A question is routed by intent
+     (classifyIntent), an investigation runs real operations over the project index
+     (runInvestigation), and the findings are surfaced through the same trace +
+     evidence-chip UI the AI providers use — every claim pinned to a real file:line.
+     Meridian understands the terrain first; a model is optional, and only for
+     interpretation. Honestly labeled LOCAL · NO AI, with an explicit KNOWN-LOCALLY
+     vs REQUIRES-MODEL verdict on every answer.                                    */
+
+  var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Evidence collection'];
+  var CAP_MODEL = ['Architectural reasoning', 'Natural-language synthesis', 'Root-cause analysis', 'Refactoring recommendations'];
+  var LOCAL_HELP = 'Ask in plain language ("where is X defined", "what references X", "what imports X", '
+    + '"files related to app.js", "project structure", "where are the tests", "entry points", "what changed recently") '
+    + 'or use a command: `def`, `refs`, `imports`, `importers`, `related`, `symbols`, `structure`, `tests`, `entries`, '
+    + '`recent <n>`, `dir <path>`, `search <text|regex>`. Interpretation ("why…", "how should I…") needs a model — '
+    + 'connect one in settings and Meridian sends only the relevant evidence, never the whole repo.';
 
   function localEvidence(h) {
-    return { file: h.p, startLine: h.line, endLine: h.line, quote: String(h.text).trim().slice(0, 120) };
+    return { file: h.p, startLine: h.line, endLine: h.line, quote: String(h.text).trim().slice(0, 120), kind: 'evidence' };
+  }
+  function lineText(file, line) {
+    var f = files.get(file); if (!f) return '';
+    return (f.content.split('\n')[line - 1] || '').trim().slice(0, 120);
+  }
+  function evAt(file, line) { return { file: file, startLine: line, endLine: line, quote: lineText(file, line), kind: 'evidence' }; }
+
+  /* resolve a natural-language argument to a loaded file path (basename-aware) */
+  function resolveToFile(arg) {
+    if (!arg) return null;
+    if (files.has(arg)) return arg;
+    var base = arg.slice(arg.lastIndexOf('/') + 1).toLowerCase(), la = arg.toLowerCase();
+    var exact = null, contains = null;
+    files.forEach(function (f, p) {
+      var b = p.slice(p.lastIndexOf('/') + 1).toLowerCase();
+      if (b === base) { if (!exact) exact = p; }
+      else if (!contains && (b.indexOf(base) !== -1 || p.toLowerCase().indexOf(la) !== -1)) contains = p;
+    });
+    return exact || contains;
+  }
+  /* look a symbol up in the index: exact → last dotted segment → case-insensitive */
+  function symLookup(name, idx) {
+    if (!name) return [];
+    if (idx.symbols.has(name)) return idx.symbols.get(name);
+    var last = name.split('.').pop();
+    if (last !== name && idx.symbols.has(last)) return idx.symbols.get(last);
+    var lc = name.toLowerCase(), out = [];
+    idx.symbols.forEach(function (arr, k) { if (k.toLowerCase() === lc) out = out.concat(arr); });
+    return out;
   }
 
-  /* build a trace-shaped object (steps + evidence) — no confidence field, it's deterministic */
+  var STOP_INTENT = { where: 1, what: 1, which: 1, who: 1, does: 1, do: 1, is: 1, are: 1, the: 1, file: 1, files: 1, function: 1, functions: 1, method: 1, methods: 1, symbol: 1, symbols: 1, class: 1, classes: 1, defined: 1, definition: 1, declared: 1, reference: 1, references: 1, referenced: 1, import: 1, imports: 1, imported: 1, related: 1, project: 1, structure: 1, test: 1, tests: 1, entry: 1, point: 1, points: 1, recent: 1, recently: 1, show: 1, list: 1, find: 1, all: 1, call: 1, calls: 1, uses: 1, used: 1, depend: 1, depends: 1, this: 1, that: 1, for: 1, and: 1, with: 1 };
+  /* pick the most identifier-like token from a question (for def/refs/symbols) */
+  function pickSymbol(q, idx) {
+    var bt = q.match(/`([^`]+)`/); if (bt) return bt[1].trim();
+    var qq = q.match(/["“”']([^"“”']+)["“”']/); if (qq) return qq[1].trim();
+    var toks = q.match(/[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/g) || [];
+    if (idx) { for (var i = 0; i < toks.length; i++) { if (symLookup(toks[i], idx).length) return toks[i]; } }
+    var fancy = toks.filter(function (t) { return (/[A-Z]/.test(t) || t.indexOf('_') !== -1 || t.indexOf('.') !== -1 || /\d/.test(t)) && !STOP_INTENT[t.toLowerCase()]; });
+    if (fancy.length) return fancy.sort(function (a, b) { return b.length - a.length; })[0];
+    var terms = queryTerms(q); return terms.length ? terms[0] : '';
+  }
+  /* pick a path-ish token from a question (for imports/importers/related/dir) */
+  function pickPathish(q) {
+    var bt = q.match(/`([^`]+)`/); if (bt) return bt[1].trim();
+    var qq = q.match(/["“”']([^"“”']+)["“”']/); if (qq) return qq[1].trim();
+    var withExt = q.match(/[\w./-]*[\w-]\.[A-Za-z]{1,6}\b/); if (withExt) return withExt[0];
+    var withSlash = q.match(/[\w.-]+\/[\w./-]+/); if (withSlash) return withSlash[0];
+    return pickSymbol(q);
+  }
+
+  /* ---- Intent router: deterministic kinds vs. reasoning vs. plain fallback ---- */
+  function classifyIntent(q) {
+    var s = q.trim(), lo = s.toLowerCase(), idx = files.size ? getIndex() : null;
+    var cmd = s.match(/^\s*(search|def|refs|dir|recent|imports|importers|importedby|symbols|related|structure|overview|tests|entries|entrypoints|help)\b\s*([\s\S]*)$/i);
+    if (cmd) {
+      var kmap = { search: 'search', def: 'def', refs: 'refs', dir: 'dir', recent: 'recent', imports: 'imports', importers: 'importers', importedby: 'importers', symbols: 'symbols', related: 'related', structure: 'structure', overview: 'structure', tests: 'tests', entries: 'entries', entrypoints: 'entries', help: 'help' };
+      return { kind: kmap[cmd[1].toLowerCase()], arg: cmd[2].trim(), deterministic: true, needsModel: false };
+    }
+    function det(kind, arg) { return { kind: kind, arg: arg, deterministic: true, needsModel: false }; }
+    /* distinctive deterministic nouns first */
+    if (/\b(entry ?points?|entrypoints?|main file|entry file)\b/.test(lo)) return det('entries', '');
+    if (/\b(recent(ly)?|latest|newest|last changed|what changed|changed recently)\b/.test(lo)) { var num = lo.match(/\b(\d{1,2})\b/); return det('recent', num ? num[1] : '10'); }
+    if (/\b(project structure|structure of|overview|directories|packages|project map|top-?level|layout|organi[sz]ation|how is .* organi[sz]ed|what.*directories)\b/.test(lo)) return det('structure', '');
+    if (/\btests?\b/.test(lo) && /\b(where|find|list|show|which|are|any)\b/.test(lo)) return det('tests', '');
+    if (/\b(list|show|all)\b/.test(lo) && /\b(files?)\b/.test(lo) && /\b([a-z]{1,6})\b\s+files?\b/.test(lo)) return det('listType', s);
+    if (/\brelated\b|\bconnected to\b|\bassociated with\b|\bneighbou?rs of\b/.test(lo)) return det('related', pickPathish(s));
+    /* import direction */
+    if (/\bwhat does\b[\s\S]*\bimport\b|\bimports of\b|\bdependencies of\b|\bwhat.*\bdepend(s)? on\b/.test(lo)) return det('imports', pickPathish(s));
+    if (/\b(imports?|importe(rs|d)?|depend(s|ents?|encies)?|who (imports|uses|depends)|used by|includes)\b/.test(lo)) return det('importers', pickPathish(s));
+    if (/\b(symbols?|functions?|classes|methods)\b/.test(lo) && !/\b(where|defined|definition|reference|references)\b/.test(lo)) return det('symbols', pickSymbol(s, idx));
+    if (/\b(reference|references|referenced|callers?|call sites?|usages?|used by|who calls|what calls|uses of)\b/.test(lo)) return det('refs', pickSymbol(s, idx));
+    if (/\b(where|location|find|definition|defined|declared|declaration)\b/.test(lo)) return det('def', pickSymbol(s, idx));
+    /* reasoning — interpretation a deterministic engine cannot honestly provide */
+    if (/\b(why|how (do|does|is|should|can|would)|root cause|recommend|refactor|improve|architect(ure)?|risk|risks|should i|would you|best way|design|rationale|trade-?offs?|explain)\b/.test(lo)) return { kind: 'reason', arg: pickSymbol(s, idx), deterministic: false, needsModel: true };
+    return { kind: 'plain', arg: pickSymbol(s, idx), deterministic: true, needsModel: false };
+  }
+
+  /* ---- Investigation engine: real operations over the index, collecting evidence.
+     Returns { steps, verdict:{local,text}, actions, answer }. No fabricated work. ---- */
+  function gatherTerrain(q, steps) {
+    /* shared evidence-gathering used by plain + reason: term search → ranked files */
+    var terms = queryTerms(q), perFile = {};
+    steps.push({ action: 'extract search terms', note: terms.length ? terms.join(', ') : 'none', evidence: [], status: 'done' });
+    terms.slice(0, 4).forEach(function (t) {
+      var r = localSearchData(t, 'text');
+      steps.push({ action: 'search “' + t + '”', note: r.hits.length ? r.hits.length + ' hit' + (r.hits.length === 1 ? '' : 's') : 'no matches', evidence: r.hits.slice(0, 4).map(localEvidence), status: 'done' });
+      r.hits.forEach(function (h) { (perFile[h.p] || (perFile[h.p] = { count: 0, first: h })).count++; });
+    });
+    var ranked = Object.keys(perFile).map(function (p) {
+      return { p: p, count: perFile[p].count, first: perFile[p].first, score: perFile[p].count * 10 + (files.has(p) ? files.get(p).base : 0) };
+    }).sort(function (a, b) { return b.score - a.score; }).slice(0, 8);
+    if (ranked.length) steps.push({ action: 'rank relevant files', note: ranked.length + ' file' + (ranked.length === 1 ? '' : 's') + ' · hits + importance', evidence: ranked.map(function (r) { return localEvidence(r.first); }), status: 'done' });
+    return { terms: terms, ranked: ranked };
+  }
+
+  function runInvestigation(q, intent) {
+    var idx = getIndex(), steps = [], actions = null;
+    var localVerdict = { local: true, text: 'KNOWN LOCALLY' };
+    var arg = intent.arg;
+
+    if (intent.kind === 'help') {
+      return { steps: [{ action: 'list capabilities', note: 'local engine reference', evidence: [], status: 'done' }],
+        verdict: localVerdict,
+        answer: '**Meridian LOCAL engine** — deterministic project intelligence, no AI, no network.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n' + LOCAL_HELP };
+    }
+
+    if (intent.kind === 'def') {
+      var defs = symLookup(arg, idx);
+      steps.push({ action: 'look up “' + arg + '” in the symbol index', note: defs.length + ' definition' + (defs.length === 1 ? '' : 's'), evidence: defs.slice(0, 8).map(function (d) { return evAt(d.file, d.line); }), status: 'done' });
+      var refs = localSearchData(arg, 'refs');
+      steps.push({ action: 'scan for references', note: refs.hits.length + ' reference' + (refs.hits.length === 1 ? '' : 's'), evidence: refs.hits.slice(0, 6).map(localEvidence), status: 'done' });
+      actions = [{ kind: 'refs', command: arg, why: 'list every reference to ' + arg }];
+      var ans = defs.length
+        ? '`' + arg + '` is defined in ' + defs.length + ' place' + (defs.length === 1 ? '' : 's') + ':\n\n' + defs.slice(0, 8).map(function (d) { return '- `' + d.file + '` line ' + d.line + ' (' + d.kind + ')'; }).join('\n') + '\n\nEvidence chips open each definition at its exact line.'
+        : 'No indexed definition named `' + arg + '`. It may be an external symbol, a dynamic name, or spelled differently. The reference scan above shows where the term appears.';
+      return { steps: steps, verdict: localVerdict, actions: actions, answer: ans };
+    }
+
+    if (intent.kind === 'refs') {
+      var r = localSearchData(arg, 'refs');
+      steps.push({ action: 'find references to “' + arg + '”', note: r.hits.length + ' hit' + (r.hits.length === 1 ? '' : 's') + ' in ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's'), evidence: r.hits.slice(0, 10).map(localEvidence), status: 'done' });
+      var d2 = symLookup(arg, idx);
+      if (d2.length) steps.push({ action: 'locate its definition', note: d2.length + ' definition' + (d2.length === 1 ? '' : 's'), evidence: d2.slice(0, 4).map(function (d) { return evAt(d.file, d.line); }), status: 'done' });
+      actions = [{ kind: 'def', command: arg, why: 'jump to where ' + arg + ' is defined' }];
+      return { steps: steps, verdict: localVerdict, actions: actions,
+        answer: r.hits.length ? '`' + arg + '` is referenced ' + (r.hits.length >= r.cap ? r.cap + '+' : r.hits.length) + ' time' + (r.hits.length === 1 ? '' : 's') + ' across ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's') + '. Chips open each at its line.' : 'No references to `' + arg + '` in the loaded files.' };
+    }
+
+    if (intent.kind === 'importers') {
+      var tf = resolveToFile(arg);
+      var imps = tf ? (idx.importedBy.get(tf) || []) : [];
+      steps.push({ action: 'resolve “' + arg + '” to a file', note: tf || 'unresolved', evidence: [], status: 'done' });
+      steps.push({ action: 'read importer edges from the index', note: imps.length + ' importer' + (imps.length === 1 ? '' : 's'), evidence: imps.slice(0, 12).map(function (x) { return evAt(x.file, x.line); }), status: 'done' });
+      var ians = !tf ? 'Could not resolve `' + arg + '` to a loaded file.'
+        : imps.length ? '`' + tf + '` is imported by ' + imps.length + ' file' + (imps.length === 1 ? '' : 's') + ':\n\n' + imps.slice(0, 12).map(function (x) { return '- `' + x.file + '` line ' + x.line; }).join('\n')
+        : 'No loaded file imports `' + tf + '`. Either nothing depends on it, or the project uses a bundling/single-file style with no import statements between files (a real architectural fact, not a gap).';
+      return { steps: steps, verdict: localVerdict, answer: ians };
+    }
+
+    if (intent.kind === 'imports') {
+      var tf2 = resolveToFile(arg);
+      var list = tf2 ? (idx.importsByFile.get(tf2) || []) : [];
+      var resolved = list.filter(function (x) { return x.resolved; }), external = list.filter(function (x) { return !x.resolved; });
+      steps.push({ action: 'resolve “' + arg + '” to a file', note: tf2 || 'unresolved', evidence: [], status: 'done' });
+      steps.push({ action: 'read import statements', note: list.length + ' import' + (list.length === 1 ? '' : 's') + ' · ' + resolved.length + ' internal, ' + external.length + ' external', evidence: list.slice(0, 12).map(function (x) { return evAt(tf2, x.line); }), status: 'done' });
+      var mans = !tf2 ? 'Could not resolve `' + arg + '` to a loaded file.'
+        : list.length ? '`' + tf2 + '` has ' + list.length + ' import' + (list.length === 1 ? '' : 's') + '.\n\n**Internal:** ' + (resolved.map(function (x) { return '`' + x.resolved + '`'; }).join(', ') || 'none') + '\n**External:** ' + (external.map(function (x) { return '`' + x.raw + '`'; }).join(', ') || 'none')
+        : 'No import statements found in `' + tf2 + '`.';
+      return { steps: steps, verdict: localVerdict, answer: mans };
+    }
+
+    if (intent.kind === 'related') {
+      var rf = resolveToFile(arg);
+      steps.push({ action: 'resolve “' + arg + '” to a file', note: rf || 'unresolved', evidence: [], status: 'done' });
+      var rel = {};
+      if (rf) {
+        (idx.importsByFile.get(rf) || []).forEach(function (x) { if (x.resolved) rel[x.resolved] = 'imports'; });
+        (idx.importedBy.get(rf) || []).forEach(function (x) { rel[x.file] = 'imported by'; });
+        var d = dirOf(rf), bn = rf.slice(rf.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '').toLowerCase();
+        files.forEach(function (f, p) {
+          if (p === rf) return;
+          if (dirOf(p) === d && !rel[p]) rel[p] = 'same directory';
+          else if (!rel[p] && bn.length > 2 && p.toLowerCase().indexOf(bn) !== -1) rel[p] = 'name match';
+        });
+      }
+      var relList = Object.keys(rel).slice(0, 20);
+      steps.push({ action: 'gather relationships (imports · importers · directory · name)', note: relList.length + ' related file' + (relList.length === 1 ? '' : 's'), evidence: relList.map(function (p) { return evAt(p, 1); }), status: 'done' });
+      var rans = !rf ? 'Could not resolve `' + arg + '` to a loaded file.'
+        : relList.length ? 'Files related to `' + rf + '`:\n\n' + relList.map(function (p) { return '- `' + p + '` — ' + rel[p]; }).join('\n')
+        : 'No related files found for `' + rf + '` (no import edges, no directory siblings, no name matches).';
+      return { steps: steps, verdict: localVerdict, answer: rans };
+    }
+
+    if (intent.kind === 'symbols') {
+      if (arg) {
+        var matches = [];
+        idx.symbols.forEach(function (defsArr, name) { if (name.toLowerCase().indexOf(arg.toLowerCase()) !== -1) matches.push({ name: name, def: defsArr[0], n: defsArr.length }); });
+        matches.sort(function (a, b) { return a.name.length - b.name.length; });
+        var top = matches.slice(0, 15);
+        steps.push({ action: 'search the symbol index for “' + arg + '”', note: matches.length + ' matching symbol' + (matches.length === 1 ? '' : 's'), evidence: top.map(function (mm) { return evAt(mm.def.file, mm.def.line); }), status: 'done' });
+        return { steps: steps, verdict: localVerdict,
+          answer: top.length ? matches.length + ' symbol' + (matches.length === 1 ? '' : 's') + ' match `' + arg + '`:\n\n' + top.map(function (mm) { return '- `' + mm.name + '` (' + mm.def.kind + ') — `' + mm.def.file + '` line ' + mm.def.line + (mm.n > 1 ? ' (+' + (mm.n - 1) + ' more)' : ''); }).join('\n') : 'No indexed symbol matches `' + arg + '`.' };
+      }
+      var byFile = {};
+      idx.symbols.forEach(function (defsArr) { defsArr.forEach(function (d) { byFile[d.file] = (byFile[d.file] || 0) + 1; }); });
+      var topFiles = Object.keys(byFile).sort(function (a, b) { return byFile[b] - byFile[a]; }).slice(0, 8);
+      steps.push({ action: 'summarize the symbol index', note: idx.symbolCount + ' definitions · ' + idx.symbols.size + ' unique names', evidence: topFiles.map(function (p) { return evAt(p, 1); }), status: 'done' });
+      return { steps: steps, verdict: localVerdict,
+        answer: 'The index holds **' + idx.symbolCount + ' symbol definitions** (' + idx.symbols.size + ' unique names). Densest files:\n\n' + topFiles.map(function (p) { return '- `' + p + '` — ' + byFile[p] + ' symbols'; }).join('\n') + '\n\nAsk `symbols <name>` to find a specific one.' };
+    }
+
+    if (intent.kind === 'structure') {
+      var paths = sortedPaths(), dirCounts = {};
+      paths.forEach(function (p) { var d = dirOf(p) || '.'; dirCounts[d] = (dirCounts[d] || 0) + 1; });
+      var topDirs = Object.keys(dirCounts).sort(function (a, b) { return dirCounts[b] - dirCounts[a]; }).slice(0, 8);
+      var langs = Object.keys(idx.byExt).sort(function (a, b) { return idx.byExt[b] - idx.byExt[a]; }).slice(0, 6);
+      steps.push({ action: 'read the project index', note: idx.fileCount + ' files · ' + idx.packages.length + ' packages · ' + idx.symbolCount + ' symbols', evidence: idx.entries.slice(0, 4).map(function (p) { return evAt(p, 1); }), status: 'done' });
+      steps.push({ action: 'map directories & languages', note: topDirs.length + ' directories', evidence: idx.packages.slice(0, 4).map(function (pk) { return evAt(pk.manifest, 1); }), status: 'done' });
+      var sans = '**Project structure** — ' + idx.fileCount + ' files, ' + idx.symbolCount + ' symbols.\n\n'
+        + '**Packages:** ' + (idx.packages.length ? idx.packages.map(function (pk) { return '`' + (pk.name || pk.dir) + '`'; }).join(', ') : 'none detected (no build manifests)') + '\n'
+        + '**Entry points:** ' + (idx.entries.length ? idx.entries.map(function (p) { return '`' + p + '`'; }).join(', ') : 'none detected') + '\n'
+        + '**Tests:** ' + (idx.tests.length ? idx.tests.length + ' file' + (idx.tests.length === 1 ? '' : 's') : 'none detected') + '\n'
+        + '**Top directories:** ' + topDirs.map(function (d) { return '`' + d + '` (' + dirCounts[d] + ')'; }).join(', ') + '\n'
+        + '**Languages:** ' + langs.map(function (e) { return e + ' (' + idx.byExt[e] + ')'; }).join(', ');
+      return { steps: steps, verdict: localVerdict, answer: sans };
+    }
+
+    if (intent.kind === 'tests') {
+      steps.push({ action: 'read test classification from the index', note: idx.tests.length + ' test file' + (idx.tests.length === 1 ? '' : 's'), evidence: idx.tests.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
+      return { steps: steps, verdict: localVerdict,
+        answer: idx.tests.length ? 'Detected ' + idx.tests.length + ' test file' + (idx.tests.length === 1 ? '' : 's') + ' (patterns: `.test.` `.spec.` `_test` `tests/` `__tests__`):\n\n' + idx.tests.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') : 'No test files detected by the standard patterns (`.test.` `.spec.` `_test` `tests/` `__tests__`). That is a real finding about this project, not a limitation.' };
+    }
+
+    if (intent.kind === 'entries') {
+      steps.push({ action: 'read entry-point classification', note: idx.entries.length + ' entry point' + (idx.entries.length === 1 ? '' : 's'), evidence: idx.entries.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
+      return { steps: steps, verdict: localVerdict,
+        answer: idx.entries.length ? 'Likely entry points (index/main/app/server/cli/core/lib):\n\n' + idx.entries.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') : 'No conventional entry-point filenames detected.' };
+    }
+
+    if (intent.kind === 'recent') {
+      var rr = localRecentData(arg || '10'); rr.steps.forEach(function (st) { st.status = 'done'; });
+      return { steps: rr.steps, verdict: localVerdict, answer: rr.answer };
+    }
+    if (intent.kind === 'dir') {
+      var dd = localDirData(arg || '.'); dd.steps.forEach(function (st) { st.status = 'done'; });
+      return { steps: dd.steps, verdict: localVerdict, answer: dd.answer };
+    }
+    if (intent.kind === 'search') {
+      if (!arg) return { steps: [{ action: 'parse command', note: 'search needs a pattern', evidence: [], status: 'done' }], verdict: localVerdict, answer: '`search` needs a pattern, e.g. `search cache_control`.' };
+      var sr = localSearchData(arg, 'text');
+      steps.push({ action: 'search “' + arg + '”', note: sr.hits.length + ' hit' + (sr.hits.length === 1 ? '' : 's') + ' in ' + sr.filesHit + ' file' + (sr.filesHit === 1 ? '' : 's'), evidence: sr.hits.slice(0, 12).map(localEvidence), status: 'done' });
+      return { steps: steps, verdict: localVerdict, answer: sr.hits.length ? 'Found ' + (sr.hits.length >= sr.cap ? sr.cap + '+' : sr.hits.length) + ' match' + (sr.hits.length === 1 ? '' : 'es') + ' for `' + arg + '`. Chips open each at its line.' : 'No matches for `' + arg + '`.' };
+    }
+
+    if (intent.kind === 'listType') {
+      var em = q.toLowerCase().match(/\b(typescript|javascript|python|golang|go|rust|java|ruby|markdown|html|css|json|yaml|c\+\+|c#|[a-z]{1,6})\s+files?\b/);
+      var alias = { typescript: 'ts', javascript: 'js', python: 'py', golang: 'go', rust: 'rs', java: 'java', ruby: 'rb', markdown: 'md', 'c++': 'cpp', 'c#': 'cs' };
+      var want = em ? (alias[em[1]] || em[1]) : '';
+      var matched = sortedPaths().filter(function (p) { return fileExt(p) === want; });
+      steps.push({ action: 'filter files by extension “' + want + '”', note: matched.length + ' file' + (matched.length === 1 ? '' : 's'), evidence: matched.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
+      return { steps: steps, verdict: localVerdict, answer: matched.length ? matched.length + ' `.' + want + '` file' + (matched.length === 1 ? '' : 's') + ':\n\n' + matched.slice(0, 25).map(function (p) { return '- `' + p + '`'; }).join('\n') : 'No `.' + want + '` files loaded.' };
+    }
+
+    if (intent.kind === 'reason') {
+      var t = gatherTerrain(q, steps);
+      var sym = intent.arg && symLookup(intent.arg, idx).length ? intent.arg : (t.terms[0] || '');
+      if (sym) {
+        var sd = symLookup(sym, idx);
+        if (sd.length) steps.push({ action: 'locate “' + sym + '”', note: sd.length + ' definition' + (sd.length === 1 ? '' : 's'), evidence: sd.slice(0, 4).map(function (d) { return evAt(d.file, d.line); }), status: 'done' });
+      }
+      actions = [];
+      if (sym) actions.push({ kind: 'def', command: sym, why: 'inspect where ' + sym + ' is defined' }, { kind: 'refs', command: sym, why: 'see everywhere ' + sym + ' is used' });
+      actions.push({ kind: 'recent', command: '10', why: 'check what changed recently' });
+      var top5 = t.ranked.slice(0, 5).map(function (r) { return '- `' + r.p + '`'; }).join('\n');
+      return {
+        steps: steps, actions: actions,
+        verdict: { local: false, text: 'REQUIRES MODEL REASONING' },
+        answer: 'This question asks for **interpretation** (root cause / recommendation / explanation) — that is where a model reasons, and Meridian will not fabricate it. What Meridian **can** tell you is the terrain: it gathered ' + (t.ranked.length) + ' relevant file' + (t.ranked.length === 1 ? '' : 's') + ' and ' + steps.reduce(function (a, s) { return a + (s.evidence ? s.evidence.length : 0); }, 0) + ' pieces of evidence.\n\n'
+          + (top5 ? 'Most relevant files:\n\n' + top5 + '\n\n' : '')
+          + 'Connect a model in settings to synthesize an answer — Meridian will send only this evidence, not the whole repo.'
+      };
+    }
+
+    /* plain: deterministic ranked search; synthesis optional */
+    var tp = gatherTerrain(q, steps);
+    if (!tp.terms.length) return { steps: steps, verdict: localVerdict, answer: 'That question has no distinctive terms to search for. Name a symbol, filename, or keyword — or use a command.\n\n' + LOCAL_HELP };
+    var topSym = tp.terms[0];
+    actions = [{ kind: 'def', command: topSym, why: 'where “' + topSym + '” is defined' }, { kind: 'refs', command: topSym, why: 'every reference to “' + topSym + '”' }, { kind: 'recent', command: '10', why: 'recently modified files' }];
+    return { steps: steps, verdict: localVerdict, actions: actions,
+      answer: tp.ranked.length ? 'Deterministic search — the files below best match your words (match count, then importance). Open a chip to inspect, or ask `def`/`refs`. Interpreting *why* would benefit from a model.\n\n' + tp.ranked.slice(0, 5).map(function (r, i) { return (i + 1) + '. `' + r.p + '` — ' + r.count + ' match' + (r.count === 1 ? '' : 'es'); }).join('\n') : 'None of your terms appear in the loaded files. Try different wording or check what is selected in CONTEXT.' };
+  }
+
+  function renderVerdict(msgEl, verdict) {
+    if (!verdict) return;
+    var bd = msgEl.querySelector('.bd');
+    var v = document.createElement('div');
+    v.className = 'verdict ' + (verdict.local ? 'ok' : 'model');
+    v.innerHTML = '<span class="vk mono"></span><span class="vt"></span>';
+    v.querySelector('.vk').textContent = verdict.local ? '✓ ' + verdict.text : '○ ' + verdict.text;
+    v.querySelector('.vt').textContent = verdict.local ? 'answered from the project index — zero inference, zero network' : 'evidence gathered locally — connect a model to synthesize';
+    bd.appendChild(v);
+  }
+
   function askLocal(q) {
     addUserMsg(q);
     var msgEl = addAiMsg();
     var txtEl = msgEl.querySelector('.txt');
-    setStatus('LOCAL ENGINE — searching loaded files…');
+    setStatus('LOCAL ENGINE — investigating…');
 
-    var m = q.match(/^\s*(search|def|refs|dir|recent)\b\s*([\s\S]*)$/i);
-    var answer, trace = { steps: [] }, actions = null;
-
+    var answer, trace, verdict;
     if (!files.size) {
-      answer = 'No project is loaded, so there is nothing to search. Drop a folder into CONTEXT, then ask again — '
-        + 'or switch to an AI provider in settings.\n\n' + LOCAL_HELP;
-      trace.steps.push({ n: 1, action: 'check loaded context', note: 'no files in memory', evidence: [] });
-    } else if (m) {
-      var cmd = m[1].toLowerCase(), arg = m[2].trim();
-      if (cmd === 'dir') {
-        var res = localDirData(arg || '.');
-        answer = res.answer; trace.steps = res.steps;
-      } else if (cmd === 'recent') {
-        var res2 = localRecentData(arg || '10');
-        answer = res2.answer; trace.steps = res2.steps;
-      } else if (!arg) {
-        answer = '`' + cmd + '` needs an argument — e.g. `' + cmd + ' '
-          + (cmd === 'def' || cmd === 'refs' ? 'functionName' : 'pattern') + '`.\n\n' + LOCAL_HELP;
-        trace.steps.push({ n: 1, action: 'parse command', note: 'missing argument for ' + cmd, evidence: [] });
-      } else {
-        var mode = cmd === 'def' ? 'def' : cmd === 'refs' ? 'refs' : 'text';
-        var r = localSearchData(arg, mode);
-        var label = cmd === 'def' ? 'definition-shaped matches' : cmd === 'refs' ? 'references' : 'matches';
-        answer = r.hits.length
-          ? 'Found ' + (r.hits.length >= r.cap ? r.cap + '+' : r.hits.length) + ' ' + label
-            + ' for `' + arg + '` across ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's')
-            + '. The evidence chips below open each hit at its exact line.'
-          : 'No ' + label + ' for `' + arg + '` in the loaded files.';
-        trace.steps.push({
-          n: 1, action: cmd + ' “' + arg + '”',
-          note: r.hits.length ? r.hits.length + ' hit' + (r.hits.length === 1 ? '' : 's') + ' in ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's') : 'no matches',
-          evidence: r.hits.slice(0, 8).map(localEvidence)
-        });
-      }
+      answer = 'No project is loaded, so there is no terrain to analyze yet. Drop a folder into CONTEXT and Meridian will index it — or switch to an AI provider in settings.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n' + LOCAL_HELP;
+      trace = { steps: [{ action: 'check loaded context', note: 'no files in memory', evidence: [] }] };
+      verdict = { local: true, text: 'KNOWN LOCALLY' };
     } else {
-      /* plain question → rank files by term hits + static importance */
-      var terms = queryTerms(q);
-      if (!terms.length) {
-        answer = 'That question has no distinctive terms to search for. Try naming a symbol, filename, or keyword — '
-          + 'or use a command.\n\n' + LOCAL_HELP;
-        trace.steps.push({ n: 1, action: 'extract search terms', note: 'no usable terms found', evidence: [] });
-      } else {
-        trace.steps.push({ n: 1, action: 'parse question', note: 'search terms: ' + terms.join(', '), evidence: [] });
-        var perFile = {};      /* path -> {count, first hit} */
-        terms.slice(0, 4).forEach(function (t) {
-          var r = localSearchData(t, 'text');
-          trace.steps.push({
-            n: trace.steps.length + 1, action: 'search “' + t + '”',
-            note: r.hits.length ? r.hits.length + ' hit' + (r.hits.length === 1 ? '' : 's') : 'no matches',
-            evidence: r.hits.slice(0, 4).map(localEvidence)
-          });
-          r.hits.forEach(function (h) {
-            var e = perFile[h.p] || (perFile[h.p] = { count: 0, first: h });
-            e.count++;
-          });
-        });
-        var ranked = Object.keys(perFile).map(function (p) {
-          var base = files.has(p) ? files.get(p).base : 0;
-          return { p: p, count: perFile[p].count, first: perFile[p].first, score: perFile[p].count * 10 + base };
-        }).sort(function (a, b) { return b.score - a.score; }).slice(0, 8);
-
-        if (ranked.length) {
-          answer = 'Deterministic search — no AI. The files below best match your words (by match count, then file importance). '
-            + 'Open the evidence chips to inspect the matching lines, then read the top files or run a follow-up command.\n\n'
-            + ranked.slice(0, 5).map(function (r, i) {
-                return (i + 1) + '. `' + r.p + '` — ' + r.count + ' match' + (r.count === 1 ? '' : 'es');
-              }).join('\n');
-          trace.steps.push({
-            n: trace.steps.length + 1, action: 'rank files',
-            note: ranked.length + ' file' + (ranked.length === 1 ? '' : 's') + ' matched · sorted by hits + importance',
-            evidence: ranked.map(function (r) { return localEvidence(r.first); })
-          });
-          var top = terms[0];
-          actions = [
-            { kind: 'def', command: top, why: 'jump to where “' + top + '” is likely defined' },
-            { kind: 'refs', command: top, why: 'list every reference to “' + top + '”' },
-            { kind: 'recent', command: '10', why: 'see the most recently modified files' }
-          ];
-        } else {
-          answer = 'None of your terms (' + terms.join(', ') + ') appear in the loaded files. '
-            + 'Try different wording, or check what is selected in CONTEXT.\n\n' + LOCAL_HELP;
-        }
-      }
+      var intent = classifyIntent(q);
+      var inv = runInvestigation(q, intent);
+      answer = inv.answer;
+      trace = { steps: inv.steps, actions: inv.actions || null };
+      verdict = inv.verdict;
     }
 
-    if (actions) trace.actions = actions;
     txtEl.innerHTML = renderRich(answer);
+    renderVerdict(msgEl, verdict);
     renderTrace(msgEl, trace);
     /* the header chip defaults to TRACED — relabel it so nobody mistakes this for a model */
     var chip = msgEl.querySelector('.term-hd .chip');
@@ -2594,6 +2955,41 @@
     transcript.push({ q: q, answer: answer, trace: trace, model: 'LOCAL ENGINE', provider: 'LOCAL', ts: Date.now() });
     setStatus('LOCAL ENGINE IDLE — deterministic · zero network');
     scrollEnd();
+  }
+
+  /* ---- Project Intelligence overview: the deterministic terrain, shown on load
+     for every provider. Tiles are real queries into the same engine. ---- */
+  function renderOverview() {
+    var ov = $('overview'), emptyEl = $('empty');
+    if (!files.size) { ov.hidden = true; ov.innerHTML = ''; if (emptyEl) emptyEl.hidden = false; return; }
+    if (emptyEl) emptyEl.hidden = true; /* overview is the orientation once a project is loaded */
+    var idx = getIndex();
+    var dirs = {}; sortedPaths().forEach(function (p) { dirs[dirOf(p) || '.'] = 1; });
+    var langs = Object.keys(idx.byExt).filter(function (e) { return e !== '·'; }).sort(function (a, b) { return idx.byExt[b] - idx.byExt[a]; });
+    var tiles = [
+      { label: 'FILES', value: idx.fileCount, q: 'project structure' },
+      { label: 'DIRECTORIES', value: Object.keys(dirs).length, q: 'project structure' },
+      { label: 'PACKAGES', value: idx.packages.length, q: 'project structure' },
+      { label: 'ENTRY POINTS', value: idx.entries.length, q: 'entry points' },
+      { label: 'TESTS', value: idx.tests.length, q: 'where are the tests' },
+      { label: 'SYMBOLS', value: idx.symbolCount, q: 'symbols' }
+    ];
+    ov.hidden = false;
+    ov.innerHTML = '<div class="ov-hd mono">PROJECT INTELLIGENCE // <b>deterministic</b> — Meridian understands the terrain before a model enters the room</div>'
+      + '<div class="stat-grid"></div><div class="ov-langs mono"></div><div class="ov-cap mono"></div>';
+    var grid = ov.querySelector('.stat-grid');
+    tiles.forEach(function (t) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'stat-tile';
+      b.title = 'Run a local investigation: ' + t.q;
+      b.innerHTML = '<span class="sl"></span><span class="sv"></span>';
+      b.querySelector('.sl').textContent = t.label;
+      b.querySelector('.sv').textContent = t.value >= 1000 ? fmtTok(t.value) : String(t.value);
+      b.addEventListener('click', function () { askLocal(t.q); });
+      grid.appendChild(b);
+    });
+    ov.querySelector('.ov-langs').textContent = '// languages: ' + (langs.slice(0, 6).map(function (e) { return e + ' ·' + idx.byExt[e]; }).join('  ') || 'none');
+    ov.querySelector('.ov-cap').textContent = '// ✓ known locally: ' + CAP_LOCAL.join(' · ') + '   ○ requires a model: ' + CAP_MODEL.join(' · ');
   }
 
   /* data-level directory summary + recent, mirroring runDirSummary / runRecent */
