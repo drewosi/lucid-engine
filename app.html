@@ -159,6 +159,13 @@
   #ignorein { width: 100%; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; padding: 8px 10px; resize: vertical; box-sizing: border-box; }
   #ignorein:focus { outline: none; border-color: var(--accent); }
 
+  /* skipped-file review */
+  #skiplist { max-height: 46vh; overflow-y: auto; margin-top: 4px; }
+  .skip-grp { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin: 14px 0 4px; }
+  .skip-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-2); }
+  .skip-row .sp { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .skip-row .sz { color: var(--ink-3); font-size: 10px; flex: none; }
+
   /* ============ CONVERSATION ============ */
   section.stage { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   #convo { flex: 1; overflow-y: auto; padding: 26px 24px 12px; scroll-behavior: smooth; }
@@ -369,6 +376,9 @@
       <p class="rail-note" id="smartnote" hidden></p>
       <div id="tree"></div>
       <p class="rail-note" id="skipnote" hidden></p>
+      <div id="skiprevrow" hidden>
+        <button class="btn-quiet acc" type="button" id="skiprev" title="List every skipped file and pull specific ones back in">[ REVIEW SKIPPED ]</button>
+      </div>
       <div id="ctxactions" hidden>
         <button class="btn-quiet" type="button" id="selall">[ SELECT ALL ]</button>
         <button class="btn-quiet" type="button" id="selnone">[ SELECT NONE ]</button>
@@ -501,6 +511,16 @@
     <div class="viewer" role="dialog" aria-modal="true" aria-label="Cited file">
       <div class="vh"><span id="vtitle">—</span><span class="rng" id="vrange"></span><button class="btn-icon mono" type="button" id="vclose">ESC CLOSE</button></div>
       <div class="vb" id="vbody" tabindex="0"></div>
+    </div>
+  </div>
+
+  <!-- SKIPPED-FILE REVIEW -->
+  <div class="veil" id="skipveil">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Skipped files">
+      <div class="k mono">CONTEXT // SKIPPED FILES</div>
+      <p class="note" id="skipsum"></p>
+      <div id="skiplist"></div>
+      <div class="row"><button class="btn btn-hairline" type="button" id="skipclose">Close</button></div>
     </div>
   </div>
 
@@ -766,6 +786,11 @@
   /* ============ CONTEXT ENGINE ============ */
   var files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
   var skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
+  var skippedFiles = [];       /* {path, reason, size, ref} — File refs kept so users can include-back */
+  var SKIP_LIST_MAX = 500;
+  function recordSkip(path, reason, size, ref) {
+    if (skippedFiles.length < SKIP_LIST_MAX) skippedFiles.push({ path: path, reason: reason, size: size || 0, ref: ref || null });
+  }
   var IGNORE_DIRS = ['.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', 'target', 'vendor', '__pycache__', '.venv', 'venv', 'coverage', '.cache', '.idea', '.vscode'];
   var BIN_EXT = /\.(png|jpe?g|gif|webp|avif|ico|icns|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|m4[av]|mov|avi|mkv|webm|ogg|wav|flac|zip|gz|bz2|xz|7z|rar|tar|jar|war|class|pyc|pyo|o|a|so|dylib|dll|exe|bin|dat|db|sqlite3?|pdf|doc[x]?|xls[x]?|ppt[x]?|ds_store|lockb|wasm)$/i;
   var MAX_FILE = 512 * 1024, MAX_FILES = 4000;
@@ -778,15 +803,17 @@
     for (var i = 0; i < v.length; i++) if (v[i] === 0) return true;
     return false;
   }
-  function ingestFile(file, path) {
+  /* force=true (the include-back path) bypasses pattern/extension/size filters;
+     the null-byte sniff still applies — true binaries are never ingested */
+  function ingestFile(file, path, force) {
     path = (path || file.name).replace(/^\.?\//, '');
     if (files.size >= MAX_FILES) { skipped.over++; return Promise.resolve(); }
-    if (ignoredPath(path)) { skipped.dirs++; return Promise.resolve(); }
-    if (matchesIgnore(path)) { skipped.user++; return Promise.resolve(); }
-    if (BIN_EXT.test(path)) { skipped.binary++; return Promise.resolve(); }
-    if (file.size > MAX_FILE) { skipped.big++; return Promise.resolve(); }
+    if (!force && ignoredPath(path)) { skipped.dirs++; return Promise.resolve(); }
+    if (!force && matchesIgnore(path)) { skipped.user++; recordSkip(path, 'ignore-pattern', file.size, file); return Promise.resolve(); }
+    if (!force && BIN_EXT.test(path)) { skipped.binary++; recordSkip(path, 'binary-ext', file.size, file); return Promise.resolve(); }
+    if (!force && file.size > MAX_FILE) { skipped.big++; recordSkip(path, 'oversized', file.size, file); return Promise.resolve(); }
     return file.slice(0, 8192).arrayBuffer().then(function (buf) {
-      if (looksBinary(buf)) { skipped.binary++; return; }
+      if (looksBinary(buf)) { skipped.binary++; recordSkip(path, 'binary-content', file.size, null); return; }
       return file.text().then(function (text) {
         files.set(path, {
           content: text,
@@ -832,10 +859,12 @@
     if (skipped.dirs) s.push(skipped.dirs + ' ignored-dir');
     if (skipped.user) s.push(skipped.user + ' ignore-pattern');
     if (skipped.over) s.push(skipped.over + ' over the ' + MAX_FILES + '-file cap');
+    var totSkipped = skipped.binary + skipped.big + skipped.dirs + skipped.user + skipped.over;
     var note = $('skipnote');
     note.hidden = !s.length;
-    if (s.length) note.textContent = '// skipped: ' + s.join(', ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files.';
-    toast(files.size + ' file' + (files.size === 1 ? '' : 's') + ' loaded into memory.');
+    if (s.length) note.textContent = '// ' + totSkipped + ' skipped: ' + s.join(' · ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files.';
+    $('skiprevrow').hidden = !skippedFiles.length;
+    toast(files.size + ' file' + (files.size === 1 ? '' : 's') + ' loaded into memory' + (totSkipped ? ' · ' + totSkipped + ' skipped — review in the CONTEXT rail' : '') + '.');
     setStatus('CORE IDLE — ' + files.size + ' files in memory');
     maybeAutoSmart();
   }
@@ -955,10 +984,81 @@
   $('selnone').addEventListener('click', function () { files.forEach(function (f) { f.checked = false; }); contextDirty = true; mapDirty = true; renderTree(); renderBudget(); });
   $('clearctx').addEventListener('click', function () {
     files.clear(); skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
+    skippedFiles.length = 0;
     contextDirty = true; mapDirty = true; renderTree(); renderBudget();
     $('skipnote').hidden = true;
+    $('skiprevrow').hidden = true;
     toast('Project unloaded from memory.');
   });
+
+  /* ---- skipped-file review + include-back ---- */
+  var skipveil = $('skipveil'), untrapSkip = null;
+  var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE' };
+  function openSkipReview() {
+    var list = $('skiplist');
+    list.innerHTML = '';
+    var order = ['oversized', 'ignore-pattern', 'binary-ext', 'binary-content'];
+    var groups = {};
+    skippedFiles.forEach(function (s) { (groups[s.reason] = groups[s.reason] || []).push(s); });
+    $('skipsum').textContent = '// ' + skippedFiles.length + ' file' + (skippedFiles.length === 1 ? '' : 's') + ' recorded'
+      + (skipped.dirs ? ' — plus ' + skipped.dirs + ' inside ignored/dot directories (not listed)' : '')
+      + '. INCLUDE pulls a file into memory despite the filter; true binaries stay out.';
+    order.forEach(function (g) {
+      var rows = groups[g];
+      if (!rows || !rows.length) return;
+      var hd = document.createElement('div');
+      hd.className = 'skip-grp';
+      hd.textContent = SKIP_LABEL[g] + ' — ' + rows.length + (g === 'oversized' ? ' (>' + (MAX_FILE / 1024) + 'KB)' : '');
+      list.appendChild(hd);
+      rows.slice(0, 200).forEach(function (s) {
+        var row = document.createElement('div');
+        row.className = 'skip-row';
+        var sp = document.createElement('span');
+        sp.className = 'sp'; sp.textContent = s.path; sp.title = s.path;
+        var sz = document.createElement('span');
+        sz.className = 'sz'; sz.textContent = s.size >= 1024 ? Math.round(s.size / 1024) + 'KB' : s.size + 'B';
+        row.appendChild(sp); row.appendChild(sz);
+        if (s.ref) {
+          var inc = document.createElement('button');
+          inc.type = 'button'; inc.className = 'ev mono'; inc.textContent = '[ INCLUDE ]';
+          inc.addEventListener('click', function () {
+            inc.disabled = true;
+            ingestFile(s.ref, s.path, true).then(function () {
+              if (files.has(s.path)) {
+                var ix = skippedFiles.indexOf(s);
+                if (ix !== -1) skippedFiles.splice(ix, 1);
+                contextDirty = true; mapDirty = true;
+                renderTree(); renderBudget();
+                row.remove();
+                $('skiprevrow').hidden = !skippedFiles.length;
+                toast('“' + s.path + '” included in context.');
+              } else {
+                inc.disabled = false;
+                toast('Could not include — the file content reads as binary.');
+              }
+            });
+          });
+          row.appendChild(inc);
+        }
+        list.appendChild(row);
+      });
+      if (rows.length > 200) {
+        var more = document.createElement('div');
+        more.className = 'skip-grp';
+        more.textContent = '… ' + (rows.length - 200) + ' more not shown';
+        list.appendChild(more);
+      }
+    });
+    skipveil.classList.add('on');
+    untrapSkip = trap(skipveil.querySelector('.modal'));
+  }
+  function closeSkipReview() {
+    skipveil.classList.remove('on');
+    if (untrapSkip) { untrapSkip(); untrapSkip = null; }
+  }
+  $('skiprev').addEventListener('click', openSkipReview);
+  $('skipclose').addEventListener('click', closeSkipReview);
+  skipveil.addEventListener('click', function (e) { if (e.target === skipveil) closeSkipReview(); });
 
   /* ============ SMART CONTEXT ENGINE ============
      Instead of sending every checked file whole (FULL mode), SMART mode:
@@ -1377,6 +1477,7 @@
       }).then(function (st) {
         if (st !== 'granted') { toast('Read permission declined — drop the folder instead.'); return; }
         files.clear(); skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
+        skippedFiles.length = 0;
         lastDirHandle = rec.handle;
         setStatus('RELOADING “' + rec.name + '”…');
         return walkHandle(rec.handle, rec.handle.name + '/').then(afterIngest);
@@ -2293,6 +2394,7 @@
       if (palOv.classList.contains('on')) { palClose(); return; }
       if (keymapveil.classList.contains('on')) { keymapveil.classList.remove('on'); return; }
       if (viewveil.classList.contains('on')) { closeViewer(); return; }
+      if (skipveil.classList.contains('on')) { closeSkipReview(); return; }
       if (drawer.classList.contains('open')) { openDrawer(false); return; }
       if (rail.classList.contains('open')) { rail.classList.remove('open'); railbtn.setAttribute('aria-expanded', 'false'); return; }
     }
