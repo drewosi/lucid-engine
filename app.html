@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MERIDIAN — Workbench</title>
-<meta name="description" content="The Meridian workbench. Load a project into your browser's memory, ask questions, and get answers with inspectable evidence traces. Runs entirely in your browser with your own Anthropic API key.">
+<meta name="description" content="The Meridian workbench. Load a project into your browser's memory, ask questions, and get answers with inspectable evidence traces. Runs entirely in your browser with your own API key — or the no-API local engine.">
 <link rel="canonical" href="https://drewosi.github.io/lucid-engine/app.html">
 <meta property="og:title" content="MERIDIAN — Workbench">
 <meta property="og:description" content="Load a project into your browser's memory and get AI answers with inspectable evidence traces. Browser-only. Your key, your data, zero egress to us.">
@@ -378,7 +378,7 @@
         <input type="file" id="dirpick" webkitdirectory multiple hidden aria-label="Pick a project folder">
         <input type="file" id="filepick" multiple hidden aria-label="Pick files">
       </div>
-      <p class="rail-note">// files are read into this tab's memory only. nothing is uploaded to us — <b>we run no servers</b>. selected files are sent to your chosen model provider with each question, under your key.</p>
+      <p class="rail-note">// files are read into this tab's memory only. nothing is uploaded to us — <b>we run no servers</b>. selected files are sent to your chosen model provider with each question, under your key. in LOCAL mode nothing is sent at all.</p>
       <div id="budget" hidden title="Estimated tokens vs the model's context window — the estimate is language-aware (code counts denser than prose)">
         <div class="budget-bar" id="budgetbar"><i></i></div>
         <div class="budget-txt"><span id="budgettxt">≈ 0 tokens selected</span><span id="budgetmax"></span></div>
@@ -408,7 +408,7 @@
             <h2>The workbench is live.</h2>
             <p>Ask a question and the answer arrives with its trace — the reasoning steps, pinned to the exact files and lines they stand on.</p>
             <ol>
-              <li>Add your API key in <b>SETTINGS</b> — Anthropic, OpenAI, or a custom endpoint. It stays in this browser.</li>
+              <li>Add your API key in <b>SETTINGS</b> — Anthropic, OpenAI, or a custom endpoint. It stays in this browser. Or pick <b>LOCAL</b>: no key, no AI — deterministic search over your loaded files.</li>
               <li>Load a project folder into <b>CONTEXT</b> (optional, recommended).</li>
               <li>Ask. Expand any answer's evidence chips to inspect the cited lines.</li>
             </ol>
@@ -447,6 +447,7 @@
       <option value="anthropic">ANTHROPIC</option>
       <option value="openai">OPENAI</option>
       <option value="custom">CUSTOM (OPENAI-COMPATIBLE)</option>
+      <option value="local">LOCAL — NO API (DETERMINISTIC)</option>
     </select>
     <p class="note" id="provnote"></p>
     <div id="customcfg" hidden>
@@ -461,6 +462,7 @@
       <button class="btn btn-hairline" type="button" id="custsave" style="margin-top:8px">Save endpoint</button>
     </div>
 
+    <div id="keysec">
     <h3 id="keyhd">ANTHROPIC API KEY</h3>
     <div class="key-row">
       <label for="keyin" style="position:absolute;left:-9999px">API key</label>
@@ -471,6 +473,7 @@
     <p class="note">// stored in this browser's localStorage only, per provider. it is sent to exactly one place: the selected provider's API endpoint, with your requests. we never see it — there is no server on our side to see it with.</p>
     <p class="note">// recommended: create a key in a dedicated workspace with a monthly spend limit. any script running on a page can read its own origin's localStorage — this page loads zero third-party scripts, and keeping the blast radius small is still good practice.</p>
     <button class="btn-quiet" type="button" id="clearkey">[ CLEAR KEY ]</button>
+    </div>
 
     <h3>MODEL</h3>
     <p class="note" id="modelnote"></p>
@@ -508,7 +511,7 @@
       <h2 id="fr-title">A real instrument, in free beta.</h2>
       <ul>
         <li><b>It runs entirely in your browser.</b> We operate no servers. Your files, questions, and key are never sent to us.</li>
-        <li><b>Bring your own API key.</b> Anthropic by default; OpenAI or a custom OpenAI-compatible endpoint in settings. Requests go directly from this browser to the provider under <b>your</b> account — usage is billed by the provider to you, at their rates.</li>
+        <li><b>Bring your own API key.</b> Anthropic by default; OpenAI or a custom OpenAI-compatible endpoint in settings. Requests go directly from this browser to the provider under <b>your</b> account — usage is billed by the provider to you, at their rates. Prefer no API at all? The <b>LOCAL</b> engine answers by deterministic search over your loaded files — no key, no AI, zero network.</li>
         <li><b>Your key stays local.</b> It is stored in this browser's localStorage and sent only to the selected provider's API endpoint. Use a spend-limited key.</li>
         <li><b>AI output can be wrong.</b> Answers and traces are machine-generated and may be inaccurate or incomplete. They are not professional advice. Verify before you rely on them.</li>
       </ul>
@@ -621,7 +624,9 @@
     openai:    { label: 'OPENAI', keyLS: 'meridian.key.openai', keyHint: 'sk-…',
                  note: '// requests go straight from this browser to api.openai.com via the chat-completions API, streamed.' },
     custom:    { label: 'CUSTOM', keyLS: 'meridian.key.custom', keyHint: 'api key (optional for local servers)',
-                 note: '// any OpenAI-compatible endpoint: ollama, LM Studio, vLLM, openrouter… the server must allow browser CORS. cost estimates are unavailable.' }
+                 note: '// any OpenAI-compatible endpoint: ollama, LM Studio, vLLM, openrouter… the server must allow browser CORS. cost estimates are unavailable.' },
+    local:     { label: 'LOCAL', keyLS: 'meridian.key.local', keyHint: '', /* keyLS is never read — local needs no key */
+                 note: '// no API, no key, no AI. questions run as deterministic keyword/symbol search over the loaded files — nothing ever leaves this tab.' }
   };
   var MODELS = {
     'claude-sonnet-5':  { provider: 'anthropic', label: 'SONNET 5',  ctx: 1000000, rIn: 3.00, rOut: 15.00, rCacheW: 3.75, rCacheR: 0.30,
@@ -631,7 +636,9 @@
     'gpt-5.1':          { provider: 'openai', label: 'GPT-5.1', ctx: 400000, rIn: 1.25, rOut: 10.00, rCacheW: 0, rCacheR: 0.125,
                           note: 'gpt-5.1 — 400K-token context, OpenAI flagship.' },
     'gpt-5-mini':       { provider: 'openai', label: 'GPT-5 MINI', ctx: 400000, rIn: 0.25, rOut: 2.00, rCacheW: 0, rCacheR: 0.025,
-                          note: 'gpt-5-mini — 400K-token context. cheap; traces are shallower.' }
+                          note: 'gpt-5-mini — 400K-token context. cheap; traces are shallower.' },
+    '__local':          { provider: 'local', label: 'LOCAL ENGINE', ctx: 200000, rIn: 0, rOut: 0, rCacheW: 0, rCacheR: 0, unknownRates: true, local: true,
+                          note: 'deterministic keyword/symbol search over the loaded files — no AI, no network, free. answers cite exact lines.' }
   };
   var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget', ignore: 'meridian.ignore',
              provider: 'meridian.provider', okey: 'meridian.key.openai', ckey: 'meridian.key.custom', curl: 'meridian.custom.url', cmodel: 'meridian.custom.model' };
@@ -741,8 +748,11 @@
   provsel.value = curProvider;
   function syncProviderUI() {
     $('provnote').textContent = PROVIDERS[curProvider].note;
-    $('keyhd').textContent = PROVIDERS[curProvider].label + ' API KEY';
-    $('keyin').placeholder = PROVIDERS[curProvider].keyHint;
+    $('keysec').hidden = curProvider === 'local';
+    if (curProvider !== 'local') {
+      $('keyhd').textContent = PROVIDERS[curProvider].label + ' API KEY';
+      $('keyin').placeholder = PROVIDERS[curProvider].keyHint;
+    }
     $('customcfg').hidden = curProvider !== 'custom';
     if (curProvider === 'custom') {
       $('custurl').value = lsGet(LS.curl) || '';
@@ -996,7 +1006,7 @@
     $('budgettxt').textContent = smart
       ? '≈ ' + fmtTok(sel.tokens) + ' loaded · sends ≤ ' + fmtTok(getBudget())
       : '≈ ' + fmtTok(sel.tokens) + ' tokens · ' + sel.count + ' selected';
-    $('budgetmax').textContent = MODELS[model].label + ' · ' + fmtTok(cap);
+    $('budgetmax').textContent = MODELS[model].local ? 'LOCAL — NOTHING SENT' : MODELS[model].label + ' · ' + fmtTok(cap);
     $('ctxreadout').innerHTML = smart
       ? 'CTX <b>SMART</b> · <b>' + sel.count + '</b> files · sends ≤ <b>' + fmtTok(getBudget()) + '</b>'
       : 'CTX ≈ <b>' + fmtTok(sel.tokens) + '</b> tokens · <b>' + sel.count + '</b> files';
@@ -1444,6 +1454,7 @@
 
   function maybeAutoSmart() {
     if (ctxMode === 'smart') return;
+    if (MODELS[model].local) return; /* local mode sends nothing — smart/full is moot */
     var sel = selectedTokens();
     if (sel.tokens > MODELS[model].ctx * AUTO_SMART_FRAC) {
       setCtxMode('smart');
@@ -1904,9 +1915,9 @@
     resEl.appendChild(d);
   }
 
-  /* one engine behind search / def / refs — all in-memory, nothing touches disk */
-  function runLocalSearch(query, resEl, mode, filterGlob) {
-    resEl.innerHTML = '';
+  /* one engine behind search / def / refs — all in-memory, nothing touches disk.
+     localSearchData is DOM-free so the LOCAL ENGINE provider can reuse it. */
+  function localSearchData(query, mode, filterGlob) {
     var fRe = null;
     if (filterGlob) { try { fRe = actGlobToRe(filterGlob); } catch (e) {} }
     var re = null, lq = query.toLowerCase();
@@ -1921,21 +1932,27 @@
     } else {
       try { re = new RegExp(query, 'i'); } catch (e) { re = null; }
     }
-    var cap = mode === 'refs' ? 40 : 30, hits = 0, filesHit = 0;
+    var cap = mode === 'refs' ? 40 : 30, hits = [], filesHit = 0;
     files.forEach(function (f, p) {
-      if (hits >= cap) return;
+      if (hits.length >= cap) return;
       if (fRe && !fRe.test(p)) return;
       var lines = f.content.split('\n'), had = false;
-      for (var i = 0; i < lines.length && hits < cap; i++) {
+      for (var i = 0; i < lines.length && hits.length < cap; i++) {
         var hit = re ? re.test(lines[i]) : lines[i].toLowerCase().indexOf(lq) !== -1;
         if (!hit) continue;
-        hits++; had = true;
-        evChip(resEl, p + ':' + (i + 1), p, i + 1);
+        had = true;
+        hits.push({ p: p, line: i + 1, text: lines[i] });
       }
       if (had) filesHit++;
     });
-    if (!hits) resNote(resEl, '// no matches in loaded files' + (filterGlob ? ' under filter ' + filterGlob : ''));
-    else resNote(resEl, '// ' + (hits >= cap ? cap + '+ ' : hits + ' ') + (mode === 'def' ? 'definition-shaped ' : '') + 'match' + (hits === 1 ? '' : 'es') + ' in ' + filesHit + ' file' + (filesHit === 1 ? '' : 's') + ' — click a chip to inspect');
+    return { hits: hits, filesHit: filesHit, cap: cap };
+  }
+  function runLocalSearch(query, resEl, mode, filterGlob) {
+    resEl.innerHTML = '';
+    var r = localSearchData(query, mode, filterGlob);
+    r.hits.forEach(function (h) { evChip(resEl, h.p + ':' + h.line, h.p, h.line); });
+    if (!r.hits.length) resNote(resEl, '// no matches in loaded files' + (filterGlob ? ' under filter ' + filterGlob : ''));
+    else resNote(resEl, '// ' + (r.hits.length >= r.cap ? r.cap + '+ ' : r.hits.length + ' ') + (mode === 'def' ? 'definition-shaped ' : '') + 'match' + (r.hits.length === 1 ? '' : 'es') + ' in ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's') + ' — click a chip to inspect');
   }
 
   /* local directory summary — file count, tokens, largest, newest */
@@ -2237,6 +2254,7 @@
     if (streaming) return;
     var q = promptEl.value.trim();
     if (!q) return;
+    if (curProvider === 'local') { promptEl.value = ''; askLocal(q); return; }
     var key = lsGet(curKeyLS()) || '';
     if (!key && curProvider !== 'custom') {
       setStatus('NO KEY — add your ' + PROVIDERS[curProvider].label + ' API key in settings', true);
@@ -2454,6 +2472,163 @@
       sendbtn.hidden = false; stopbtn.hidden = true;
       promptEl.focus();
     });
+  }
+
+  /* ============ LOCAL ENGINE (NO API · NO AI) ============
+     Answers questions by deterministic search over the loaded in-memory files.
+     No key, no network, no model — every "answer" is really the search machinery
+     (localSearchData / dir / recent) surfaced through the same trace + evidence-chip
+     UI the AI providers use. Honestly labeled LOCAL · NO AI everywhere.        */
+  var LOCAL_HELP = 'The LOCAL engine searches your loaded files — no AI, no network. Commands: '
+    + '`search <text|regex>`, `def <symbol>`, `refs <symbol>`, `dir <path>`, `recent <n>`. '
+    + 'Or ask a plain question and it ranks the files whose contents best match your words. '
+    + 'For real AI answers, pick a provider (Anthropic, OpenAI, or a local server) in settings.';
+
+  function localEvidence(h) {
+    return { file: h.p, startLine: h.line, endLine: h.line, quote: String(h.text).trim().slice(0, 120) };
+  }
+
+  /* build a trace-shaped object (steps + evidence) — no confidence field, it's deterministic */
+  function askLocal(q) {
+    addUserMsg(q);
+    var msgEl = addAiMsg();
+    var txtEl = msgEl.querySelector('.txt');
+    setStatus('LOCAL ENGINE — searching loaded files…');
+
+    var m = q.match(/^\s*(search|def|refs|dir|recent)\b\s*([\s\S]*)$/i);
+    var answer, trace = { steps: [] }, actions = null;
+
+    if (!files.size) {
+      answer = 'No project is loaded, so there is nothing to search. Drop a folder into CONTEXT, then ask again — '
+        + 'or switch to an AI provider in settings.\n\n' + LOCAL_HELP;
+      trace.steps.push({ n: 1, action: 'check loaded context', note: 'no files in memory', evidence: [] });
+    } else if (m) {
+      var cmd = m[1].toLowerCase(), arg = m[2].trim();
+      if (cmd === 'dir') {
+        var res = localDirData(arg || '.');
+        answer = res.answer; trace.steps = res.steps;
+      } else if (cmd === 'recent') {
+        var res2 = localRecentData(arg || '10');
+        answer = res2.answer; trace.steps = res2.steps;
+      } else if (!arg) {
+        answer = '`' + cmd + '` needs an argument — e.g. `' + cmd + ' '
+          + (cmd === 'def' || cmd === 'refs' ? 'functionName' : 'pattern') + '`.\n\n' + LOCAL_HELP;
+        trace.steps.push({ n: 1, action: 'parse command', note: 'missing argument for ' + cmd, evidence: [] });
+      } else {
+        var mode = cmd === 'def' ? 'def' : cmd === 'refs' ? 'refs' : 'text';
+        var r = localSearchData(arg, mode);
+        var label = cmd === 'def' ? 'definition-shaped matches' : cmd === 'refs' ? 'references' : 'matches';
+        answer = r.hits.length
+          ? 'Found ' + (r.hits.length >= r.cap ? r.cap + '+' : r.hits.length) + ' ' + label
+            + ' for `' + arg + '` across ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's')
+            + '. The evidence chips below open each hit at its exact line.'
+          : 'No ' + label + ' for `' + arg + '` in the loaded files.';
+        trace.steps.push({
+          n: 1, action: cmd + ' “' + arg + '”',
+          note: r.hits.length ? r.hits.length + ' hit' + (r.hits.length === 1 ? '' : 's') + ' in ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's') : 'no matches',
+          evidence: r.hits.slice(0, 8).map(localEvidence)
+        });
+      }
+    } else {
+      /* plain question → rank files by term hits + static importance */
+      var terms = queryTerms(q);
+      if (!terms.length) {
+        answer = 'That question has no distinctive terms to search for. Try naming a symbol, filename, or keyword — '
+          + 'or use a command.\n\n' + LOCAL_HELP;
+        trace.steps.push({ n: 1, action: 'extract search terms', note: 'no usable terms found', evidence: [] });
+      } else {
+        trace.steps.push({ n: 1, action: 'parse question', note: 'search terms: ' + terms.join(', '), evidence: [] });
+        var perFile = {};      /* path -> {count, first hit} */
+        terms.slice(0, 4).forEach(function (t) {
+          var r = localSearchData(t, 'text');
+          trace.steps.push({
+            n: trace.steps.length + 1, action: 'search “' + t + '”',
+            note: r.hits.length ? r.hits.length + ' hit' + (r.hits.length === 1 ? '' : 's') : 'no matches',
+            evidence: r.hits.slice(0, 4).map(localEvidence)
+          });
+          r.hits.forEach(function (h) {
+            var e = perFile[h.p] || (perFile[h.p] = { count: 0, first: h });
+            e.count++;
+          });
+        });
+        var ranked = Object.keys(perFile).map(function (p) {
+          var base = files.has(p) ? files.get(p).base : 0;
+          return { p: p, count: perFile[p].count, first: perFile[p].first, score: perFile[p].count * 10 + base };
+        }).sort(function (a, b) { return b.score - a.score; }).slice(0, 8);
+
+        if (ranked.length) {
+          answer = 'Deterministic search — no AI. The files below best match your words (by match count, then file importance). '
+            + 'Open the evidence chips to inspect the matching lines, then read the top files or run a follow-up command.\n\n'
+            + ranked.slice(0, 5).map(function (r, i) {
+                return (i + 1) + '. `' + r.p + '` — ' + r.count + ' match' + (r.count === 1 ? '' : 'es');
+              }).join('\n');
+          trace.steps.push({
+            n: trace.steps.length + 1, action: 'rank files',
+            note: ranked.length + ' file' + (ranked.length === 1 ? '' : 's') + ' matched · sorted by hits + importance',
+            evidence: ranked.map(function (r) { return localEvidence(r.first); })
+          });
+          var top = terms[0];
+          actions = [
+            { kind: 'def', command: top, why: 'jump to where “' + top + '” is likely defined' },
+            { kind: 'refs', command: top, why: 'list every reference to “' + top + '”' },
+            { kind: 'recent', command: '10', why: 'see the most recently modified files' }
+          ];
+        } else {
+          answer = 'None of your terms (' + terms.join(', ') + ') appear in the loaded files. '
+            + 'Try different wording, or check what is selected in CONTEXT.\n\n' + LOCAL_HELP;
+        }
+      }
+    }
+
+    if (actions) trace.actions = actions;
+    txtEl.innerHTML = renderRich(answer);
+    renderTrace(msgEl, trace);
+    /* the header chip defaults to TRACED — relabel it so nobody mistakes this for a model */
+    var chip = msgEl.querySelector('.term-hd .chip');
+    if (chip) { chip.className = 'chip'; chip.textContent = 'LOCAL · NO AI'; }
+    var hd = msgEl.querySelector('.term-hd');
+    if (hd && hd.firstChild) hd.firstChild.textContent = 'MERIDIAN LOCAL ENGINE — NO AI ';
+
+    history.push({ role: 'user', content: q });
+    history.push({ role: 'assistant', content: answer });
+    transcript.push({ q: q, answer: answer, trace: trace, model: 'LOCAL ENGINE', provider: 'LOCAL', ts: Date.now() });
+    setStatus('LOCAL ENGINE IDLE — deterministic · zero network');
+    scrollEnd();
+  }
+
+  /* data-level directory summary + recent, mirroring runDirSummary / runRecent */
+  function localDirData(dirPath) {
+    var clean = dirPath.replace(/\/+$/, '');
+    var prefix = clean === '.' || clean === '' ? '' : clean + '/';
+    var items = [];
+    files.forEach(function (f, p) { if (!prefix || p.indexOf(prefix) === 0) items.push({ p: p, f: f }); });
+    if (!items.length) return { answer: 'No loaded files under “' + dirPath + '”.', steps: [{ n: 1, action: 'summarize ' + (prefix || './'), note: 'no files', evidence: [] }] };
+    var tok = 0;
+    items.forEach(function (it) { tok += it.f.tokens; });
+    var largest = items.slice().sort(function (a, b) { return b.f.tokens - a.f.tokens; }).slice(0, 5);
+    var ans = '`' + (prefix || './') + '` — ' + items.length + ' file' + (items.length === 1 ? '' : 's') + ' ≈' + fmtTok(tok) + ' tokens. Largest:\n\n'
+      + largest.map(function (it, i) { return (i + 1) + '. `' + it.p + '` ≈' + fmtTok(it.f.tokens); }).join('\n');
+    return { answer: ans, steps: [{
+      n: 1, action: 'summarize ' + (prefix || './'),
+      note: items.length + ' files ≈' + fmtTok(tok) + ' tokens',
+      evidence: largest.map(function (it) { return { file: it.p, startLine: 1, endLine: 1, quote: '' }; })
+    }] };
+  }
+  function localRecentData(countStr) {
+    var n = Math.min(Math.max(parseInt(countStr, 10) || 10, 1), 20);
+    var all = [];
+    files.forEach(function (f, p) { all.push({ p: p, m: f.mtime }); });
+    all.sort(function (a, b) { return b.m - a.m; });
+    var top = all.slice(0, n);
+    var ans = top.length
+      ? 'Most recently modified (from file mtimes):\n\n' + top.map(function (it, i) {
+          return (i + 1) + '. `' + it.p + '`' + (it.m ? ' · ' + new Date(it.m).toISOString().slice(0, 10) : '');
+        }).join('\n')
+      : 'No files loaded.';
+    return { answer: ans, steps: [{
+      n: 1, action: 'list recent files', note: top.length + ' file' + (top.length === 1 ? '' : 's'),
+      evidence: top.map(function (it) { return { file: it.p, startLine: 1, endLine: 1, quote: '' }; })
+    }] };
   }
 
   /* ============ COMMAND PALETTE (Ctrl/Cmd-K) ============
