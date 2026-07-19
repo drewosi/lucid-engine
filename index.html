@@ -1,0 +1,1185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MERIDIAN — An AI instrument for people who build</title>
+<meta name="description" content="Meridian holds your entire project in working memory, shows the reasoning behind every answer, and operates your tools with your hands on the controls. A Lucid Engine demonstration.">
+<style>
+  /* ============ LUCID ENGINE TOKENS · v1.2 ============ */
+  #app {
+    --paper: #0A0B0D;
+    --surface: #101216;
+    --surface-2: #14171C;
+    --ink: #EDECE7;
+    --ink-2: #A9A8A1;
+    --ink-3: #6C6B66;
+    --line: #22242A;
+    --line-strong: #34363E;
+    --accent: #FF5C0A;
+    --accent-ink: #0A0B0D;
+    --err: #E06B4F;
+
+    --ease-out-engine: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-inout-engine: cubic-bezier(0.65, 0, 0.35, 1);
+    --ease-snap: cubic-bezier(0.3, 0, 0, 1);
+    --t-feedback: 120ms;
+    --t-state: 200ms;
+    --t-entrance: 400ms;
+  }
+  #app[data-mode="light"] {
+    --paper: #FAFAF7;
+    --surface: #FFFFFF;
+    --surface-2: #F1F0EA;
+    --ink: #111110;
+    --ink-2: #4A4945;
+    --ink-3: #8A8880;
+    --line: #E4E2DB;
+    --line-strong: #C9C7BE;
+    --accent: #FF4F00;
+    --accent-ink: #FFFFFF;
+    --err: #C4452D;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  #app {
+    background: var(--paper); color: var(--ink); min-height: 100vh;
+    font-family: "Helvetica Neue", "Segoe UI", -apple-system, Arial, sans-serif;
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+    transition: background var(--t-state) var(--ease-inout-engine), color var(--t-state) var(--ease-inout-engine);
+  }
+  .mono { font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 28px; }
+  a { color: inherit; text-decoration: none; }
+  :is(a, button, input, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  kbd {
+    font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px;
+    border: 1px solid var(--line-strong); border-radius: 3px; padding: 2px 7px; color: var(--ink);
+  }
+
+  /* Signal Trace */
+  .trace { position: relative; }
+  .trace::after { content: ""; position: absolute; left: 0; bottom: -4px; height: 1px; width: 0; background: var(--accent); transition: width 150ms var(--ease-snap); }
+  .trace:hover::after, .trace.active::after { width: 100%; }
+
+  /* Materialize */
+  .rv { opacity: 0; transform: translateY(8px); }
+  .rv.in {
+    opacity: 1; transform: none;
+    transition: opacity var(--t-entrance) var(--ease-out-engine), transform var(--t-entrance) var(--ease-out-engine);
+    transition-delay: calc(min(var(--i, 0), 8) * 30ms);
+  }
+
+  /* ============ BOOT ============ */
+  #boot { position: fixed; inset: 0; z-index: 200; background: #0A0B0D; color: #EDECE7; display: flex; align-items: center; justify-content: center; transition: opacity var(--t-entrance) var(--ease-out-engine); }
+  #boot.done { opacity: 0; pointer-events: none; }
+  .boot-inner { width: min(420px, 80vw); }
+  .boot-line { font-size: 12px; letter-spacing: .08em; color: #6C6B66; min-height: 18px; margin: 2px 0; opacity: 0; }
+  .boot-line.on { opacity: 1; }
+  .boot-line b { color: #EDECE7; font-weight: 500; }
+  .boot-line .ok { color: #FF5C0A; }
+  .boot-bar { height: 2px; background: #22242A; margin-top: 14px; }
+  .boot-bar i { display: block; height: 100%; width: 0%; background: #FF5C0A; }
+  .boot-pct { font-size: 11px; color: #6C6B66; margin-top: 6px; text-align: right; }
+
+  /* ============ NAV ============ */
+  nav.primary { position: sticky; top: 0; z-index: 100; height: 64px; background: var(--paper); border-bottom: 1px solid var(--line); transition: background var(--t-state) var(--ease-inout-engine); }
+  .nav-in { display: flex; align-items: center; gap: 24px; height: 100%; }
+  .wordmark { font-weight: 700; letter-spacing: .02em; font-size: 16px; display: flex; align-items: baseline; gap: 10px; }
+  .wordmark .tag { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .14em; font-weight: 400; }
+  .anchors { display: flex; gap: 22px; margin-left: auto; }
+  .anchors a { font-size: 13.5px; color: var(--ink-2); padding: 4px 0; }
+  .anchors a:hover, .anchors a.active { color: var(--ink); }
+  .nav-actions { display: flex; gap: 10px; align-items: center; }
+  @media (max-width: 860px) { .anchors { display: none; } .nav-actions .btn-hairline { display: none; } }
+
+  .btn { font-family: inherit; font-size: 13.5px; height: 36px; padding: 0 18px; border-radius: 3px; cursor: pointer; letter-spacing: .01em; display: inline-flex; align-items: center; gap: 8px;
+    transition: transform var(--t-feedback) var(--ease-snap), filter var(--t-feedback) var(--ease-snap), border-color var(--t-feedback) var(--ease-snap), background var(--t-feedback) var(--ease-snap); }
+  .btn:active { transform: scale(.985); }
+  .btn-signal { background: var(--accent); color: var(--accent-ink); border: none; font-weight: 700; }
+  .btn-signal:hover { filter: brightness(1.08); }
+  .btn-hairline { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+  .btn-hairline:hover { border-color: var(--accent); background: var(--surface); }
+  .btn-mode, .btn-k { background: transparent; border: 1px solid var(--line-strong); color: var(--ink-3); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; height: 32px; padding: 0 10px; border-radius: 3px; cursor: pointer; }
+  .btn-mode:hover, .btn-k:hover { border-color: var(--accent); color: var(--ink); }
+  .btn-hero { height: 44px; padding: 0 24px; font-size: 14.5px; }
+
+  /* ============ HERO ============ */
+  .hero { position: relative; min-height: calc(100vh - 64px); display: flex; align-items: center; overflow: hidden; }
+  #field { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+  .hero-copy { position: relative; z-index: 2; padding: 90px 0; max-width: 620px; pointer-events: none; }
+  .hero-copy a, .hero-copy .btn { pointer-events: auto; }
+  .eyebrow { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; letter-spacing: .16em; color: var(--ink-3); display: flex; align-items: center; gap: 10px; }
+  .eyebrow .dot { width: 8px; height: 8px; background: var(--accent); animation: flare 1.6s var(--ease-inout-engine) infinite alternate; }
+  @keyframes flare { from { opacity: .4; } to { opacity: 1; } }
+  h1 { font-size: clamp(44px, 7.2vw, 88px); line-height: .98; letter-spacing: -.03em; font-weight: 700; margin: 22px 0 24px; text-wrap: balance; }
+  h1 .thin { color: var(--ink-3); font-weight: 700; }
+  .hero-sub { font-size: 17px; color: var(--ink-2); max-width: 44ch; margin: 0 0 34px; }
+  .hero-sub b { color: var(--ink); font-weight: 500; }
+  .hero-cta-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .hero-note { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-3); letter-spacing: .06em; }
+
+  /* ============ READOUT ============ */
+  .readout { position: relative; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; letter-spacing: .08em; color: var(--ink-3); overflow: hidden; }
+  .readout .row { display: flex; gap: 30px; padding: 10px 28px; white-space: nowrap; overflow-x: auto; max-width: 1140px; margin: 0 auto; }
+  .readout b { color: var(--ink); font-weight: 500; }
+  .readout .acc { color: var(--accent); }
+  .sweep { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent); left: -2px; opacity: 0; pointer-events: none; }
+  .sweep.go { animation: sweep 500ms var(--ease-inout-engine) 1; }
+  @keyframes sweep { 0% { left: 0; opacity: .9; } 100% { left: 100%; opacity: .9; } }
+
+  /* ============ SECTIONS ============ */
+  section.block { padding: 96px 0 0; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; padding-bottom: 12px; margin-bottom: 36px; position: relative; }
+  .sec-head::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--line-strong); transform: scaleX(0); transform-origin: left; transition: transform 400ms var(--ease-out-engine) 120ms; }
+  .sec-head.in::after { transform: scaleX(1); }
+  .sec-head .idx { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink-3); }
+  .sec-head h2 { font-size: clamp(24px, 3.4vw, 34px); margin: 0; letter-spacing: -.02em; }
+  .sec-head .anno { margin-left: auto; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-3); letter-spacing: .08em; }
+  @media (max-width: 640px) { .sec-head .anno { display: none; } }
+
+  /* Capabilities */
+  .caps { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .cap { background: var(--paper); padding: 26px 24px 30px; position: relative; transition: background var(--t-feedback) var(--ease-snap); }
+  .cap:hover { background: var(--surface); }
+  .cap svg { display: block; margin-bottom: 18px; stroke: var(--ink-2); }
+  .cap:hover svg { stroke: var(--accent); }
+  .cap h3 { margin: 0 0 8px; font-size: 17px; letter-spacing: -.01em; }
+  .cap p { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 40ch; }
+  .cap .anno { position: absolute; top: 22px; right: 22px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--accent); opacity: 0; transform: translateX(4px); transition: opacity var(--t-feedback) var(--ease-snap), transform var(--t-feedback) var(--ease-snap); }
+  .cap:hover .anno { opacity: 1; transform: none; }
+
+  /* System */
+  .sys-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.1fr); gap: 48px; align-items: start; }
+  @media (max-width: 860px) { .sys-grid { grid-template-columns: 1fr; } }
+  .step { border-left: 1px solid var(--line-strong); padding: 4px 0 34px 24px; position: relative; }
+  .step:last-child { padding-bottom: 4px; }
+  .step::before { content: ""; position: absolute; left: -5px; top: 8px; width: 9px; height: 9px; background: var(--paper); border: 1px solid var(--line-strong); }
+  .step.lit::before { background: var(--accent); border-color: var(--accent); }
+  .step .k { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .14em; color: var(--ink-3); }
+  .step h3 { margin: 6px 0 6px; font-size: 19px; letter-spacing: -.01em; }
+  .step p { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 46ch; }
+  .diagram { border: 1px solid var(--line); background: var(--surface); padding: 22px; overflow-x: auto; }
+  .diagram svg { display: block; width: 100%; height: auto; }
+  .diagram text { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; letter-spacing: .1em; }
+  #flowpath { stroke-dasharray: 900; stroke-dashoffset: 900; }
+  .diagram.in #flowpath { transition: stroke-dashoffset 600ms var(--ease-inout-engine) 300ms; stroke-dashoffset: 0; }
+
+  /* ============ TRACE DEMO ============ */
+  .trace-grid { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(320px, 1.4fr); gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .trace-grid { grid-template-columns: 1fr; } }
+  .q-list { display: grid; gap: 10px; }
+  .q-btn { text-align: left; background: transparent; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink-2); font-family: inherit; font-size: 14px; padding: 14px 16px; cursor: pointer; transition: border-color var(--t-feedback) var(--ease-snap), background var(--t-feedback) var(--ease-snap), opacity var(--t-state) var(--ease-snap), color var(--t-feedback) var(--ease-snap); }
+  .q-btn:hover { border-color: var(--accent); background: var(--surface); color: var(--ink); }
+  .q-btn.sel { border-color: var(--accent); color: var(--ink); background: var(--surface); }
+  .q-list.focused .q-btn:not(.sel) { opacity: .55; }
+  .q-btn .qk { display: block; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin-bottom: 5px; }
+  .q-note { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-3); letter-spacing: .06em; margin-top: 4px; }
+
+  .terminal { background: #0A0B0D; border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+  .term-hd { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #22242A; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .14em; color: #6C6B66; }
+  .term-hd .chip { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #FF5C0A; color: #FF5C0A; border-radius: 3px; padding: 1px 8px; font-size: 10px; }
+  .term-hd .chip .dot { width: 5px; height: 5px; background: #FF5C0A; animation: flare 1.6s var(--ease-inout-engine) infinite alternate; }
+  .term-bd { padding: 18px 18px 20px; font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.65; color: #D9D8D1; min-height: 180px; cursor: pointer; }
+  .term-bd .dim { color: #6C6B66; }
+  .term-bd .q-echo { color: #8A8880; }
+  .term-bd .ans { white-space: pre-wrap; }
+  .term-bd .cursor { display: inline-block; width: 1ch; background: #FF5C0A; height: 1.1em; vertical-align: text-bottom; animation: flare 1s steps(2) infinite; }
+
+  .trace-tree { border-top: 1px dashed #22242A; margin-top: 14px; padding-top: 14px; display: none; position: relative; }
+  .trace-tree.on { display: block; }
+  .trace-tree .tt { font-size: 10.5px; letter-spacing: .14em; color: #6C6B66; margin-bottom: 10px; }
+  .ev-row { display: flex; flex-wrap: wrap; gap: 8px; position: relative; z-index: 2; }
+  .ev { border: 1px solid #34363E; border-radius: 3px; padding: 6px 10px; font-size: 11px; color: #A9A8A1; cursor: default; transition: border-color var(--t-feedback) var(--ease-snap), color var(--t-feedback) var(--ease-snap); background: #0A0B0D; }
+  .ev:hover, .ev:focus { border-color: #FF5C0A; color: #EDECE7; }
+  .ev .src { color: #6C6B66; }
+  #linkcanvas { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+
+  /* ============ STATS ============ */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 72px; }
+  .stat { background: var(--surface); padding: 20px 22px 24px; border-top: 1px solid var(--line-strong); }
+  .stat .lbl { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--ink-3); }
+  .stat .val { font-size: clamp(30px, 4vw, 42px); font-weight: 700; letter-spacing: -.03em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .stat .val small { font-size: 15px; color: var(--ink-3); font-weight: 400; letter-spacing: 0; }
+  .stat .sub { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); margin-top: 2px; letter-spacing: .06em; }
+  .stat.live .lbl::after { content: " ·"; color: var(--accent); }
+
+  /* Pricing */
+  .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .tier { background: var(--paper); padding: 28px 26px 32px; display: flex; flex-direction: column; position: relative; }
+  .tier.hot { background: var(--surface); border-top: 2px solid var(--accent); margin-top: -1px; }
+  .tier .chip { position: absolute; top: 18px; right: 18px; height: 20px; display: inline-flex; align-items: center; gap: 6px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; border: 1px solid var(--accent); color: var(--accent); padding: 0 8px; border-radius: 3px; }
+  .tier .chip .dot { width: 6px; height: 6px; background: var(--accent); animation: flare 1.6s var(--ease-inout-engine) infinite alternate; }
+  .tier h3 { margin: 0; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; color: var(--ink-2); font-weight: 500; }
+  .price { font-size: 44px; font-weight: 700; letter-spacing: -.03em; margin: 14px 0 2px; font-variant-numeric: tabular-nums; }
+  .price small { font-size: 14px; color: var(--ink-3); font-weight: 400; letter-spacing: 0; }
+  .tier ul { list-style: none; margin: 18px 0 26px; padding: 0; display: grid; gap: 9px; font-size: 13.5px; color: var(--ink-2); }
+  .tier li { padding-left: 18px; position: relative; }
+  .tier li::before { content: "—"; position: absolute; left: 0; color: var(--accent); }
+  .tier .btn { margin-top: auto; justify-content: center; }
+
+  /* ============ FAQ ============ */
+  .faq { border: 1px solid var(--line); }
+  .faq-item { border-bottom: 1px solid var(--line); background: var(--paper); transition: opacity var(--t-state) var(--ease-snap); }
+  .faq-item:last-child { border-bottom: none; }
+  .faq.focused .faq-item:not(.open) { opacity: .55; }
+  .faq-q { width: 100%; display: flex; align-items: center; gap: 16px; background: transparent; border: none; color: var(--ink); font-family: inherit; font-size: 15px; text-align: left; padding: 18px 20px; cursor: pointer; min-height: 56px; }
+  .faq-q .qi { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-3); letter-spacing: .1em; flex: none; }
+  .faq-q .x { margin-left: auto; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 16px; color: var(--ink-3); transition: transform 200ms var(--ease-snap), color var(--t-feedback); flex: none; }
+  .faq-item.open .faq-q .x { transform: rotate(45deg); color: var(--accent); }
+  .faq-a { max-height: 0; overflow: hidden; transition: max-height 200ms var(--ease-inout-engine); }
+  .faq-a p { margin: 0; padding: 0 20px 20px 47px; font-size: 14px; color: var(--ink-2); max-width: 64ch; }
+
+  /* ============ ACCESS / FOOTER ============ */
+  .access { border-top: 1px solid var(--line-strong); margin-top: 96px; padding: 72px 0; background: var(--surface); }
+  .access-grid { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(300px, 1fr); gap: 48px; align-items: center; }
+  @media (max-width: 760px) { .access-grid { grid-template-columns: 1fr; } }
+  .access h2 { font-size: clamp(26px, 4vw, 40px); letter-spacing: -.025em; margin: 0 0 10px; text-wrap: balance; }
+  .access p { color: var(--ink-2); font-size: 15px; margin: 0; max-width: 42ch; }
+  .field-label { display: block; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .14em; color: var(--ink-3); margin-bottom: 6px; }
+  .field-row { display: flex; gap: 10px; }
+  input[type="email"] { flex: 1; min-width: 0; height: 44px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: inherit; font-size: 14.5px; padding: 0 14px; transition: border-color var(--t-feedback) var(--ease-snap); }
+  input[type="email"]:focus { outline: none; border-color: var(--accent); }
+  input[type="email"].bad { border-color: var(--err); }
+  .field-err { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; color: var(--err); margin-top: 8px; min-height: 16px; letter-spacing: .04em; }
+  .field-note { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-3); margin-top: 4px; letter-spacing: .04em; }
+  .field-ok { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12.5px; color: var(--ink); letter-spacing: .04em; line-height: 1.8; }
+  .field-ok .acc { color: var(--accent); }
+  .clear-btn { margin-top: 10px; background: transparent; border: none; color: var(--ink-3); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .1em; cursor: pointer; padding: 4px 0; }
+  .clear-btn:hover { color: var(--err); }
+
+  footer.site { border-top: 1px solid var(--line); padding: 44px 0; }
+  .foot-cols { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 28px; margin-bottom: 34px; }
+  @media (max-width: 760px) { .foot-cols { grid-template-columns: 1fr 1fr; } }
+  .foot-cols h4 { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--ink-3); font-weight: 500; margin: 0 0 12px; }
+  .foot-cols ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .foot-cols a { font-size: 13px; color: var(--ink-2); }
+  .foot-cols a:hover { color: var(--accent); }
+  .foot-cols .brand { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .foot-cols .brand-sub { font-size: 12.5px; color: var(--ink-3); max-width: 30ch; }
+  .foot { display: flex; flex-wrap: wrap; gap: 10px 30px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .1em; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: 18px; }
+  .foot b { color: var(--ink-2); font-weight: 500; }
+
+  /* ============ WAYFINDER ============ */
+  #wayfinder { position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 95; display: grid; gap: 14px; }
+  @media (max-width: 1000px) { #wayfinder { display: none; } }
+  .wf { position: relative; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: none; border: none; padding: 0; }
+  .wf i { width: 6px; height: 6px; background: var(--line-strong); border-radius: 0; transition: background var(--t-feedback) var(--ease-snap), box-shadow var(--t-feedback) var(--ease-snap); }
+  .wf.active i { background: var(--accent); box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--accent); }
+  .wf .lb { position: absolute; right: 26px; top: 50%; transform: translateY(-50%) translateX(4px); white-space: nowrap; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .12em; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 3px; padding: 3px 8px; opacity: 0; pointer-events: none; transition: opacity 150ms var(--ease-snap), transform 150ms var(--ease-snap); }
+  .wf:hover .lb, .wf:focus-visible .lb { opacity: 1; transform: translateY(-50%) translateX(0); }
+
+  /* ============ TOASTS ============ */
+  #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 140; display: grid; gap: 8px; }
+  .toast { width: 320px; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--line-strong); border-left: 2px solid var(--accent); border-radius: 3px; padding: 12px 14px; font-size: 13px; color: var(--ink); display: flex; align-items: baseline; gap: 10px; opacity: 0; transform: translateY(8px); transition: opacity var(--t-entrance) var(--ease-out-engine), transform var(--t-entrance) var(--ease-out-engine); }
+  .toast.in { opacity: 1; transform: none; }
+  .toast .ts { margin-left: auto; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); flex: none; }
+
+  /* ============ PALETTE ============ */
+  #palette { position: fixed; inset: 0; z-index: 150; display: none; align-items: flex-start; justify-content: center; background: rgba(10, 11, 13, .6); padding-top: 20vh; }
+  #palette.on { display: flex; }
+  .pal-card { width: min(560px, 92vw); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+  #pal-in { width: 100%; height: 48px; background: transparent; border: none; border-bottom: 1px solid var(--line); color: var(--ink); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 13.5px; padding: 0 16px; letter-spacing: .04em; }
+  #pal-in:focus { outline: none; }
+  #pal-list { max-height: 320px; overflow-y: auto; padding: 6px 0; }
+  .pal-row { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 16px; cursor: pointer; border-left: 2px solid transparent; }
+  .pal-row .grp { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .12em; color: var(--ink-3); width: 86px; flex: none; }
+  .pal-row .nm { font-size: 14px; color: var(--ink-2); }
+  .pal-row kbd { margin-left: auto; }
+  .pal-row.sel { background: var(--surface-2); border-left-color: var(--accent); }
+  .pal-row.sel .nm { color: var(--ink); }
+  .pal-empty { padding: 16px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; color: var(--ink-3); letter-spacing: .06em; }
+
+  /* ============ OVERLAYS (L2/L3) ============ */
+  #gridov { position: fixed; inset: 0; z-index: 90; pointer-events: none; display: none; }
+  #gridov.on { display: block; }
+  #gridov .cols { max-width: 1140px; margin: 0 auto; height: 100%; display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; padding: 0 28px; }
+  #gridov .cols i { background: rgba(255, 92, 10, .05); border-inline: 1px solid rgba(255, 92, 10, .14); }
+
+  #debug { position: fixed; right: 16px; bottom: 16px; z-index: 120; width: 264px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .05em; color: var(--ink-2); display: none; }
+  #debug.on { display: block; }
+  #debug .hd { padding: 10px 12px; border-bottom: 1px solid var(--line); color: var(--accent); letter-spacing: .14em; display: flex; justify-content: space-between; }
+  #debug .bd { padding: 12px; display: grid; gap: 10px; }
+  #debug label { display: grid; gap: 4px; color: var(--ink-3); }
+  #debug output { color: var(--ink); }
+  #debug input[type="range"] { width: 100%; accent-color: var(--accent); }
+  #debug .row { display: flex; justify-content: space-between; }
+  #debug .row b { color: var(--ink); font-weight: 500; }
+  #debug button { font-family: inherit; font-size: 10.5px; letter-spacing: .1em; background: transparent; border: 1px solid var(--line-strong); color: var(--ink-2); border-radius: 3px; padding: 5px 10px; cursor: pointer; }
+  #debug button:hover { border-color: var(--accent); color: var(--ink); }
+
+  #keymap { position: fixed; inset: 0; z-index: 130; display: none; align-items: center; justify-content: center; background: rgba(10, 11, 13, .6); }
+  #keymap.on { display: flex; }
+  .keymap-card { width: min(440px, 88vw); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px; padding: 22px 24px 26px; }
+  .keymap-card h3 { margin: 0 0 14px; font-size: 13px; letter-spacing: .14em; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; color: var(--accent); font-weight: 500; }
+  .keymap-card table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .keymap-card td { padding: 7px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+  .keymap-card td:first-child { width: 84px; }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .rv, .rv.in { opacity: 1; transform: none; transition: none; }
+    .eyebrow .dot, .tier .chip .dot, .term-hd .chip .dot, .term-bd .cursor { animation: none; }
+    #flowpath, .diagram.in #flowpath { stroke-dashoffset: 0; transition: none; }
+    .btn, .cap, .trace::after, .sec-head::after, .faq-a, .toast { transition: none; }
+    .sec-head::after, .sec-head.in::after { transform: scaleX(1); }
+    .sweep.go { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app" data-mode="dark">
+
+  <!-- BOOT -->
+  <div id="boot" aria-hidden="true">
+    <div class="boot-inner mono">
+      <div class="boot-line"><b>MERIDIAN</b> // BOOT SEQUENCE 02</div>
+      <div class="boot-line">mounting instruments <span class="ok">OK</span></div>
+      <div class="boot-line">calibrating field <span class="ok">OK</span></div>
+      <div class="boot-line">signal lock <span class="ok">ACQUIRED</span></div>
+      <div class="boot-bar"><i id="bootbar"></i></div>
+      <div class="boot-pct" id="bootpct">000%</div>
+    </div>
+  </div>
+
+  <!-- overlays -->
+  <div id="gridov" aria-hidden="true"><div class="cols"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+  <div id="debug" role="dialog" aria-label="Field debug panel">
+    <div class="hd">FIELD.DEBUG <span>[d] close</span></div>
+    <div class="bd">
+      <div class="row"><span>points</span><b id="dbg-pts">—</b></div>
+      <div class="row"><span>fps</span><b id="dbg-fps">—</b></div>
+      <div class="row"><span>rotation</span><b id="dbg-rot">—</b></div>
+      <label>rot.speed <output id="o-speed">0.06</output>
+        <input type="range" id="r-speed" min="0" max="0.30" step="0.01" value="0.06"></label>
+      <label>point.count <output id="o-count">1440</output>
+        <input type="range" id="r-count" min="400" max="2400" step="80" value="1440"></label>
+      <label>pointer.force <output id="o-force">35</output>
+        <input type="range" id="r-force" min="0" max="100" step="5" value="35"></label>
+      <button id="b-pause" type="button">PAUSE FIELD</button>
+    </div>
+  </div>
+  <div id="keymap" role="dialog" aria-label="Keyboard shortcuts">
+    <div class="keymap-card">
+      <h3>KEYMAP // L2</h3>
+      <table>
+        <tr><td><kbd>ctrl k</kbd></td><td>command palette</td></tr>
+        <tr><td><kbd>t</kbd></td><td>toggle mode — ceremony / daylight</td></tr>
+        <tr><td><kbd>g</kbd></td><td>grid overlay — the 12-column spine</td></tr>
+        <tr><td><kbd>d</kbd></td><td>field debug — operate the hero machinery</td></tr>
+        <tr><td><kbd>1–5</kbd></td><td>jump to section</td></tr>
+        <tr><td><kbd>?</kbd></td><td>this map</td></tr>
+        <tr><td><kbd>esc</kbd></td><td>close everything</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- command palette -->
+  <div id="palette" role="dialog" aria-label="Command palette">
+    <div class="pal-card">
+      <input id="pal-in" class="mono" type="text" placeholder="type a command…" autocomplete="off" spellcheck="false">
+      <div id="pal-list" role="listbox"></div>
+    </div>
+  </div>
+
+  <!-- toasts -->
+  <div id="toasts" aria-live="polite"></div>
+
+  <!-- wayfinder -->
+  <nav id="wayfinder" aria-label="Section wayfinder"></nav>
+
+  <!-- NAV -->
+  <nav class="primary" aria-label="Primary">
+    <div class="wrap nav-in">
+      <a href="#top" class="wordmark">MERIDIAN <span class="tag">INSTRUMENT 01</span></a>
+      <div class="anchors">
+        <a href="#capabilities" class="trace" data-sec="capabilities">Capabilities</a>
+        <a href="#system" class="trace" data-sec="system">System</a>
+        <a href="#tracedemo" class="trace" data-sec="tracedemo">Trace</a>
+        <a href="#pricing" class="trace" data-sec="pricing">Pricing</a>
+        <a href="#access" class="trace" data-sec="access">Access</a>
+      </div>
+      <div class="nav-actions">
+        <button class="btn-k mono" id="palbtn" type="button" aria-label="Open command palette">CTRL-K</button>
+        <button class="btn-mode mono" id="modebtn" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
+        <a href="#access" class="btn btn-hairline">Request access</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero" id="top">
+    <canvas id="field" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <div class="hero-copy">
+        <div class="eyebrow mono rv" style="--i:0"><span class="dot"></span>FIELD ACTIVE · PRIVATE BETA</div>
+        <h1 class="rv" style="--i:1">An AI instrument<br><span class="thin">for people who build.</span></h1>
+        <p class="hero-sub rv" style="--i:2">Meridian holds your entire project in working memory, shows the reasoning behind every answer, and operates your tools with <b>your hands on the controls</b>.</p>
+        <div class="hero-cta-row rv" style="--i:3">
+          <a href="#access" class="btn btn-signal btn-hero" id="heroCta">Request access</a>
+          <a href="#tracedemo" class="btn btn-hairline btn-hero">Run a trace</a>
+        </div>
+        <p class="hero-note mono rv" style="--i:4">// the field behind this text is live — press <b>d</b> to operate it, <b>ctrl-k</b> for commands</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- READOUT -->
+  <div class="readout" aria-label="Live system readout">
+    <div class="sweep" id="sweep"></div>
+    <div class="row">
+      <span>SYS.READOUT</span>
+      <span>PTS <b id="ro-pts">1440</b></span>
+      <span>FPS <b id="ro-fps">—</b></span>
+      <span>ROT <b id="ro-rot">000.0°</b></span>
+      <span>PTR <b id="ro-ptr">—</b></span>
+      <span>MODE <b id="ro-mode">CEREMONY</b></span>
+      <span class="acc">T+<b id="ro-t" class="acc">00:00</b></span>
+    </div>
+  </div>
+
+  <!-- CAPABILITIES -->
+  <section class="block" id="capabilities">
+    <div class="wrap">
+      <div class="sec-head rv"><span class="idx mono">01</span><h2>Capabilities</h2><span class="anno" data-scramble>// hover for the machinery</span></div>
+      <div class="caps">
+        <div class="cap rv" style="--i:0"><span class="anno">// ctx: 2.4M tokens resident</span>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="3" y="3" width="20" height="20"/><rect x="8" y="8" width="10" height="10"/></svg>
+          <h3>Context Engine</h3><p>Your whole project — code, docs, decisions — resident in working memory. Nothing re-explained twice.</p></div>
+        <div class="cap rv" style="--i:1"><span class="anno">// snr +18.3 dB</span>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M2 13h5l3-8 4 16 3-8h7"/></svg>
+          <h3>Signal Extraction</h3><p>Separates what matters from what's loud. Surfaces the three things worth your attention, not thirty.</p></div>
+        <div class="cap rv" style="--i:2"><span class="anno">// trace.depth: full</span>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="6" cy="20" r="2.5"/><circle cx="13" cy="8" r="2.5"/><circle cx="21" cy="15" r="2.5"/><path d="M8 18l3.5-8M15 9.5l4 4"/></svg>
+          <h3>Trace</h3><p>Every answer shows its reasoning path. Expand any conclusion back to the evidence it stands on.</p></div>
+        <div class="cap rv" style="--i:3"><span class="anno">// 47 instruments mounted</span>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="13" cy="13" r="10"/><path d="M13 6v7l5 3"/></svg>
+          <h3>Instruments</h3><p>Mount your tools — repos, terminals, trackers. Meridian operates them precisely, with your approval.</p></div>
+        <div class="cap rv" style="--i:4"><span class="anno">// Δ detected: 0.02%</span>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M3 20L10 8l5 7 3-4 5 9z"/></svg>
+          <h3>Drift Watch</h3><p>Monitors your systems for slow change and flags it before it breaks — dependencies, configs, behavior.</p></div>
+        <div class="cap rv" style="--i:5"><span class="anno">// egress: 0 bytes</span>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="5" y="11" width="16" height="11"/><path d="M9 11V7a4 4 0 018 0v4"/></svg>
+          <h3>Private Core</h3><p>Runs where your data lives. The model comes to the work — the work never leaves the building.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SYSTEM -->
+  <section class="block" id="system">
+    <div class="wrap">
+      <div class="sec-head rv"><span class="idx mono">02</span><h2>The system</h2><span class="anno" data-scramble>// clarity in the architecture</span></div>
+      <div class="sys-grid">
+        <div>
+          <div class="step rv lit" style="--i:0"><div class="k mono">STAGE 01</div><h3>Observe</h3><p>Meridian ingests your repositories, documents, and telemetry, and builds a live model of the project as it actually is — not as the README claims.</p></div>
+          <div class="step rv" style="--i:1"><div class="k mono">STAGE 02</div><h3>Reason</h3><p>Questions run against the live model. Every conclusion carries a trace — the path from evidence to answer stays inspectable, always.</p></div>
+          <div class="step rv" style="--i:2"><div class="k mono">STAGE 03</div><h3>Act</h3><p>With your approval, Meridian operates the mounted instruments — precise, logged, reversible. You hold the controls; it holds the detail.</p></div>
+        </div>
+        <div class="diagram rv" style="--i:2" id="diagram">
+          <svg viewBox="0 0 460 300" role="img" aria-label="System diagram: sources flow into the core, the core drives instruments">
+            <g fill="none" stroke="var(--line-strong)" stroke-width="1">
+              <rect x="10" y="30" width="120" height="44"/><rect x="10" y="94" width="120" height="44"/><rect x="10" y="158" width="120" height="44"/>
+              <rect x="190" y="82" width="110" height="110"/>
+              <rect x="350" y="60" width="100" height="40"/><rect x="350" y="130" width="100" height="40"/><rect x="350" y="200" width="100" height="40"/>
+            </g>
+            <path id="flowpath" d="M130 52h30v85h30 M130 116h60 M130 180h30v-42h30 M300 116h20v-36h30 M300 137h50v13 M300 158h20v62h30" fill="none" stroke="var(--accent)" stroke-width="1.4"/>
+            <g fill="var(--ink-3)" font-size="10">
+              <text x="20" y="56">REPOS</text><text x="20" y="120">DOCS</text><text x="20" y="184">TELEMETRY</text>
+              <text x="360" y="84">TERMINAL</text><text x="360" y="154">TRACKER</text><text x="360" y="224">DEPLOY</text>
+            </g>
+            <g font-size="11" fill="var(--ink)"><text x="213" y="132">MERIDIAN</text><text x="228" y="150">CORE</text></g>
+            <text x="196" y="180" font-size="9" fill="var(--accent)">TRACE: ON</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRACE DEMO -->
+  <section class="block" id="tracedemo">
+    <div class="wrap">
+      <div class="sec-head rv"><span class="idx mono">03</span><h2>Run a trace</h2><span class="anno" data-scramble>// simulated core — real traces ship with the beta</span></div>
+      <div class="trace-grid">
+        <div>
+          <div class="q-list rv" id="qlist" style="--i:0">
+            <button class="q-btn" type="button" data-q="0"><span class="qk mono">Q.01</span>Why did checkout latency spike on Tuesday?</button>
+            <button class="q-btn" type="button" data-q="1"><span class="qk mono">Q.02</span>What breaks if we drop Node 18?</button>
+            <button class="q-btn" type="button" data-q="2"><span class="qk mono">Q.03</span>Who touched the auth flow this quarter?</button>
+          </div>
+          <p class="q-note mono rv" style="--i:1">// pick a question. click the terminal to skip the feed.</p>
+        </div>
+        <div class="terminal rv" style="--i:1">
+          <div class="term-hd">MERIDIAN CORE — TRACE CONSOLE <span class="chip"><span class="dot"></span>SIM</span></div>
+          <div class="term-bd" id="termbd">
+            <span class="dim">// core idle — select a question to run a trace</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div class="stats">
+        <div class="stat rv" style="--i:0"><div class="lbl mono">INSTRUMENTS MOUNTED</div><div class="val" data-count="47">0</div><div class="sub mono">across 12 categories</div></div>
+        <div class="stat rv" style="--i:1"><div class="lbl mono">CONTEXT RESIDENT</div><div class="val" data-count="2.4" data-dec="1">0<small> M tokens</small></div><div class="sub mono">per project core</div></div>
+        <div class="stat rv live" style="--i:2"><div class="lbl mono">FIELD POINTS</div><div class="val" id="stat-pts">—</div><div class="sub mono">live from this page's hero</div></div>
+        <div class="stat rv live" style="--i:3"><div class="lbl mono">SESSION</div><div class="val" id="stat-t">0<small> s</small></div><div class="sub mono">live — you, right now</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="block" id="pricing">
+    <div class="wrap">
+      <div class="sec-head rv"><span class="idx mono">04</span><h2>Pricing</h2><span class="anno" data-scramble>// three doors, no fine print</span></div>
+      <div class="tiers">
+        <div class="tier rv" style="--i:0">
+          <h3>Observer</h3>
+          <div class="price">$0</div>
+          <ul><li>One project resident</li><li>Core instruments</li><li>Trace on every answer</li><li>Community channel</li></ul>
+          <a href="#access" class="btn btn-hairline">Start observing</a>
+        </div>
+        <div class="tier hot rv" style="--i:1">
+          <span class="chip"><span class="dot"></span>SIGNAL</span>
+          <h3>Operator</h3>
+          <div class="price">$29<small>/mo</small></div>
+          <ul><li>Unlimited projects</li><li>All 47 instruments</li><li>Drift Watch on 5 systems</li><li>Full trace history</li></ul>
+          <a href="#access" class="btn btn-signal">Request access</a>
+        </div>
+        <div class="tier rv" style="--i:2">
+          <h3>Laboratory</h3>
+          <div class="price">$120<small>/mo</small></div>
+          <ul><li>Private Core, on your metal</li><li>Drift Watch fleet-wide</li><li>Audit-grade trace export</li><li>A human who answers</li></ul>
+          <a href="#access" class="btn btn-hairline">Talk to the lab</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="block" id="faq">
+    <div class="wrap">
+      <div class="sec-head rv"><span class="idx mono">05</span><h2>Questions</h2><span class="anno" data-scramble>// asked, answered, traced</span></div>
+      <div class="faq rv" id="faqbox">
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.01</span>Is Meridian real?<span class="x">+</span></button>
+          <div class="faq-a"><p>Honest answer: Meridian is a demonstration product, built to prove the Lucid Engine design system in working code. This page is real — the particle field, the palette, the trace console are all running live in front of you. The product behind them isn't. Yet.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.02</span>Where does my data live?<span class="x">+</span></button>
+          <div class="faq-a"><p>With the Private Core, on your hardware — the model comes to the work. Nothing is uploaded, mirrored, or "telemetried" out. Egress is zero bytes by architecture, not by policy.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.03</span>What counts as an instrument?<span class="x">+</span></button>
+          <div class="faq-a"><p>Anything with a surface Meridian can read or operate: a repository, a terminal, a tracker, a deploy pipeline, a metrics endpoint. Instruments are mounted explicitly, one by one — nothing is discovered behind your back.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.04</span>Can I read every trace?<span class="x">+</span></button>
+          <div class="faq-a"><p>Every answer carries its full reasoning path — the evidence, the steps, the confidence. Expand any conclusion back to its sources. If a trace can't be shown, the answer isn't given.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.05</span>Why is the beta only 47 seats?<span class="x">+</span></button>
+          <div class="faq-a"><p>Because every trace gets read by a person during the beta. Forty-seven is the number where that stays true. When it stops being true, the cohort is full.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACCESS -->
+  <section class="access" id="access">
+    <div class="wrap access-grid">
+      <div class="rv" style="--i:0">
+        <h2>The beta is small on purpose.</h2>
+        <p>Forty-seven seats per cohort — enough to watch every trace personally. Leave an address; you'll hear from a person, not a sequence.</p>
+      </div>
+      <div class="rv" style="--i:1" id="formzone">
+        <form id="waitform" novalidate>
+          <label class="field-label" for="email">EMAIL</label>
+          <div class="field-row">
+            <input type="email" id="email" name="email" placeholder="name@domain.com" autocomplete="email">
+            <button class="btn btn-signal" type="submit">Join the list</button>
+          </div>
+          <div class="field-err mono" id="fielderr" role="alert" aria-live="polite"></div>
+          <div class="field-note mono">// stored in this browser only — localStorage. nothing is transmitted.</div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site">
+    <div class="wrap">
+      <div class="foot-cols">
+        <div>
+          <div class="brand">MERIDIAN</div>
+          <div class="brand-sub">A demonstration instrument, built end-to-end on the Lucid Engine design DNA.</div>
+        </div>
+        <div>
+          <h4>PAGE</h4>
+          <ul>
+            <li><a href="#capabilities">Capabilities</a></li>
+            <li><a href="#system">System</a></li>
+            <li><a href="#tracedemo">Trace demo</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>SYSTEM</h4>
+          <ul>
+            <li><a href="dna.html">Design DNA — Lucid Engine</a></li>
+            <li><a href="https://github.com/drewosi/lucid-engine/blob/main/DESIGN-DNA.md">DESIGN-DNA.md</a></li>
+            <li><a href="#faq">Questions</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>SOURCE</h4>
+          <ul>
+            <li><a href="https://github.com/drewosi/lucid-engine">GitHub — lucid-engine</a></li>
+            <li><a href="https://github.com/drewosi/lucid-engine/blob/main/index.html">This page's code</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot">
+        <span><b>MERIDIAN</b> // A LUCID ENGINE DEMONSTRATION</span>
+        <span>DESIGN DNA v1.2 · JUL 2026</span>
+        <span>PRESS <b>?</b> FOR KEYMAP · <b>CTRL-K</b> FOR COMMANDS</span>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var app = document.getElementById('app');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var t0 = performance.now();
+  var REPO = 'https://github.com/drewosi/lucid-engine';
+  var LIVE = 'https://drewosi.github.io/lucid-engine/';
+
+  function $(id) { return document.getElementById(id); }
+
+  /* ============ TOASTS ============ */
+  var toastQ = [], toastBusy = false;
+  function toast(msg) {
+    toastQ.push(msg);
+    if (!toastBusy) nextToast();
+  }
+  function nextToast() {
+    if (!toastQ.length) { toastBusy = false; return; }
+    toastBusy = true;
+    var msg = toastQ.shift();
+    var el = document.createElement('div');
+    el.className = 'toast';
+    var now = new Date();
+    el.innerHTML = '<span></span><span class="ts mono"></span>';
+    el.firstChild.textContent = msg;
+    el.lastChild.textContent = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    $('toasts').appendChild(el);
+    requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('in'); }); });
+    var timer, remaining = 4000, started = Date.now();
+    function arm(ms) { timer = setTimeout(dismiss, ms); }
+    function dismiss() {
+      el.classList.remove('in');
+      setTimeout(function () { el.remove(); nextToast(); }, reduced ? 0 : 300);
+    }
+    el.addEventListener('mouseenter', function () { clearTimeout(timer); remaining -= Date.now() - started; });
+    el.addEventListener('mouseleave', function () { started = Date.now(); arm(Math.max(600, remaining)); });
+    arm(remaining);
+  }
+
+  /* ============ FIELD ENGINE ============ */
+  var canvas = $('field'), ctx = canvas.getContext('2d');
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var W = 0, H = 0, CX = 0, CY = 0, R = 0;
+  var pts = [];
+  var cfg = { count: 1440, speed: 0.06, force: 35, paused: false };
+  var rotY = 0, tilt = 0.35, tiltTarget = 0.35, yawBoost = 0, lastT = performance.now();
+  var ptr = { x: -1e4, y: -1e4 };
+  var fps = 0, frames = 0, fpsClock = performance.now();
+
+  function palette() {
+    var dark = app.getAttribute('data-mode') === 'dark';
+    return dark ? { pt: '232,230,221', acc: '255,92,10' } : { pt: '17,17,16', acc: '255,79,0' };
+  }
+  var pal = palette();
+
+  function resize() {
+    var hero = document.querySelector('.hero');
+    W = hero.clientWidth; H = hero.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    CX = W > 860 ? W * 0.66 : W * 0.5;
+    CY = H * 0.5;
+    R = Math.min(W, H) * (W > 860 ? 0.34 : 0.42);
+  }
+
+  function build(n) {
+    pts = [];
+    var golden = Math.PI * (3 - Math.sqrt(5)), i, m;
+    for (i = 0; i < n; i++) {
+      var y = 1 - (i / (n - 1)) * 2;
+      var r = Math.sqrt(Math.max(0, 1 - y * y));
+      var th = golden * i;
+      pts.push({ x: Math.cos(th) * r, y: y, z: Math.sin(th) * r, a: false, ox: 0, oy: 0 });
+    }
+    m = Math.max(24, Math.round(n * 0.055));
+    for (i = 0; i < m; i++) {
+      var phi = (i / m) * Math.PI * 2;
+      pts.push({ x: Math.sin(phi), y: Math.cos(phi), z: 0, a: true, ox: 0, oy: 0 });
+    }
+    $('ro-pts').textContent = pts.length;
+    $('dbg-pts').textContent = pts.length;
+    $('stat-pts').textContent = pts.length;
+    /* Signal Sweep — real data refresh */
+    var sw = $('sweep');
+    sw.classList.remove('go'); void sw.offsetWidth; sw.classList.add('go');
+  }
+
+  function frame(now) {
+    var dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (!cfg.paused) {
+      rotY += (cfg.speed + yawBoost) * dt * Math.PI;
+      yawBoost *= 0.95;
+      tilt += (tiltTarget - tilt) * 0.06;
+    }
+    ctx.clearRect(0, 0, W, H);
+    var sy = Math.sin(rotY), cy = Math.cos(rotY), st = Math.sin(tilt), ct = Math.cos(tilt);
+    var fov = 3.2, i, p, n = pts.length;
+    for (var pass = 0; pass < 2; pass++) {
+      var accPass = pass === 1;
+      ctx.fillStyle = 'rgb(' + (accPass ? pal.acc : pal.pt) + ')';
+      for (i = 0; i < n; i++) {
+        p = pts[i];
+        if (p.a !== accPass) continue;
+        var x1 = p.x * cy + p.z * sy;
+        var z1 = -p.x * sy + p.z * cy;
+        var y1 = p.y * ct - z1 * st;
+        var z2 = p.y * st + z1 * ct;
+        var s = fov / (fov - z2);
+        var px = CX + x1 * R * s, py = CY + y1 * R * s;
+        var ddx = px - ptr.x, ddy = py - ptr.y;
+        var d2 = ddx * ddx + ddy * ddy, rad = 90;
+        var txo = 0, tyo = 0;
+        if (d2 < rad * rad && d2 > 0.01) {
+          var d = Math.sqrt(d2), f = ((rad - d) / rad) * cfg.force * 0.028;
+          txo = ddx / d * f * rad * 0.35; tyo = ddy / d * f * rad * 0.35;
+        }
+        p.ox += (txo - p.ox) * 0.14; p.oy += (tyo - p.oy) * 0.14;
+        var t = (z2 + 1) / 2;
+        var size = (accPass ? 1.4 : 0.9) + 1.7 * t;
+        ctx.globalAlpha = (accPass ? 0.45 : 0.14) + 0.6 * t;
+        ctx.fillRect(px + p.ox - size / 2, py + p.oy - size / 2, size, size);
+      }
+    }
+    ctx.globalAlpha = 1;
+    frames++;
+    if (now - fpsClock > 1000) {
+      fps = frames; frames = 0; fpsClock = now;
+      $('ro-fps').textContent = fps;
+      $('dbg-fps').textContent = fps;
+    }
+    if (!reduced) requestAnimationFrame(frame);
+  }
+
+  document.addEventListener('mousemove', function (e) {
+    var r = canvas.getBoundingClientRect();
+    ptr.x = e.clientX - r.left; ptr.y = e.clientY - r.top;
+    tiltTarget = 0.35 + ((e.clientY / window.innerHeight) - 0.5) * 0.5;
+    $('ro-ptr').textContent = String(Math.max(0, Math.round(e.clientX))).padStart(4, '0') + ',' + String(Math.max(0, Math.round(e.clientY))).padStart(4, '0');
+  });
+  function drawStatic() { var s = cfg.paused; cfg.paused = true; frame(performance.now()); cfg.paused = s; }
+  window.addEventListener('resize', function () { resize(); if (reduced) drawStatic(); });
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () { resize(); if (reduced) drawStatic(); }).observe(document.querySelector('.hero'));
+  }
+  resize(); build(cfg.count);
+  if (reduced) { rotY = 0.8; drawStatic(); } else { requestAnimationFrame(frame); }
+
+  /* clocks */
+  setInterval(function () {
+    var s = Math.floor((performance.now() - t0) / 1000);
+    $('ro-t').textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    var st = $('stat-t'); if (st) st.innerHTML = s + '<small> s</small>';
+    var deg = ((rotY * 180 / Math.PI) % 360 + 360) % 360;
+    $('ro-rot').textContent = deg.toFixed(1).padStart(5, '0') + '°';
+    $('dbg-rot').textContent = deg.toFixed(1) + '°';
+  }, 1000);
+
+  /* ============ BOOT ============ */
+  var boot = $('boot');
+  function finishBoot() {
+    boot.classList.add('done');
+    setTimeout(function () { boot.remove(); }, 450);
+    document.querySelectorAll('.hero .rv').forEach(function (el) { el.classList.add('in'); });
+  }
+  if (reduced) { finishBoot(); }
+  else {
+    var lines = boot.querySelectorAll('.boot-line');
+    var bar = $('bootbar'), pct = $('bootpct'), p = 0;
+    lines.forEach(function (l, i) { setTimeout(function () { l.classList.add('on'); }, 90 + i * 160); });
+    var iv = setInterval(function () {
+      p = Math.min(100, p + 7 + Math.random() * 9);
+      bar.style.width = p + '%';
+      pct.textContent = String(Math.round(p)).padStart(3, '0') + '%';
+      if (p >= 100) { clearInterval(iv); setTimeout(finishBoot, 160); }
+    }, 70);
+  }
+
+  /* ============ SCRAMBLE READOUT ============ */
+  var GLYPHS = '01#/\\|<>+=·-_';
+  function scramble(el) {
+    if (reduced || el.dataset.done) return;
+    el.dataset.done = '1';
+    var target = el.textContent, len = target.length, start = performance.now();
+    (function tick(now) {
+      var t = Math.min(1, (now - start) / 300);
+      var solved = Math.floor(t * len), out = target.slice(0, solved);
+      for (var i = solved; i < len; i++) {
+        out += target[i] === ' ' ? ' ' : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+      }
+      el.textContent = out;
+      if (t < 1) requestAnimationFrame(tick); else el.textContent = target;
+    })(start);
+  }
+
+  /* ============ COUNTER ROLL ============ */
+  function counterRoll(el) {
+    if (el.dataset.done) return;
+    el.dataset.done = '1';
+    var target = parseFloat(el.dataset.count), dec = parseInt(el.dataset.dec || '0', 10);
+    var suffix = el.querySelector('small'), sufHTML = suffix ? suffix.outerHTML : '';
+    if (reduced) { el.innerHTML = target.toFixed(dec) + sufHTML; return; }
+    var start = performance.now();
+    (function tick(now) {
+      var t = Math.min(1, (now - start) / 600);
+      var eased = 1 - Math.pow(1 - t, 3);
+      el.innerHTML = (target * eased).toFixed(dec) + sufHTML;
+      if (t < 1) requestAnimationFrame(tick);
+    })(start);
+  }
+
+  /* ============ MATERIALIZE + section machinery ============ */
+  var revealables = Array.prototype.filter.call(document.querySelectorAll('.rv'), function (el) { return !el.closest('.hero'); });
+  if (!reduced) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        en.target.classList.add('in');
+        en.target.querySelectorAll('[data-scramble]').forEach(scramble);
+        if (en.target.hasAttribute('data-scramble')) scramble(en.target);
+        en.target.querySelectorAll('[data-count]').forEach(counterRoll);
+        io.unobserve(en.target);
+      });
+    }, { threshold: 0.2 });
+    revealables.forEach(function (el) { io.observe(el); });
+  } else {
+    document.querySelectorAll('.rv').forEach(function (el) { el.classList.add('in'); });
+    document.querySelectorAll('[data-count]').forEach(counterRoll);
+    $('diagram').classList.add('in');
+  }
+
+  /* nav + wayfinder tracking */
+  var SECTIONS = [
+    { id: 'top', label: 'FIELD' },
+    { id: 'capabilities', label: 'CAPABILITIES' },
+    { id: 'system', label: 'SYSTEM' },
+    { id: 'tracedemo', label: 'TRACE' },
+    { id: 'pricing', label: 'PRICING' },
+    { id: 'faq', label: 'QUESTIONS' },
+    { id: 'access', label: 'ACCESS' }
+  ];
+  var wf = $('wayfinder');
+  SECTIONS.forEach(function (s) {
+    var b = document.createElement('button');
+    b.className = 'wf'; b.type = 'button'; b.setAttribute('aria-label', s.label.toLowerCase());
+    b.innerHTML = '<i></i><span class="lb mono"></span>';
+    b.querySelector('.lb').textContent = s.label;
+    b.addEventListener('click', function () { document.getElementById(s.id).scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }); });
+    b.dataset.sec = s.id;
+    wf.appendChild(b);
+  });
+  var secIO = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (!en.isIntersecting) return;
+      document.querySelectorAll('.anchors a').forEach(function (a) { a.classList.toggle('active', a.dataset.sec === en.target.id); });
+      document.querySelectorAll('.wf').forEach(function (b) { b.classList.toggle('active', b.dataset.sec === en.target.id); });
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  SECTIONS.forEach(function (s) { secIO.observe(document.getElementById(s.id)); });
+
+  /* ============ MODE ============ */
+  var modebtn = $('modebtn');
+  function setMode(m, silent) {
+    app.setAttribute('data-mode', m);
+    pal = palette();
+    modebtn.textContent = 'MODE: ' + (m === 'dark' ? 'CEREMONY' : 'DAYLIGHT');
+    $('ro-mode').textContent = m === 'dark' ? 'CEREMONY' : 'DAYLIGHT';
+    if (reduced) drawStatic();
+    if (!silent) toast(m === 'dark' ? 'Ceremony mode — lights down.' : 'Daylight mode — the workday world.');
+  }
+  modebtn.addEventListener('click', function () { setMode(app.getAttribute('data-mode') === 'dark' ? 'light' : 'dark'); });
+
+  /* ============ MAGNETIC ACKNOWLEDGE ============ */
+  var cta = $('heroCta');
+  if (!reduced) {
+    document.addEventListener('mousemove', function (e) {
+      var r = cta.getBoundingClientRect();
+      var dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+      var ox = Math.max(Math.abs(dx) - r.width / 2, 0), oy = Math.max(Math.abs(dy) - r.height / 2, 0);
+      var dist = Math.sqrt(ox * ox + oy * oy), reach = 24;
+      if (dist < reach && dist > 0) {
+        var k = (1 - dist / reach) * 3;
+        cta.style.transform = 'translate(' + Math.sign(dx) * k + 'px,' + Math.sign(dy) * k + 'px)';
+      } else if (cta.style.transform) { cta.style.transform = ''; }
+    });
+  }
+
+  /* ============ TRACE DEMO ============ */
+  var TRACES = [
+    {
+      a: 'The spike traces to a dependency bump at 14:32 — redis client 5.2.1\nchanged connection pooling defaults. Two services inherited it; only\ncheckout saw load. Pin 5.2.0 or adopt the new pool size.\n\nconfidence: 0.93 · trace depth: 3',
+      ev: [['deploy #4821', 'ci'], ['metrics 14:30–15:10', 'telemetry'], ['redis 5.2.0→5.2.1 diff', 'deps']]
+    },
+    {
+      a: 'Three instruments still pin Node 18: the deploy runner image, the\nPDF renderer, and one lambda layer. Everything else is 20-ready.\nEstimated migration: ~2 days, mostly the renderer.\n\nconfidence: 0.91 · trace depth: 3',
+      ev: [['engines field scan', 'repos'], ['CI image manifest', 'ci'], ['lambda runtime list', 'cloud']]
+    },
+    {
+      a: 'Four people, 23 commits. The meaningful change: session TTL logic\nrewritten in PR #611 (May 12). Everything since is cosmetic.\nThe full diff chain is held in the trace.\n\nconfidence: 0.97 · trace depth: 2',
+      ev: [['commit graph auth/*', 'repos'], ['PR #611', 'repos'], ['ownership map', 'model']]
+    }
+  ];
+  var termbd = $('termbd'), qlist = $('qlist');
+  var feeding = null;
+  function typeFeed(el, text, done) {
+    if (reduced) { el.textContent = text; done(); return; }
+    var i = 0, cur = document.createElement('span');
+    cur.className = 'cursor';
+    el.textContent = ''; el.appendChild(cur);
+    feeding = setInterval(function () {
+      i += 1 + (Math.random() < 0.3 ? 1 : 0);
+      if (i >= text.length) { i = text.length; clearInterval(feeding); feeding = null; }
+      el.textContent = text.slice(0, i);
+      if (feeding) el.appendChild(cur); else done();
+    }, 14);
+    termbd.onclick = function () {
+      if (feeding) { clearInterval(feeding); feeding = null; el.textContent = text; done(); }
+    };
+  }
+  function runTrace(idx) {
+    var t = TRACES[idx];
+    qlist.classList.add('focused');
+    qlist.querySelectorAll('.q-btn').forEach(function (b) { b.classList.toggle('sel', b.dataset.q == idx); });
+    var q = qlist.querySelector('[data-q="' + idx + '"]').textContent.replace(/^Q\.\d\d/, '').trim();
+    termbd.innerHTML = '<div class="q-echo">&gt; ' + q + '</div><div class="ans"></div>' +
+      '<div class="trace-tree" id="ttree"><div class="tt">TRACE // EVIDENCE CHAIN</div>' +
+      '<svg id="linkcanvas"></svg><div class="ev-row" id="evrow"></div></div>';
+    var ans = termbd.querySelector('.ans');
+    typeFeed(ans, t.a, function () {
+      var tree = $('ttree'), row = $('evrow');
+      t.ev.forEach(function (e) {
+        var d = document.createElement('span');
+        d.className = 'ev'; d.tabIndex = 0;
+        d.innerHTML = '<span class="src"></span> ';
+        d.querySelector('.src').textContent = e[1] + '://';
+        d.appendChild(document.createTextNode(e[0]));
+        row.appendChild(d);
+      });
+      tree.classList.add('on');
+      /* Constellation Link — lines from answer block to each evidence node */
+      var svg = $('linkcanvas');
+      function drawLinks(activeEl) {
+        svg.innerHTML = '';
+        svg.setAttribute('width', tree.clientWidth); svg.setAttribute('height', tree.clientHeight);
+        var tr = tree.getBoundingClientRect();
+        row.querySelectorAll('.ev').forEach(function (ev) {
+          var er = ev.getBoundingClientRect();
+          var x2 = er.left - tr.left + er.width / 2, y2 = er.top - tr.top;
+          var ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          ln.setAttribute('x1', 12); ln.setAttribute('y1', 8);
+          ln.setAttribute('x2', x2); ln.setAttribute('y2', y2);
+          ln.setAttribute('stroke', ev === activeEl ? '#FF5C0A' : '#22242A');
+          ln.setAttribute('stroke-width', '1');
+          svg.appendChild(ln);
+        });
+      }
+      drawLinks(null);
+      row.querySelectorAll('.ev').forEach(function (ev) {
+        ev.addEventListener('mouseenter', function () { drawLinks(ev); });
+        ev.addEventListener('mouseleave', function () { drawLinks(null); });
+        ev.addEventListener('focus', function () { drawLinks(ev); });
+        ev.addEventListener('blur', function () { drawLinks(null); });
+      });
+    });
+  }
+  qlist.addEventListener('click', function (e) {
+    var b = e.target.closest('.q-btn');
+    if (b) runTrace(parseInt(b.dataset.q, 10));
+  });
+
+  /* ============ FAQ (Orbit Focus) ============ */
+  var faqbox = $('faqbox');
+  faqbox.addEventListener('click', function (e) {
+    var q = e.target.closest('.faq-q');
+    if (!q) return;
+    var item = q.parentElement, wasOpen = item.classList.contains('open');
+    faqbox.querySelectorAll('.faq-item').forEach(function (it) {
+      it.classList.remove('open');
+      it.querySelector('.faq-q').setAttribute('aria-expanded', 'false');
+      it.querySelector('.faq-a').style.maxHeight = '';
+    });
+    faqbox.classList.remove('focused');
+    if (!wasOpen) {
+      item.classList.add('open');
+      q.setAttribute('aria-expanded', 'true');
+      var a = item.querySelector('.faq-a');
+      a.style.maxHeight = a.scrollHeight + 'px';
+      faqbox.classList.add('focused');
+    }
+  });
+
+  /* ============ WAITLIST (local persistence) ============ */
+  var LS_KEY = 'meridian.waitlist';
+  var formzone = $('formzone');
+  function okState(email) {
+    var pos = 200 + (Math.abs(email.split('').reduce(function (h, c) { return (h * 31 + c.charCodeAt(0)) | 0; }, 7)) % 97);
+    formzone.innerHTML =
+      '<div class="field-ok" role="status">ENTRY LOGGED — <span class="acc">#0' + pos + '</span> in line for cohort 06.<br>' +
+      'address held: ' + email.replace(/</g, '&lt;') + '<br>' +
+      '<span style="opacity:.6">// stored in this browser only — localStorage. nothing was transmitted.</span></div>' +
+      '<button class="clear-btn" type="button" id="clearwl">[ CLEAR ENTRY ]</button>';
+    $('clearwl').addEventListener('click', function () {
+      try { localStorage.removeItem(LS_KEY); } catch (e) {}
+      toast('Waitlist entry cleared from this browser.');
+      location.reload();
+    });
+  }
+  try {
+    var saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (saved && saved.email) okState(saved.email);
+  } catch (e) {}
+  var form = $('waitform');
+  if (form) {
+    var email = $('email'), err = $('fielderr'), touched = false;
+    var validate = function () {
+      var v = email.value.trim();
+      if (!v) return 'EMAIL — required. enter an address to join the list.';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return 'EMAIL — missing @ or domain. format: name@domain.com';
+      return '';
+    };
+    var showErr = function (m) { err.textContent = m; email.classList.toggle('bad', !!m); };
+    email.addEventListener('blur', function () { touched = true; showErr(validate()); });
+    email.addEventListener('input', function () { if (touched) showErr(validate()); });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault(); touched = true;
+      var m = validate();
+      if (m) { showErr(m); email.focus(); return; }
+      var v = email.value.trim();
+      try { localStorage.setItem(LS_KEY, JSON.stringify({ email: v, ts: Date.now() })); } catch (e2) {}
+      okState(v);
+      toast('Entry logged — stored locally, nothing sent.');
+    });
+  }
+
+  /* ============ COMMAND PALETTE ============ */
+  var palOv = $('palette'), palIn = $('pal-in'), palList = $('pal-list');
+  var ACTIONS = [
+    { g: 'NAVIGATE', n: 'Go to Capabilities', k: '1', f: function () { go('capabilities'); } },
+    { g: 'NAVIGATE', n: 'Go to System', k: '2', f: function () { go('system'); } },
+    { g: 'NAVIGATE', n: 'Go to Trace demo', k: '3', f: function () { go('tracedemo'); } },
+    { g: 'NAVIGATE', n: 'Go to Pricing', k: '4', f: function () { go('pricing'); } },
+    { g: 'NAVIGATE', n: 'Go to Access', k: '5', f: function () { go('access'); } },
+    { g: 'MODE', n: 'Toggle ceremony / daylight', k: 't', f: function () { setMode(app.getAttribute('data-mode') === 'dark' ? 'light' : 'dark'); } },
+    { g: 'MACHINERY', n: 'Toggle grid overlay', k: 'g', f: function () { $('gridov').classList.toggle('on'); toast('Grid overlay ' + ($('gridov').classList.contains('on') ? 'on — the 12-column spine.' : 'off.')); } },
+    { g: 'MACHINERY', n: 'Toggle field debug', k: 'd', f: function () { $('debug').classList.toggle('on'); } },
+    { g: 'MACHINERY', n: 'Run trace Q.01', k: '', f: function () { go('tracedemo'); runTrace(0); } },
+    { g: 'MACHINERY', n: 'Show keymap', k: '?', f: function () { $('keymap').classList.add('on'); } },
+    { g: 'EXTERNAL', n: 'Open GitHub repo', k: '', f: function () { window.open(REPO, '_blank', 'noopener'); } },
+    { g: 'EXTERNAL', n: 'Open design system (DNA)', k: '', f: function () { window.location.href = 'dna.html'; } },
+    { g: 'EXTERNAL', n: 'Copy live URL', k: '', f: function () {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(LIVE).then(function () { toast('Live URL copied.'); }, function () { toast('Copy blocked — URL: ' + LIVE); });
+        } else { toast('Copy unavailable — URL: ' + LIVE); }
+      } }
+  ];
+  function go(id) { document.getElementById(id).scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }); }
+  var palSel = 0, palMatches = [];
+  function fuzzy(q, s) {
+    q = q.toLowerCase(); s = s.toLowerCase();
+    var i = 0, j = 0;
+    while (i < q.length && j < s.length) { if (q[i] === s[j]) i++; j++; }
+    return i === q.length;
+  }
+  function palRender() {
+    var q = palIn.value.trim();
+    palMatches = ACTIONS.filter(function (a) { return !q || fuzzy(q, a.g + ' ' + a.n); });
+    palSel = Math.min(palSel, Math.max(0, palMatches.length - 1));
+    palList.innerHTML = '';
+    if (!palMatches.length) {
+      palList.innerHTML = '<div class="pal-empty">// no matching command — esc to close</div>';
+      return;
+    }
+    palMatches.forEach(function (a, i) {
+      var d = document.createElement('div');
+      d.className = 'pal-row' + (i === palSel ? ' sel' : '');
+      d.setAttribute('role', 'option');
+      d.innerHTML = '<span class="grp"></span><span class="nm"></span>' + (a.k ? '<kbd></kbd>' : '');
+      d.children[0].textContent = a.g;
+      d.children[1].textContent = a.n;
+      if (a.k) d.children[2].textContent = a.k;
+      d.addEventListener('click', function () { palExec(i); });
+      d.addEventListener('mousemove', function () { if (palSel !== i) { palSel = i; palRender(); } });
+      palList.appendChild(d);
+    });
+  }
+  function palOpen() { palOv.classList.add('on'); palIn.value = ''; palSel = 0; palRender(); palIn.focus(); }
+  function palClose() { palOv.classList.remove('on'); palIn.blur(); }
+  function palExec(i) { var a = palMatches[i]; if (!a) return; palClose(); a.f(); }
+  $('palbtn').addEventListener('click', palOpen);
+  palIn.addEventListener('input', function () { palSel = 0; palRender(); });
+  palIn.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); palSel = Math.min(palSel + 1, palMatches.length - 1); palRender(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); palSel = Math.max(palSel - 1, 0); palRender(); }
+    else if (e.key === 'Enter') { e.preventDefault(); palExec(palSel); }
+    else if (e.key === 'Escape') { palClose(); }
+  });
+  palOv.addEventListener('click', function (e) { if (e.target === palOv) palClose(); });
+
+  /* ============ KEYS ============ */
+  var gridov = $('gridov'), debug = $('debug'), keymap = $('keymap');
+  keymap.addEventListener('click', function (e) { if (e.target === keymap) keymap.classList.remove('on'); });
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      palOv.classList.contains('on') ? palClose() : palOpen();
+      return;
+    }
+    var tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) {
+      if (e.key === 'Escape') { palClose(); document.activeElement.blur(); }
+      return;
+    }
+    var k = e.key.toLowerCase();
+    if (k === 't') setMode(app.getAttribute('data-mode') === 'dark' ? 'light' : 'dark');
+    else if (k === 'g') { gridov.classList.toggle('on'); }
+    else if (k === 'd') debug.classList.toggle('on');
+    else if (e.key === '?') keymap.classList.toggle('on');
+    else if (k >= '1' && k <= '5') go(['capabilities', 'system', 'tracedemo', 'pricing', 'access'][k - 1]);
+    else if (e.key === 'Escape') { gridov.classList.remove('on'); debug.classList.remove('on'); keymap.classList.remove('on'); palClose(); }
+  });
+
+  /* debug controls */
+  $('r-speed').addEventListener('input', function () { cfg.speed = parseFloat(this.value); $('o-speed').textContent = this.value; });
+  $('r-count').addEventListener('change', function () { cfg.count = parseInt(this.value, 10); $('o-count').textContent = this.value; build(cfg.count); if (reduced) drawStatic(); });
+  $('r-count').addEventListener('input', function () { $('o-count').textContent = this.value; });
+  $('r-force').addEventListener('input', function () { cfg.force = parseInt(this.value, 10); $('o-force').textContent = this.value; });
+  $('b-pause').addEventListener('click', function () { cfg.paused = !cfg.paused; this.textContent = cfg.paused ? 'RESUME FIELD' : 'PAUSE FIELD'; });
+
+  /* ============ L3 ============ */
+  console.log('%cMERIDIAN %c// you found the laboratory. fibonacci lattice, one meridian ring at longitude zero, projected by hand. ctrl-k for the palette, d for the controls. source: ' + REPO,
+    'color:#FF5C0A;font-weight:bold;font-family:monospace', 'color:#6C6B66;font-family:monospace');
+})();
+</script>
+</body>
+</html>

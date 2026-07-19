@@ -1,0 +1,706 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lucid Engine — Drew's Design DNA</title>
+<meta name="description" content="Lucid Engine: Drew's personal design DNA system — identity, visual and motion language, tensions, bans, and paste-ready AI instructions.">
+</head>
+<body>
+<style>
+  :root {
+    --paper: #FAFAF7;
+    --surface: #FFFFFF;
+    --ink: #111110;
+    --ink-2: #4A4945;
+    --ink-3: #8A8880;
+    --line: #E4E2DB;
+    --line-strong: #C9C7BE;
+    --accent: #FF4F00;
+    --accent-ink: #FFFFFF;
+    --mono-bg: #F1F0EA;
+    --code-bg: #14140F;
+    --code-ink: #E8E6DD;
+    --code-dim: #8A8880;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0A0B0D;
+      --surface: #101216;
+      --ink: #EDECE7;
+      --ink-2: #A9A8A1;
+      --ink-3: #6C6B66;
+      --line: #22242A;
+      --line-strong: #34363E;
+      --accent: #FF5C0A;
+      --accent-ink: #0A0B0D;
+      --mono-bg: #14161B;
+      --code-bg: #101216;
+      --code-ink: #D9D8D1;
+      --code-dim: #6C6B66;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0A0B0D;
+    --surface: #101216;
+    --ink: #EDECE7;
+    --ink-2: #A9A8A1;
+    --ink-3: #6C6B66;
+    --line: #22242A;
+    --line-strong: #34363E;
+    --accent: #FF5C0A;
+    --accent-ink: #0A0B0D;
+    --mono-bg: #14161B;
+    --code-bg: #101216;
+    --code-ink: #D9D8D1;
+    --code-dim: #6C6B66;
+  }
+  :root[data-theme="light"] {
+    --paper: #FAFAF7;
+    --surface: #FFFFFF;
+    --ink: #111110;
+    --ink-2: #4A4945;
+    --ink-3: #8A8880;
+    --line: #E4E2DB;
+    --line-strong: #C9C7BE;
+    --accent: #FF4F00;
+    --accent-ink: #FFFFFF;
+    --mono-bg: #F1F0EA;
+    --code-bg: #14140F;
+    --code-ink: #E8E6DD;
+    --code-dim: #8A8880;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Helvetica Neue", "Segoe UI", -apple-system, Arial, sans-serif;
+    line-height: 1.55;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono {
+    font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+
+  /* ---------- header ---------- */
+  header { padding: 72px 0 0; }
+  .eyebrow {
+    font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace;
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3); display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before {
+    content: ""; width: 10px; height: 10px; background: var(--accent);
+    display: inline-block; flex: none;
+  }
+  h1 {
+    font-size: clamp(56px, 10vw, 124px); line-height: .94;
+    letter-spacing: -.035em; font-weight: 700; margin: 20px 0 26px;
+    text-wrap: balance;
+  }
+  .philosophy {
+    font-size: clamp(19px, 2.4vw, 25px); line-height: 1.4; max-width: 42ch;
+    color: var(--ink); letter-spacing: -.01em; text-wrap: balance;
+  }
+  .philosophy b { color: var(--accent); font-weight: 700; }
+  .metaphor {
+    margin: 34px 0 0; padding: 18px 22px; border-left: 2px solid var(--accent);
+    font-size: 17px; color: var(--ink-2); max-width: 60ch;
+  }
+  .metaphor strong { color: var(--ink); }
+
+  .laws { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1px;
+    background: var(--line); border: 1px solid var(--line); margin-top: 56px; }
+  .law { background: var(--surface); padding: 22px 22px 26px; }
+  .law .n { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; color: var(--accent); letter-spacing: .1em; }
+  .law h3 { margin: 10px 0 8px; font-size: 16px; letter-spacing: -.01em; }
+  .law p { margin: 0; font-size: 14px; color: var(--ink-2); }
+
+  /* ---------- sections ---------- */
+  section { padding: 72px 0 0; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--line-strong); padding-bottom: 12px; margin-bottom: 30px; position: relative; }
+  .sec-head .idx { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 13px; color: var(--ink-3); }
+  .sec-head h2 { font-size: 26px; margin: 0; letter-spacing: -.02em; cursor: default; }
+  .sec-head .anno {
+    font-family: "Cascadia Code", ui-monospace, Consolas, monospace;
+    font-size: 11.5px; color: var(--accent); margin-left: auto;
+    opacity: 0; transform: translateX(6px); transition: opacity .18s ease, transform .18s ease;
+    text-align: right;
+  }
+  .sec-head:hover .anno { opacity: 1; transform: translateX(0); }
+  @media (prefers-reduced-motion: reduce) {
+    .sec-head .anno { transition: none; }
+    html { scroll-behavior: auto; }
+  }
+
+  /* attributes table */
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  th { text-align: left; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 500;
+    padding: 8px 14px; border-bottom: 1px solid var(--line-strong); }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.rank { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 13px; color: var(--ink-3); width: 44px; }
+  td.attr { font-weight: 700; width: 150px; letter-spacing: -.01em; }
+  td.def { color: var(--ink-2); }
+  tr:hover td { background: var(--surface); }
+  .table-scroll { overflow-x: auto; }
+  .rule-note { font-size: 13.5px; color: var(--ink-3); margin-top: 14px; }
+  .rule-note b { color: var(--ink-2); }
+
+  /* emotional sequence */
+  .seq { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .seq .step { background: var(--surface); padding: 20px 18px 24px; position: relative; }
+  .seq .step .t { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-3); letter-spacing: .12em; }
+  .seq .step h3 { margin: 8px 0 6px; font-size: 18px; letter-spacing: -.01em; }
+  .seq .step p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+  .seq .step:hover h3 { color: var(--accent); }
+  .payoff { margin: 30px 0 0; font-size: clamp(19px, 2.6vw, 26px); letter-spacing: -.015em; max-width: 32ch; line-height: 1.35; text-wrap: balance; }
+  .payoff em { font-style: normal; border-bottom: 2px solid var(--accent); }
+  .payoff-note { font-size: 14px; color: var(--ink-2); max-width: 62ch; margin-top: 14px; }
+
+  /* swatches */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 34px; }
+  .sw { border: 1px solid var(--line-strong); border-radius: 3px; overflow: hidden; }
+  .sw .chip { height: 84px; }
+  .sw .meta { padding: 10px 12px 12px; background: var(--surface); }
+  .sw .name { font-size: 13px; font-weight: 700; }
+  .sw .hex { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink-3); }
+  .sw .use { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; }
+
+  /* spec grid */
+  .spec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 26px 40px; }
+  .spec h3 { font-size: 15px; margin: 0 0 8px; letter-spacing: -.01em; display: flex; gap: 8px; align-items: baseline; }
+  .spec h3::before { content: "â€”"; color: var(--accent); }
+  .spec p, .spec li { font-size: 14px; color: var(--ink-2); margin: 0; }
+  .spec ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
+  .spec .k { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12.5px; color: var(--ink); background: var(--mono-bg); padding: 1px 6px; border-radius: 3px; }
+
+  /* type specimen */
+  .specimen { border: 1px solid var(--line-strong); background: var(--surface); padding: 26px 26px 30px; margin-bottom: 34px; display: grid; gap: 18px; }
+  .specimen .display { font-size: clamp(28px, 4.5vw, 44px); font-weight: 700; letter-spacing: -.03em; line-height: 1.05; }
+  .specimen .body { font-size: 15.5px; max-width: 62ch; color: var(--ink-2); }
+  .specimen .sys { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 13px; color: var(--ink-3); border-top: 1px dashed var(--line-strong); padding-top: 14px; }
+  .specimen .sys b { color: var(--accent); font-weight: 500; }
+
+  /* tensions */
+  .tensions { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .tension { background: var(--surface); padding: 22px; }
+  .tension h3 { margin: 0 0 8px; font-size: 16px; letter-spacing: -.01em; }
+  .tension h3 .plus { color: var(--accent); padding: 0 2px; }
+  .tension p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+  .tension p b { color: var(--ink); }
+
+  /* bans */
+  .bans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 28px; }
+  .ban { font-size: 14px; color: var(--ink-2); padding: 7px 0 7px 20px; border-bottom: 1px solid var(--line); position: relative; }
+  .ban::before { content: "Ã—"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+  .meta-ban { margin-top: 30px; font-size: clamp(17px, 2.2vw, 21px); letter-spacing: -.01em; max-width: 46ch; line-height: 1.4; text-wrap: balance; }
+  .meta-ban b { color: var(--accent); }
+
+  /* references */
+  .refs { display: grid; gap: 14px; }
+  .ref { border: 1px solid var(--line-strong); background: var(--surface); padding: 20px 22px; border-radius: 3px; }
+  .ref .cat { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  .ref h3 { margin: 6px 0 4px; font-size: 17px; letter-spacing: -.01em; }
+  .ref .who { font-size: 13px; color: var(--ink-3); margin-bottom: 12px; }
+  .ref .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 22px; font-size: 13.5px; }
+  .ref .cols div { color: var(--ink-2); }
+  .ref .cols b { display: block; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; margin-bottom: 3px; }
+  .ref .principle { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line-strong); font-size: 14px; }
+  .ref .principle b { color: var(--accent); font-weight: 500; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; margin-right: 8px; }
+
+  /* rubric */
+  .veto { margin-top: 16px; font-size: 14px; color: var(--ink-2); }
+  .veto b { color: var(--accent); }
+  .score-key { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 16px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12.5px; color: var(--ink-2); }
+  .score-key span b { color: var(--ink); font-weight: 700; }
+
+  /* instructions block */
+  .code-wrap { position: relative; margin-top: 4px; }
+  pre.instructions {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 4px;
+    padding: 26px 28px; overflow-x: auto; font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace;
+    font-size: 12.5px; line-height: 1.6; margin: 0; border: 1px solid var(--line-strong);
+  }
+  pre.instructions .h { color: var(--accent); }
+  pre.instructions .d { color: var(--code-dim); }
+  .copy-btn {
+    position: absolute; top: 14px; right: 14px;
+    font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px;
+    background: var(--accent); color: var(--accent-ink); border: none; border-radius: 3px;
+    padding: 7px 14px; cursor: pointer; letter-spacing: .06em;
+  }
+  .copy-btn:hover { filter: brightness(1.08); }
+  .copy-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  footer { padding: 72px 0 60px; }
+  .foot-line { border-top: 1px solid var(--line-strong); padding-top: 18px; display: flex; flex-wrap: wrap; gap: 8px 24px;
+    font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink-3); }
+  .foot-line b { color: var(--ink-2); font-weight: 500; }
+  a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+  a:hover { color: var(--accent); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Personal Design DNA Â· v1.2 Â· July 2026</div>
+    <h1>LUCID<br>ENGINE</h1>
+    <p class="philosophy">The combination of <b>hospitable clarity</b>, <b>visible engineering</b>, and <b>cinematic depth</b>.</p>
+    <div class="metaphor">
+      A bright, calm, immediately legible surface built on machinery so precise and so alive that discovering it produces awe. The surface welcomes everyone. The depth rewards obsession.<br><br>
+      <strong>"The front door is a museum. The basement is a laboratory."</strong>
+    </div>
+    <div class="laws">
+      <div class="law"><div class="n">LAW 01</div><h3>Clarity is the price of admission</h3><p>Nothing ships that a first-time user can't navigate. Mystery lives in the experience, never in the architecture.</p></div>
+      <div class="law"><div class="n">LAW 02</div><h3>Every element must demonstrate thought</h3><p>If a detail doesn't show evidence of engineering or authorship, it's decoration â€” cut it. Awe comes from "how was a person capable of this?"</p></div>
+      <div class="law"><div class="n">LAW 03</div><h3>Depth is a reward, not a requirement</h3><p>Hidden interactions, technical detail, and the machinery itself reveal to whoever leans in. Casual users never pay for what explorers earn.</p></div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="idx">02</span><h2>Personality Attributes</h2><span class="anno">// priority rule: higher rank wins every conflict</span></div>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>Rank</th><th>Attribute</th><th>In practice</th></tr></thead>
+      <tbody>
+        <tr><td class="rank">01</td><td class="attr">Engineered</td><td class="def">Precision is the aesthetic. Visible mechanism over applied ornament. Leica, not Rolex.</td></tr>
+        <tr><td class="rank">02</td><td class="attr">Welcoming</td><td class="def">Immediately comfortable to enter. Intelligence reveals itself over time; it never gatekeeps.</td></tr>
+        <tr><td class="rank">03</td><td class="attr">Layered</td><td class="def">Simple enough for everyone, deep enough to reward obsession. Progressive depth is the identity.</td></tr>
+        <tr><td class="rank">04</td><td class="attr">Authored</td><td class="def">Every detail placed by a single deciding hand. Wes Anderson-grade compositional intent. No accidents.</td></tr>
+        <tr><td class="rank">05</td><td class="attr">Alive</td><td class="def">The interface responds like matter responding to intelligence. Nothing is inert.</td></tr>
+        <tr><td class="rank">06</td><td class="attr">Precise</td><td class="def">Hairline alignment, tabular numbers, exact easing. Sloppiness anywhere breaks trust everywhere.</td></tr>
+        <tr><td class="rank">07</td><td class="attr">Cinematic</td><td class="def">Light, atmosphere, pacing borrowed from film â€” Blade Runner 2049 scale, Nolan physicality.</td></tr>
+        <tr><td class="rank">08</td><td class="attr">Substantive</td><td class="def">Dense with real information, beautifully organized. Substance over empty minimalism.</td></tr>
+        <tr><td class="rank">09</td><td class="attr">Confident</td><td class="def">Knows exactly what it is; never proves it desperately. Quiet confidence, not announcement.</td></tr>
+        <tr><td class="rank">10</td><td class="attr">Human</td><td class="def">Beyond-human intelligence, human empathy. Impossibly precise system; considerate experience.</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">03</span><h2>Emotional Goal</h2><span class="anno">// awe flavor: virtuosity, not spectacle</span></div>
+    <div class="seq">
+      <div class="step"><div class="t">T+0s</div><h3>Awe</h3><p>"Wow." Before a single word is read.</p></div>
+      <div class="step"><div class="t">T+2s</div><h3>Curiosity</h3><p>"What is this?" The lean-in.</p></div>
+      <div class="step"><div class="t">T+5s</div><h3>Trust</h3><p>"I understand this." Orientation is instant.</p></div>
+      <div class="step"><div class="t">T+10s</div><h3>Desire</h3><p>"I want to use this."</p></div>
+      <div class="step"><div class="t">T+âˆž</div><h3>Excitement</h3><p>"What else can it do?" And it keeps answering.</p></div>
+    </div>
+    <p class="payoff">"You have to see this. It feels like <em>something I've never seen before</em>."</p>
+    <p class="payoff-note">The specific flavor of novelty: obvious in hindsight â€” the feeling of an inevitable invention. The specific flavor of awe: virtuosity â€” awe at demonstrated human skill, never at scale, budget, or drama.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">04</span><h2>Visual Language</h2><span class="anno">// foundation â‰ˆ90% Â· accent 2â€“5% Â· never #FFF / #000</span></div>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#FAFAF7; border-bottom:1px solid #E4E2DB;"></div><div class="meta"><div class="name">Paper</div><div class="hex mono">#FAFAF7</div><div class="use">Light-mode ground â€” the workday world</div></div></div>
+      <div class="sw"><div class="chip" style="background:#111110;"></div><div class="meta"><div class="name">Ink</div><div class="hex mono">#111110</div><div class="use">Text &amp; structure, warm near-black</div></div></div>
+      <div class="sw"><div class="chip" style="background:#0A0B0D;"></div><div class="meta"><div class="name">Ceremony</div><div class="hex mono">#0A0B0D</div><div class="use">Dark-mode ground â€” light becomes the material</div></div></div>
+      <div class="sw"><div class="chip" style="background:#FF4F00;"></div><div class="meta"><div class="name">Signal Orange</div><div class="hex mono">#FF4F00 Â· rng #FF4400â€“#FF7A00</div><div class="use">The flare. Actions, live states, the one thing that matters</div></div></div>
+      <div class="sw"><div class="chip" style="background:linear-gradient(180deg,#4A4945,#8A8880,#C9C7BE);"></div><div class="meta"><div class="name">Gray ramp</div><div class="hex mono">warm cast</div><div class="use">Functional neutrals only â€” color is information</div></div></div>
+    </div>
+
+    <div class="specimen">
+      <div class="display">Machined, not inflated.</div>
+      <div class="body">Primary voice: a precise grotesque (Neue Haas Grotesk, SÃ¶hne, Suisse Int'l, ABC Diatype class) doing 90% of the work â€” UI, headings, body. Tight, confident, true quotes, tabular figures. Big type is allowed when it's doing something, never as a substitute for content.</div>
+      <div class="sys mono"><b>system_voice:</b> monospace Â· JetBrains / Berkeley Mono class Â· data, coordinates, timestamps, annotations â€” the machinery speaking. Its presence <b>is</b> the visible engineering. Â· 47.6062Â°N 122.3321Â°W Â· t=00:00:02.140</div>
+    </div>
+
+    <div class="spec-grid">
+      <div class="spec"><h3>The mode rule</h3><p>Purpose decides the door. Products, tools, dashboards open <span class="k">light</span>. World-sites, launches, cinematic marketing open <span class="k">dark</span>. Both modes always built, always switchable. Darkness is a purpose, never the lazy default.</p></div>
+      <div class="spec"><h3>Contrast</h3><p>AA minimum, AAA body text. Atmosphere comes from light and depth, never lowered text contrast â€” gray-on-gray sophistication is banned.</p></div>
+      <div class="spec"><h3>Spacing &amp; grid</h3><p><span class="k">4px</span> base unit, 12-column civic grid, full-bleed ceremony breaks left deliberately and briefly. Density is a feature: dense and beautifully organized beats sparse and empty. Optical alignment beats mathematical.</p></div>
+      <div class="spec"><h3>Shape &amp; borders</h3><p>Radii <span class="k">2â€“6px</span> on controls; sharp structural corners welcome. Hairline 1px borders mark real boundaries. Borders + light over drop shadows. No pill cards.</p></div>
+      <div class="spec"><h3>Light &amp; shadow</h3><p>Shadows are physics â€” shallow, tight, only where elevation is real. Golden-hour warmth for human moments, overcast calm at rest, neon only after dark and only when earned.</p></div>
+      <div class="spec"><h3>Texture &amp; materials</h3><p>Subtle film grain keeps engineered surfaces from sterility. Materials read real: glass refracts, metal reflects, particles obey â€” or deliberately defy â€” physics. No glassmorphism wallpaper.</p></div>
+      <div class="spec"><h3>Imagery</h3><p>Authored cinematic photography or the system's own procedural output. No stock, no corporate lifestyle, no AI-generated filler â€” nothing a viewer could clock as generated, not authored.</p></div>
+      <div class="spec"><h3>3D &amp; generative</h3><p>The crown jewel, spent like one: procedural, physical, or interactive â€” a real system on display with its engineering discoverable. In products, ceremony lives in the seams: loading, empty states, onboarding, transitions. Working screens stay instrument-calm.</p></div>
+      <div class="spec"><h3>Icons &amp; gradients</h3><p>Icons are instrument markings: geometric, hairline-consistent, on-grid. Illustration only as engineering drawings â€” diagrams, cutaways, exploded views. Gradients only as light falloff, never decoration.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">05</span><h2>Interaction Language</h2><span class="anno">// motion = matter responding to intelligence</span></div>
+    <div class="spec-grid">
+      <div class="spec"><h3>Register</h3><p>Supernatural â€” particles, dissolves, materialization, morphs, trails â€” but always triggered by and proportional to what the user did. Motion never plays <em>at</em> the user.</p></div>
+      <div class="spec"><h3>Hover</h3><p>Everything interactive acknowledges within <span class="k">100â€“150ms</span> â€” a material response (light lift, particle stir, precise underline draw), not a bounce. Hover is where quiet confidence lives.</p></div>
+      <div class="spec"><h3>Scroll</h3><p>Native physics never hijacked. Scroll may drive reveals, particle assembly, camera moves â€” position and speed always belong to the user.</p></div>
+      <div class="spec"><h3>Transitions</h3><p>Utility navigation instant (<span class="k">&lt;200ms</span>). Ceremony may dissolve content into particles that re-form as the destination â€” the signature move â€” <span class="k">â‰¤600ms</span>, never twice in a row.</p></div>
+      <div class="spec"><h3>Microinteractions</h3><p>The #1 premium signal. One precisely engineered response per control. Custom easing, <span class="k">120â€“240ms</span> in-product. No default ease-in-out.</p></div>
+      <div class="spec"><h3>Loading</h3><p>Never spinners. Loading shows the machinery: skeletons assembling, data streaming as it arrives, a progress readout in the mono system voice.</p></div>
+      <div class="spec"><h3>Cursor &amp; sound</h3><p>Default cursor in products. Custom cursors only in world-sites, only as instruments â€” a probe, a light source. Sound off by default; earned in world-sites as quiet mechanical feedback.</p></div>
+      <div class="spec"><h3>The Depth Ladder</h3><ul>
+        <li><b>L1 â€” everyone:</b> flawless clarity, beautiful responses.</li>
+        <li><b>L2 â€” the curious:</b> hidden hover detail, shortcuts, mono annotations, data on inspection.</li>
+        <li><b>L3 â€” the obsessed:</b> easter eggs, a debug/machinery view, console messages, how-it-was-built.</li>
+      </ul></div>
+      <div class="spec"><h3>The budget</h3><p>One hero motion per view â€” if two things demand attention at once, one of them is wrong. Full <span class="k">prefers-reduced-motion</span> support; the design is never dependent on motion.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">06</span><h2>Design Tensions</h2><span class="anno">// not compromises â€” the identity itself</span></div>
+    <div class="tensions">
+      <div class="tension"><h3>Warmth <span class="plus">+</span> Virtuosity</h3><p>The trade nobody makes. <b>Rule:</b> welcome first, awe seconds later. Never intimidate at the door.</p></div>
+      <div class="tension"><h3>Density <span class="plus">+</span> Calm</h3><p>Cyberpunk's information, Overwatch's readability. <b>Rule:</b> any screen may hold a lot, but must answer where-am-I / what-can-I-do / where-next in under 3 seconds.</p></div>
+      <div class="tension"><h3>Supernatural motion <span class="plus">+</span> Physical response</h3><p><b>Rule:</b> impossible behavior, believable causality.</p></div>
+      <div class="tension"><h3>Light world <span class="plus">+</span> Dark ceremony</h3><p><b>Rule:</b> purpose decides the door â€” tools open light, spectacles open dark, both always exist.</p></div>
+      <div class="tension"><h3>Beyond-human system <span class="plus">+</span> Human empathy</h3><p><b>Rule:</b> the system may feel more advanced than a human could build; the experience must feel like a human anticipated you.</p></div>
+      <div class="tension"><h3>Mystery <span class="plus">+</span> Clarity</h3><p><b>Rule:</b> users may wonder how it works; they must never wonder how to use it.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">07</span><h2>Hard Bans</h2><span class="anno">// counterfeit virtuosity, all of it</span></div>
+    <div class="bans">
+      <div class="ban">Dark-mode-with-purple-glow "AI aesthetic"</div>
+      <div class="ban">Gradient blobs; decorative gradients of any kind</div>
+      <div class="ban">Gold / luxury-status coding; "this is expensive" messaging</div>
+      <div class="ban">Low-contrast gray-on-gray posing as sophistication</div>
+      <div class="ban">Bento grids as trend rather than demanded by content</div>
+      <div class="ban">Oceans of rounded cards; pill-shaped everything</div>
+      <div class="ban">Empty minimalism: one enormous word + whitespace</div>
+      <div class="ban">Unclear navigation; experiences with no obvious direction</div>
+      <div class="ban">Spectacle that costs usability â€” and careless function too</div>
+      <div class="ban">High-fashion serifs as primary voice; novelty display fonts on duty</div>
+      <div class="ban">Corporate Memphis illustration</div>
+      <div class="ban">Stock photography; AI-generated sameness of any kind</div>
+      <div class="ban">Scroll-hijacking; autoplaying ambience; cursor followers</div>
+      <div class="ban">Bouncy cute easing on serious surfaces</div>
+      <div class="ban">Any animation that runs when nothing happened</div>
+      <div class="ban">Fake friendliness; exclamation-point copy; prestige signaling</div>
+    </div>
+    <p class="meta-ban">Don't decorate the interface to make it look designed. <b>Design the system so beautifully that the design is inseparable from its function.</b></p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">08</span><h2>Reference Library</h2><span class="anno">// study the principle, never the costume</span></div>
+    <div class="refs">
+      <div class="ref">
+        <div class="cat">Category A</div><h3>Engineering as Spectacle</h3>
+        <div class="who"><a href="https://www.awwwards.com/sites/igloo-inc">Igloo Inc</a> (Awwwards SOTY 2024, by Abeto) Â· <a href="https://lusion.co">Lusion</a></div>
+        <div class="cols">
+          <div><b>Study</b>Technology itself as the aesthetic; procedural systems built to scale; real-time iteration culture.</div>
+          <div><b>Borrow</b>Particle/volume systems as identity; the "how the hell did they build this" reaction.</div>
+          <div><b>Don't copy</b>All-WebGL UI (usability cost); dark-void-as-default.</div>
+        </div>
+        <div class="principle"><b>Principle</b>The machinery can be the beauty â€” if it's real machinery.</div>
+      </div>
+      <div class="ref">
+        <div class="cat">Category B</div><h3>Cinematic Personal Worlds</h3>
+        <div class="who"><a href="https://www.awwwards.com/sites/lando-norris">Lando Norris</a> (Awwwards SOTY 2025, by OFF+BRAND â€” WebGL + Rive hybrid)</div>
+        <div class="cols">
+          <div><b>Study</b>Conventional navigation coexisting with immersive hero moments; hybrid stacks â€” spectacle where it counts, HTML where it doesn't.</div>
+          <div><b>Borrow</b>The structure: legible spine, cinematic organs; one loud accent doing brand-scale work.</div>
+          <div><b>Don't copy</b>Celebrity loudness; sports-energy pacing.</div>
+        </div>
+        <div class="principle"><b>Principle</b>Immersion and orientation are not enemies when the spine stays conventional.</div>
+      </div>
+      <div class="ref">
+        <div class="cat">Category C</div><h3>Committed Playfulness</h3>
+        <div class="who"><a href="https://www.awwwards.com/sites/dont-board-me">Don't Board Me</a> â€” two colors, bounce-the-ball entry gate</div>
+        <div class="cols">
+          <div><b>Study</b>Total commitment to one idea; interaction as a front door; a 2-color system carrying a whole brand.</div>
+          <div><b>Borrow</b>The earned entry â€” a tiny interaction that makes users complicit before content starts.</div>
+          <div><b>Don't copy</b>The cartoon register, the toy tone.</div>
+        </div>
+        <div class="principle"><b>Principle</b>Commitment is the style. Half-measures read as generic.</div>
+      </div>
+      <div class="ref">
+        <div class="cat">Category D</div><h3>Instrument Interfaces</h3>
+        <div class="who">Nothing OS Â· Teenage Engineering Â· Leica product pages Â· Pip-Boy / in-world device UIs</div>
+        <div class="cols">
+          <div><b>Study</b>Hardware honesty; dot-matrix/mono voices; controls that feel like physical mechanisms.</div>
+          <div><b>Borrow</b>The mono system voice; interfaces that feel like real devices existing in a world.</div>
+          <div><b>Don't copy</b>Retro-gadget nostalgia as costume; lo-fi for its own sake.</div>
+        </div>
+        <div class="principle"><b>Principle</b>An interface can be an object with a physics of its own.</div>
+      </div>
+      <div class="ref">
+        <div class="cat">Category E</div><h3>Dense Information, Calm Surface</h3>
+        <div class="who">Cyberpunk 2077 UI Â· Overwatch readability Â· Linear-grade product craft Â· terminal aesthetics reinterpreted</div>
+        <div class="cols">
+          <div><b>Study</b>Hierarchy under pressure; how density becomes atmosphere instead of noise.</div>
+          <div><b>Borrow</b>Tabular precision, mono data voices, color-as-state; a lot beneath the surface, intelligently organized.</div>
+          <div><b>Don't copy</b>Sci-fi HUD clutter; fake graphs and meaningless readouts â€” the machinery must be real.</div>
+        </div>
+        <div class="principle"><b>Principle</b>Density is premium when organization is visible.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">09</span><h2>Decision Framework</h2><span class="anno">// the question: does this feel like me?</span></div>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>#</th><th>Test</th><th>Scores 0</th><th>Scores 2</th></tr></thead>
+      <tbody>
+        <tr><td class="rank">1</td><td class="attr">3-Second Test</td><td class="def">First-timer is lost</td><td class="def">Instantly knows where they are and what to do</td></tr>
+        <tr><td class="rank">2</td><td class="attr">Virtuosity Test</td><td class="def">No "how did they do that?" moment</td><td class="def">At least one â€” and it's real</td></tr>
+        <tr><td class="rank">3</td><td class="attr">Decoration Audit</td><td class="def">Ornamental filler present</td><td class="def">Every element demonstrates thought or carries information</td></tr>
+        <tr><td class="rank">4</td><td class="attr">Depth Ladder</td><td class="def">One flat layer</td><td class="def">Three working levels</td></tr>
+        <tr><td class="rank">5</td><td class="attr">Response Test</td><td class="def">Inert or laggy</td><td class="def">Everything responds beautifully &lt;150ms</td></tr>
+        <tr><td class="rank">6</td><td class="attr">Costume Check</td><td class="def">Mistakable for a trend template</td><td class="def">Unmistakably authored</td></tr>
+        <tr><td class="rank">7</td><td class="attr">Warmth Check</td><td class="def">Intimidating or cold</td><td class="def">A non-technical person feels welcome</td></tr>
+        <tr><td class="rank">8</td><td class="attr">Hindsight Test</td><td class="def">Weird for its own sake</td><td class="def">Novel, yet obvious in hindsight â€” inevitable</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="score-key"><span><b>14â€“16</b> ship it</span><span><b>11â€“13</b> fix the lowest scores</span><span><b>â‰¤10</b> not Lucid Engine â€” restart from the system</span></div>
+    <p class="veto"><b>Veto rule:</b> a 0 on Test 1 (clarity) or Test 6 (costume) fails the design regardless of total.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">10</span><h2>Claude Instructions</h2><span class="anno">// paste into any future project</span></div>
+    <div class="code-wrap">
+      <button class="copy-btn" id="copyBtn" type="button">COPY</button>
+      <pre class="instructions" id="instructionsBlock">
+<span class="h">YOU ARE DESIGNING FOR DREW â€” DESIGN DNA: "LUCID ENGINE"</span>
+
+Drew's design DNA is a two-layer system: a calm, bright, immediately legible
+surface over dense, virtuosic, visibly engineered depth. "The front door is a
+museum. The basement is a laboratory." Apply this to everything: websites,
+dashboards, apps, SaaS, AI interfaces, marketing pages, internal tools, brands.
+
+<span class="h">CORE LAWS</span>
+1. Clarity is the price of admission. First-time users must know where they
+   are, what they can do, and where to go within 3 seconds. Mystery lives in
+   the experience, never in the architecture.
+2. Every element must demonstrate thought. No decoration that merely signals
+   "designed." Awe must come from craftsmanship ("how did a person build
+   this?"), never from expensive-looking surfaces.
+3. Progressive depth: L1 = flawless clarity for everyone. L2 = hidden detail,
+   shortcuts, mono-voice annotations for the curious. L3 = easter eggs and
+   visible machinery for the obsessed.
+
+<span class="h">VISUAL SYSTEM</span>
+- Color: restrained monochrome foundation (~90%) + Signal Orange accent
+  (#FF4F00 light / #FF5C0A dark; range #FF4400-#FF7A00) at 2-5%, like a
+  signal flare. Light mode: warm paper-white (#FAFAF7-class), near-black ink,
+  warm gray ramp. Dark "ceremony mode" (#0A0B0D-class) where light is the
+  material. MODE RULE: products/tools/dashboards open light; world-sites,
+  launches, cinematic marketing open dark; both always built + switchable.
+  Never pure #FFF/#000. Never purple-glow AI aesthetics.
+- Type: precise grotesque (Neue Haas / Soehne / Suisse class) for 90% of the
+  work + monospace "system voice" (JetBrains / Berkeley Mono class) for data,
+  timestamps, technical annotation. Tabular figures. AA contrast minimum;
+  no gray-on-gray sophistication.
+- Density: dense, beautifully organized information > empty minimalism.
+  4px base unit, 12-col grid, brief full-bleed cinematic breaks.
+- Shape: machined, not inflated. 2-6px radii on controls, sharp structural
+  corners, hairline 1px borders, minimal true-elevation shadows. No pill
+  cards, no rounded-everything.
+- Light: cinematic â€” golden-hour warmth for human moments, overcast calm at
+  rest, neon only in dark mode and only when earned. Gradients only as light
+  falloff, never decoration.
+- Imagery: authored cinematic photography or the system's own procedural
+  output. No stock, no corporate Memphis, no AI-generated filler.
+- 3D: only procedural, physical, or interactive â€” a real system on display,
+  engineering discoverable. In products, ceremony lives only in the seams
+  (loading, empty states, onboarding, transitions); working screens stay
+  instrument-calm. Marketing and world-sites carry the full spectacle.
+
+<span class="h">MOTION SYSTEM</span>
+"Motion should feel like matter responding to intelligence."
+- Register: supernatural (particles, dissolves, materialization, morphs) but
+  always triggered by and proportional to user action.
+- Hover response ~100-150ms; product micro-interactions 120-240ms with custom
+  easing; ceremony transitions <=600ms, never consecutive.
+- Never hijack scroll. No spinners â€” loading shows the machinery assembling.
+- One hero motion per view. Full prefers-reduced-motion support.
+- Default cursor in products; custom cursors only as instruments in authored
+  world-sites. Sound off by default.
+
+<span class="h">HARD BANS</span>
+Purple-glow AI dark mode; gradient blobs; bento-as-trend; corporate Memphis;
+empty one-word minimalism; luxury/prestige coding (gold, fashion serifs);
+stock photos; scroll-hijack; decorative cursor followers; fake data or fake
+machinery; low-contrast text; anything recognizable as a template or trend.
+
+<span class="h">EMOTIONAL TARGET</span>
+Awe -> curiosity -> trust -> desire -> excitement. The viewer's sentence must
+be "You have to see this â€” it feels like something I've never seen before,"
+and the novelty must feel obvious in hindsight, like an inevitable invention.
+Drew should appear to be: someone who sees the future early, builds it
+meticulously, and makes it feel obvious once everyone else sees it.
+
+<span class="h">RISK CALIBRATION</span>
+7/10 boldness everywhere â€” distinctive for both personal and client work,
+calibrated to context but never diluted to a "safe professional" variant.
+Commitment over hedging: fully commit to the idea.
+
+<span class="h">MOTION LIBRARY (use only these named patterns; unnamed animation = cut)</span>
+Easing: --ease-out-engine cubic-bezier(.16,1,.3,1) arrivals;
+--ease-inout-engine cubic-bezier(.65,0,.35,1) state; --ease-snap
+cubic-bezier(.3,0,0,1) micro. Durations: feedback 120 / state 200 /
+entrance 400 / ceremony 600ms cap. Stagger 20-40ms, max 8 staggered.
+Patterns: Particle Dissolve (ceremony nav), Materialize (scroll-once
+reveal, mask + &lt;=8px, 400ms), Assembly Stagger, Signal Trace (accent
+line-draw 150ms hover/focus), Light Lift (hover via light, &lt;=2px),
+Scramble Readout (mono decode 300ms, labels only), Machinery Reveal
+(loading â€” spinners banned), Camera Drift (&lt;=6% parallax), Flare Pulse
+(only real live state; the one idle animation), Magnetic Acknowledge
+(primary CTA, ceremony only). Transform+opacity only; interruptible;
+reduced-motion degrades to instant opacity, experience stays complete.
+
+<span class="h">UX PATTERNS</span>
+Legible spine: &lt;=5 destinations, location always marked, spine survives
+ceremony. Orientation contract answered &lt;3s on every view. Cmd-K palette
+in products (every action also visible in UI). Forms: label above field;
+validate on blur then per-keystroke; errors in mono voice stating what +
+how to fix; submit never disabled. Feedback &lt;150ms; toasts bottom-right,
+one at a time, 4s; undo (8s) over confirm dialogs. Empty states =
+ceremony seams with one next action. Onboarding = one guided real action,
+no tour modals. Focus: 2px accent outline. Touch targets &gt;=44px.
+
+<span class="h">COMPONENTS (key specs)</span>
+Buttons 36/44px h, r3: Signal (accent bg, one per view), Hairline
+(1px border -&gt; accent on hover), Ghost (Signal Trace). Inputs 40px,
+mono uppercase label above, focus = accent border no glow. Cards r3,
+hairline, Light Lift only if interactive. Tables 40px rows, mono
+11.5px headers, tabular-nums, sticky header. Modals &lt;=560px, backdrop
+60% ceremony no blur, Esc closes. Tabs = sliding 2px underline, no
+pills. Chips 20px mono uppercase; Flare Pulse if live. Tooltips
+inverted mono 12px with shortcut hints. Toggles 36x20 (circular thumb
+sanctioned â€” mechanical switch exception). Progress = 2px accent bar +
+mono readout, never spinner.
+
+<span class="h">v1.2 ADDITIONS</span>
+Motion: Counter Roll (stats 0-&gt;value, 600ms, once), Threshold Wipe
+(section hairline draws on enter), Constellation Link (hover draws
+hairlines to genuinely related nodes), Orbit Focus (siblings recede to
+.55 opacity when one expands), Signal Sweep (one scanline per real data
+refresh, never idle), Type Feed (12-18ms/char terminal text, skippable).
+UX: Cmd-K palette (grouped, fuzzy, kbd hints, toast ack, never the only
+path); wayfinder dots desktop-only; HONEST-DEMO RULE â€” anything simulated
+says so in place in mono voice; local-persistence forms state what is
+stored and where. Components: palette (560px, 40px rows, accent-edge
+selection), accordion (+ rotates to x, one open, Orbit Focus siblings),
+stat tile (Counter Roll), terminal block (always ceremony-dark â€” a
+terminal is an object), timeline row, kbd chip, wayfinder dots.
+
+<span class="h">DECISION CHECK (run before presenting any design)</span>
+1. 3-second orientation?  2. One real virtuoso moment?  3. Zero unearned
+decoration?  4. Depth ladder present?  5. Everything responds <150ms?
+6. Nothing mistakable for a trend template?  7. Non-technical people feel
+welcome?  8. Novelty obvious-in-hindsight?
+A failure on #1 or #6 fails the design outright.</pre>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">11</span><h2>Motion Library</h2><span class="anno">// unnamed animation = decoration = cut</span></div>
+    <div class="specimen">
+      <div class="sys mono"><b>easing:</b> --ease-out-engine cubic-bezier(.16,1,.3,1) Â· --ease-inout-engine cubic-bezier(.65,0,.35,1) Â· --ease-snap cubic-bezier(.3,0,0,1) &nbsp;&nbsp;<b>durations:</b> feedback 120ms Â· state 200ms Â· entrance 400ms Â· ceremony 600ms cap &nbsp;&nbsp;<b>stagger:</b> 20â€“40ms, max 8</div>
+    </div>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>Pattern</th><th>Trigger</th><th>Spec</th><th>Allowed where</th></tr></thead>
+      <tbody>
+        <tr><td class="attr">Particle Dissolve / Re-form</td><td class="def">Ceremony navigation</td><td class="def">Content dissolves to particles, re-forms as destination. â‰¤600ms, never twice in a row.</td><td class="def">World-sites; product seams</td></tr>
+        <tr><td class="attr">Materialize</td><td class="def">Scroll into view, once</td><td class="def">Mask wipe + â‰¤8px translate, 400ms ease-out-engine. Never re-runs.</td><td class="def">Everywhere</td></tr>
+        <tr><td class="attr">Assembly Stagger</td><td class="def">Group arrival</td><td class="def">Children 20â€“40ms apart, max 8 staggered, rest batch. Everything lands placed.</td><td class="def">Everywhere</td></tr>
+        <tr><td class="attr">Signal Trace</td><td class="def">Hover / focus / active</td><td class="def">Accent line draws leftâ†’right, 150ms. Links, tabs, active nav.</td><td class="def">Everywhere</td></tr>
+        <tr><td class="attr">Light Lift</td><td class="def">Hover on interactive surface</td><td class="def">Ground lifts toward surface + border brightens, 120ms. â‰¤2px translate, no shadow growth.</td><td class="def">Everywhere</td></tr>
+        <tr><td class="attr">Scramble Readout</td><td class="def">First reveal of a data label</td><td class="def">Mono decode ~300ms, once per element. Labels/data only, never body copy.</td><td class="def">L2 flavor; data surfaces</td></tr>
+        <tr><td class="attr">Machinery Reveal</td><td class="def">Loading</td><td class="def">Structure assembles; real data streams in; mono progress readout. Replaces every spinner.</td><td class="def">Everywhere â€” spinners banned</td></tr>
+        <tr><td class="attr">Camera Drift</td><td class="def">Native scroll</td><td class="def">Depth-of-scene parallax, â‰¤6% differential, transform-only.</td><td class="def">Ceremony surfaces</td></tr>
+        <tr><td class="attr">Flare Pulse</td><td class="def">Genuinely live state</td><td class="def">Accent dot 0.4â†’1.0 opacity, 1.6s loop. The only permitted idle animation; one per view.</td><td class="def">Everywhere</td></tr>
+        <tr><td class="attr">Magnetic Acknowledge</td><td class="def">Pointer within ~24px of primary CTA</td><td class="def">CTA translates â‰¤3px toward pointer, ease-snap. One CTA per view.</td><td class="def">Ceremony only</td></tr>
+        <tr><td class="attr">Counter Roll</td><td class="def">First reveal of a stat</td><td class="def">Number rolls 0â†’value, 600ms, tabular-nums so layout never shifts. Once.</td><td class="def">Stat tiles, data surfaces</td></tr>
+        <tr><td class="attr">Threshold Wipe</td><td class="def">Section enters viewport</td><td class="def">Boundary hairline draws across, 400ms, once. Marks a real structural boundary.</td><td class="def">Everywhere</td></tr>
+        <tr><td class="attr">Constellation Link</td><td class="def">Hover/focus on a node</td><td class="def">Hairlines draw to genuinely related nodes, 150ms. Relations must be real.</td><td class="def">Data/trace surfaces only</td></tr>
+        <tr><td class="attr">Orbit Focus</td><td class="def">One item in a set expanded</td><td class="def">Siblings recede to opacity 0.55 (scale â‰¥0.98), 200ms. Restores instantly.</td><td class="def">Everywhere</td></tr>
+        <tr><td class="attr">Signal Sweep</td><td class="def">Data surface refreshes</td><td class="def">A 1px accent scanline sweeps once. Never idles, never loops.</td><td class="def">Data surfaces</td></tr>
+        <tr><td class="attr">Type Feed</td><td class="def">Demo/answer text begins</td><td class="def">Terminal character feed, 12â€“18ms/char, skippable by click.</td><td class="def">Demo &amp; terminal surfaces only</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="rule-note"><b>Dosage:</b> one hero motion per view Â· transform + opacity only Â· every animation interruptible Â· reduced-motion degrades to instant opacity with a complete experience.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">12</span><h2>UX Pattern Library</h2><span class="anno">// behavior is the brand</span></div>
+    <div class="spec-grid">
+      <div class="spec"><h3>Legible spine</h3><p>Persistent wordmark-as-home, â‰¤5 top-level destinations, current location always marked. The spine never dissolves, even mid-ceremony. Breadcrumbs at depth â‰¥3; footer is a sitemap, never a dump.</p></div>
+      <div class="spec"><h3>Orientation contract</h3><p>Every view answers <em>where am I / what can I do / where next</em> within 3 seconds â€” titles, active states, and a marked path are mandatory.</p></div>
+      <div class="spec"><h3>Command palette</h3><p>Ctrl/Cmd-K fuzzy command search in products â€” the L2 power path. Every palette action also exists as a visible L1 control.</p></div>
+      <div class="spec"><h3>Forms</h3><p>Label above field, always. Validate on blur; after first error, per keystroke. Errors in the mono voice: what's wrong + how to fix (<span class="k">EMAIL â€” missing @. format: name@domain.com</span>). Submit never disabled â€” clicking surfaces errors and focuses the first.</p></div>
+      <div class="spec"><h3>Feedback</h3><p>Every action acknowledged &lt;150ms, before the network resolves. Toasts bottom-right, one at a time, 4s, hover-paused. Undo (8s window) over confirm dialogs; typed confirmation only for the irreversible. "Publish" â†’ "Published."</p></div>
+      <div class="spec"><h3>Empty Â· loading Â· error</h3><p>Empty states are ceremony seams: a small machinery moment + one clear next action. Loading is Machinery Reveal with real progress. Errors: plain what-happened + how-to-fix, technical detail collapsed in mono for L2/L3.</p></div>
+      <div class="spec"><h3>Depth &amp; disclosure</h3><p>Default view serves the 80% case; advanced controls behind mono-labeled "machinery" expanders. Onboarding = one guided action in the real interface â€” no tour modals. Shortcuts surface in hover tooltips.</p></div>
+      <div class="spec"><h3>Accessibility floor</h3><p>AA everywhere, AAA body. Focus: 2px accent outline, 2px offset, on everything. Complete keyboard paths. Touch targets â‰¥44px. Reduced-motion experience is complete, not a stub.</p></div>
+      <div class="spec"><h3>Wayfinder</h3><p>Desktop only: fixed right-edge section dots, current marked with accent, mono labels on hover, click navigates. Hidden below 1000px â€” the nav carries orientation alone.</p></div>
+      <div class="spec"><h3>The honest-demo rule</h3><p>Anything simulated says so, in place, in the mono voice (<span class="k">// simulated core</span>). Fake-but-labeled machinery is theater; fake-and-unlabeled is fraud. Never gamble the trust sequence on a viewer not noticing.</p></div>
+      <div class="spec"><h3>Local persistence</h3><p>When a form stores data locally, the interface states exactly what is stored and where (<span class="k">// stored in this browser only â€” localStorage</span>). Clearing is one visible action away.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="idx">13</span><h2>UI Component Specs</h2><span class="anno">// both modes, always</span></div>
+    <div class="spec-grid">
+      <div class="spec"><h3>Buttons</h3><p>36px / 44px heights, radius 3px. <span class="k">Signal</span>: accent bg, one per view, press scale .985 @120ms. <span class="k">Hairline</span>: 1px border â†’ accent on hover + Light Lift. <span class="k">Ghost</span>: Signal Trace underline. Disabled = 40% opacity, never hidden.</p></div>
+      <div class="spec"><h3>Inputs</h3><p>40px height, 1px border, radius 3px. Label 12px mono uppercase, 6px above. Focus = accent border, no glow. Error = desaturated semantic red + mono fix-line below.</p></div>
+      <div class="spec"><h3>Cards</h3><p>Surface bg, hairline border, radius 3px, 20â€“24px padding. Light Lift only when interactive. Optional mono corner annotation (L2). Never shadow stacks.</p></div>
+      <div class="spec"><h3>Data tables</h3><p>40px rows, hairline dividers, 11.5px mono uppercase headers, <span class="k">tabular-nums</span>, sticky header, hover tint, accent sort marker.</p></div>
+      <div class="spec"><h3>Modals</h3><p>â‰¤560px, radius 4px, hairline border, backdrop 60% ceremony (no blur). Enter Materialize 200ms, exit instant. Focus-trapped; Esc always closes.</p></div>
+      <div class="spec"><h3>Toasts</h3><p>320px, bottom-right, hairline + 2px left edge (accent info / semantic status), grotesque body + mono timestamp.</p></div>
+      <div class="spec"><h3>Tabs &amp; nav</h3><p>Tabs: 2px underline slides 200ms between labels â€” no pill segments. Nav: 64px ceremony / 56px product, solid ground, hairline bottom, active marked with accent.</p></div>
+      <div class="spec"><h3>Chips &amp; tooltips</h3><p>Chips 20px, 11px mono uppercase, hairline, Flare Pulse when genuinely live. Tooltips inverted (ink bg), 12px mono, 400ms delay, carry shortcut hints.</p></div>
+      <div class="spec"><h3>Toggles &amp; progress</h3><p>Toggles 36Ã—20px, 200ms ease-snap, accent when on â€” circular thumb sanctioned (mechanical switch exception). Progress: 2px accent bar + mono readout. Never a spinner.</p></div>
+      <div class="spec"><h3>Command palette</h3><p>560px max at 20vh, hairline border, 48px mono input, 40px rows with group label + kbd hint. Selected row = surface-2 + 2px accent left edge. Fuzzy match; every action also visible in the UI.</p></div>
+      <div class="spec"><h3>Accordion</h3><p>Hairline dividers, 56px collapsed rows, mono index (<span class="k">Q.01</span>). The <span class="k">+</span> rotates 45Â° to <span class="k">Ã—</span>, 200ms ease-snap. Height animates 200ms; one open; siblings get Orbit Focus.</p></div>
+      <div class="spec"><h3>Stat tile &amp; terminal</h3><p>Stat tile: mono uppercase label, Counter Roll value 32â€“44px tabular. Terminal block: always ceremony-dark regardless of mode â€” a terminal is an object, not a surface. Mono 12.5px, Type Feed with 1ch block cursor.</p></div>
+      <div class="spec"><h3>Timeline Â· kbd Â· wayfinder</h3><p>Timeline rows: fixed mono date column, hairline left rule, node dot (Flare Pulse only if current). Kbd chips: mono 11px, hairline, 3px radius. Wayfinder: 6px dots, accent + ring when active, hover label chips.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="foot-line">
+      <span><b>LUCID ENGINE</b> v1.2</span>
+      <span>mode rule: purpose decides the door</span>
+      <span>accent: signal orange #FF4F00</span>
+      <span>voice: grotesque + mono</span>
+      <span>risk: 7/10 everywhere</span>
+      <span><a href="https://drewosi.github.io/lucid-engine/">live demo: MERIDIAN</a></span>
+      <span><a href="https://github.com/drewosi/lucid-engine">source: github/lucid-engine</a></span>
+    </div>
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById('copyBtn');
+    var block = document.getElementById('instructionsBlock');
+    if (btn && block) {
+      btn.addEventListener('click', function () {
+        var text = block.innerText;
+        function done(ok) {
+          btn.textContent = ok ? 'COPIED' : 'SELECT + CTRL-C';
+          setTimeout(function () { btn.textContent = 'COPY'; }, 1800);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+        } else {
+          var r = document.createRange();
+          r.selectNodeContents(block);
+          var sel = window.getSelection();
+          sel.removeAllRanges(); sel.addRange(r);
+          done(false);
+        }
+      });
+    }
+    /* L3 â€” for the obsessed */
+    console.log('%cLUCID ENGINE %c// you found the laboratory. L3 unlocked: this page scores itself 15/16 â€” Test 2 (virtuosity) held at 1 until a real particle system earns the point.',
+      'color:#FF4F00;font-weight:bold;font-family:monospace', 'color:#8A8880;font-family:monospace');
+  })();
+</script>
+
+</body>
+</html>
