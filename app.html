@@ -208,6 +208,16 @@
   .trace-wait { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; color: var(--ink-3); border-top: 1px dashed var(--line-strong); margin-top: 16px; padding-top: 14px; }
   .trace-wait i { display: inline-block; width: 8px; height: 8px; background: var(--accent); animation: flare 1s var(--ease-inout-engine) infinite alternate; margin-right: 8px; }
 
+  /* proposed actions (experimental instrument) */
+  .act-card { border-top: 1px dashed var(--line-strong); margin-top: 14px; padding-top: 12px; }
+  .act-hd { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin-bottom: 6px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .act-hd .exp { border: 1px solid var(--err); color: var(--err); border-radius: 3px; padding: 0 6px; font-size: 9px; letter-spacing: .1em; }
+  .act { display: flex; gap: 8px; align-items: center; padding: 6px 0; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+  .act:last-child { border-bottom: none; }
+  .act code.cmd { background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 3px 8px; font-size: 11.5px; word-break: break-all; }
+  .act .why { font-size: 11px; color: var(--ink-2); flex-basis: 100%; margin: 0; }
+  .act .ares { flex-basis: 100%; }
+
   /* ============ COMPOSER ============ */
   .composer { flex: none; border-top: 1px solid var(--line); background: var(--paper); padding: 12px 24px 14px; }
   .composer-in { max-width: 860px; margin: 0 auto; }
@@ -1365,6 +1375,7 @@
     '- Context may include a PROJECT MAP block (file tree + key-file heads) and a question-relevant subset of files. Excerpted files keep their true line numbers; gaps are marked "··· lines A–B omitted ···". Cite only line ranges you can actually see.',
     '- If the map shows a file you cannot see that would answer better, name it and suggest the user ask again mentioning it.',
     '- confidence: a number from 0 to 1 — your honest estimate.',
+    '- Optionally include "actions": up to 3 items of {"kind":"search"|"open"|"git","command":"…","why":"short reason"}. These are read-only suggestions the user must approve. kind "search": a substring or regex to find in the loaded files. kind "open": a context file path worth inspecting. kind "git": a read-only git command (status, diff, log, show, blame) for the user\'s own terminal. Never propose anything that writes, deletes, or installs.',
     '- If no project files are loaded, still emit the block with reasoning steps and empty evidence arrays.',
     '- Output nothing after the closing fence of the meridian-trace block.'
   ].join('\n');
@@ -1523,6 +1534,7 @@
       tree.appendChild(s);
     });
     bd.appendChild(tree);
+    renderActions(bd, trace.actions);
 
     /* Constellation Link — lines from the trace header to hovered evidence */
     var svg = tree.querySelector('.linkcanvas');
@@ -1549,6 +1561,98 @@
         ev.addEventListener('blur', function () { drawLinks(null); });
       });
     }
+  }
+
+  /* ============ PROPOSED ACTIONS (EXPERIMENTAL INSTRUMENT) ============
+     The model may suggest read-only actions in its trace JSON. Nothing runs
+     without an explicit click:
+       search → executed HERE, against the in-memory files only
+       open   → opens the built-in file viewer
+       git    → display + copy only; meridian never executes shell commands  */
+
+  function runLocalSearch(query, resEl) {
+    resEl.innerHTML = '';
+    var re = null;
+    try { re = new RegExp(query, 'i'); } catch (e) {}
+    var lq = query.toLowerCase(), hits = 0;
+    files.forEach(function (f, p) {
+      if (hits >= 30) return;
+      var lines = f.content.split('\n');
+      for (var i = 0; i < lines.length && hits < 30; i++) {
+        var hit = re ? re.test(lines[i]) : lines[i].toLowerCase().indexOf(lq) !== -1;
+        if (!hit) continue;
+        hits++;
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'ev mono';
+        b.textContent = p + ':' + (i + 1);
+        (function (pp, ln) {
+          b.addEventListener('click', function () { openViewer(pp, ln, ln); });
+        })(p, i + 1);
+        resEl.appendChild(b);
+      }
+    });
+    if (!hits) {
+      var none = document.createElement('span');
+      none.className = 'rail-note';
+      none.textContent = '// no matches in loaded files';
+      resEl.appendChild(none);
+    }
+    toast(hits >= 30 ? '30+ matches (showing first 30).' : hits + ' match' + (hits === 1 ? '' : 'es') + ' in loaded files.');
+  }
+
+  function renderActions(bd, actions) {
+    if (!Array.isArray(actions) || !actions.length) return;
+    var card = document.createElement('div');
+    card.className = 'act-card';
+    var hd = document.createElement('div');
+    hd.className = 'act-hd';
+    hd.innerHTML = 'PROPOSED ACTIONS <span class="exp">EXPERIMENTAL</span><span style="margin-left:auto">nothing runs without your click</span>';
+    card.appendChild(hd);
+    actions.slice(0, 3).forEach(function (a) {
+      if (!a || typeof a.command !== 'string' || !a.command.trim()) return;
+      var kind = a.kind === 'search' || a.kind === 'open' ? a.kind : 'git';
+      var row = document.createElement('div');
+      row.className = 'act';
+      var cmd = document.createElement('code');
+      cmd.className = 'cmd mono';
+      cmd.textContent = (kind === 'search' ? 'search: ' : kind === 'open' ? 'open: ' : '$ ') + a.command;
+      row.appendChild(cmd);
+      if (kind === 'search') {
+        var run = document.createElement('button');
+        run.type = 'button'; run.className = 'ev mono'; run.textContent = '[ RUN LOCALLY ]';
+        var res = document.createElement('div');
+        res.className = 'ev-row ares';
+        run.addEventListener('click', function () { runLocalSearch(a.command, res); });
+        row.appendChild(run); row.appendChild(res);
+      } else if (kind === 'open') {
+        var op = document.createElement('button');
+        op.type = 'button'; op.className = 'ev mono' + (files.has(a.command) ? '' : ' dead');
+        op.textContent = '[ OPEN ]';
+        if (files.has(a.command)) op.addEventListener('click', function () { openViewer(a.command, 1, 1); });
+        else { op.disabled = true; op.title = 'File is not in the loaded context.'; }
+        row.appendChild(op);
+      } else {
+        var cp = document.createElement('button');
+        cp.type = 'button'; cp.className = 'ev mono'; cp.textContent = '[ COPY ]';
+        cp.addEventListener('click', function () {
+          (navigator.clipboard ? navigator.clipboard.writeText(a.command) : Promise.reject())
+            .then(function () { toast('Copied — review it, then run it in your own terminal.'); })
+            .catch(function () { toast('Copy failed — select the command text manually.'); });
+        });
+        row.appendChild(cp);
+        var lbl = document.createElement('span');
+        lbl.className = 'rail-note'; lbl.style.margin = '0';
+        lbl.textContent = '// display only — meridian never executes shell commands';
+        row.appendChild(lbl);
+      }
+      if (a.why) {
+        var why = document.createElement('p');
+        why.className = 'why'; why.textContent = '// ' + a.why;
+        row.appendChild(why);
+      }
+      card.appendChild(row);
+    });
+    bd.appendChild(card);
   }
 
   /* ============ FILE VIEWER ============ */
