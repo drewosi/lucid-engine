@@ -4,16 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MERIDIAN — An AI instrument for people who build</title>
-<meta name="description" content="Meridian holds your entire project in working memory, shows the reasoning behind every answer, and operates your tools with your hands on the controls. A Lucid Engine demonstration.">
+<meta name="description" content="Meridian is a browser-only AI workbench: load your project into memory, ask questions, and every answer arrives with an inspectable evidence trace. Free beta — bring your own Anthropic API key. Zero egress to us.">
 <link rel="canonical" href="https://drewosi.github.io/lucid-engine/">
 <meta property="og:title" content="MERIDIAN — An AI instrument for people who build">
-<meta property="og:description" content="Holds your entire project in working memory, shows the reasoning behind every answer, and operates your tools with your hands on the controls. Private beta — 47 seats per cohort.">
+<meta property="og:description" content="A browser-only AI workbench. Load your project into memory and get answers with inspectable evidence traces — pinned to the exact files and lines they stand on. Free beta, your own API key, zero egress to us.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://drewosi.github.io/lucid-engine/">
 <meta property="og:site_name" content="MERIDIAN">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="MERIDIAN — An AI instrument for people who build">
-<meta name="twitter:description" content="Holds your entire project in working memory, shows the reasoning behind every answer, and operates your tools with your hands on the controls. Private beta — 47 seats per cohort.">
+<meta name="twitter:description" content="A browser-only AI workbench. Load your project into memory and get answers with inspectable evidence traces. Free beta, your own API key, zero egress to us.">
 <style>
   /* ============ LUCID ENGINE TOKENS · v1.2 ============ */
   #app {
@@ -158,6 +158,9 @@
   .cap p { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 40ch; }
   .cap .anno { position: absolute; top: 22px; right: 22px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--accent); opacity: 0; transform: translateX(4px); transition: opacity var(--t-feedback) var(--ease-snap), transform var(--t-feedback) var(--ease-snap); }
   .cap:hover .anno { opacity: 1; transform: none; }
+  .flag { display: inline-flex; align-items: center; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 9.5px; letter-spacing: .14em; border: 1px solid var(--line-strong); color: var(--ink-3); border-radius: 3px; padding: 2px 7px; vertical-align: 2px; margin-left: 8px; }
+  .flag.live { border-color: var(--accent); color: var(--accent); }
+  .cap.road h3, .cap.road p { opacity: .75; }
 
   /* System */
   .sys-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.1fr); gap: 48px; align-items: start; }
@@ -415,7 +418,7 @@
       <div class="nav-actions">
         <button class="btn-k mono" id="palbtn" type="button" aria-label="Open command palette">CTRL-K</button>
         <button class="btn-mode mono" id="modebtn" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
-        <a href="#access" class="btn btn-hairline">Request access</a>
+        <a href="app.html" class="btn btn-hairline">Launch Meridian</a>
       </div>
     </div>
   </nav>
@@ -425,12 +428,12 @@
     <canvas id="field" aria-hidden="true"></canvas>
     <div class="wrap">
       <div class="hero-copy">
-        <div class="eyebrow mono rv" style="--i:0"><span class="dot"></span>FIELD ACTIVE · PRIVATE BETA</div>
+        <div class="eyebrow mono rv" style="--i:0"><span class="dot"></span>FIELD ACTIVE · FREE BETA · LIVE</div>
         <h1 class="rv" style="--i:1">An AI instrument<br><span class="thin">for people who build.</span></h1>
-        <p class="hero-sub rv" style="--i:2">Meridian holds your entire project in working memory, shows the reasoning behind every answer, and operates your tools with <b>your hands on the controls</b>.</p>
+        <p class="hero-sub rv" style="--i:2">Meridian loads your project into your browser's memory and answers with <b>the reasoning on the table</b> — every conclusion pinned to the files and lines it stands on. Your API key, your machine, <b>zero egress to us</b>.</p>
         <div class="hero-cta-row rv" style="--i:3">
-          <a href="#access" class="btn btn-signal btn-hero" id="heroCta">Request access</a>
-          <a href="#tracedemo" class="btn btn-hairline btn-hero">Run a trace</a>
+          <a href="app.html" class="btn btn-signal btn-hero" id="heroCta">Launch Meridian</a>
+          <a href="#tracedemo" class="btn btn-hairline btn-hero">Preview a trace</a>
         </div>
         <p class="hero-note mono rv" style="--i:4">// the field behind this text is live — press <b>d</b> to operate it, <b>ctrl-k</b> for commands</p>
       </div>
@@ -456,24 +459,24 @@
     <div class="wrap">
       <div class="sec-head rv"><span class="idx mono">01</span><h2>Capabilities</h2><span class="anno" data-scramble>// hover for the machinery</span></div>
       <div class="caps">
-        <div class="cap rv" style="--i:0"><span class="anno">// ctx: 2.4M tokens resident</span>
+        <div class="cap rv" style="--i:0"><span class="anno">// in your browser's RAM</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="3" y="3" width="20" height="20"/><rect x="8" y="8" width="10" height="10"/></svg>
-          <h3>Context Engine</h3><p>Your whole project — code, docs, decisions — resident in working memory. Nothing re-explained twice.</p></div>
-        <div class="cap rv" style="--i:1"><span class="anno">// snr +18.3 dB</span>
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M2 13h5l3-8 4 16 3-8h7"/></svg>
-          <h3>Signal Extraction</h3><p>Separates what matters from what's loud. Surfaces the three things worth your attention, not thirty.</p></div>
-        <div class="cap rv" style="--i:2"><span class="anno">// trace.depth: full</span>
+          <h3>Context Engine<span class="flag live">LIVE</span></h3><p>Drop a project folder into the workbench. Code, docs, decisions — read into memory, ready to be asked about.</p></div>
+        <div class="cap rv" style="--i:1"><span class="anno">// trace.depth: full</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="6" cy="20" r="2.5"/><circle cx="13" cy="8" r="2.5"/><circle cx="21" cy="15" r="2.5"/><path d="M8 18l3.5-8M15 9.5l4 4"/></svg>
-          <h3>Trace</h3><p>Every answer shows its reasoning path. Expand any conclusion back to the evidence it stands on.</p></div>
-        <div class="cap rv" style="--i:3"><span class="anno">// 47 instruments mounted</span>
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="13" cy="13" r="10"/><path d="M13 6v7l5 3"/></svg>
-          <h3>Instruments</h3><p>Mount your tools — repos, terminals, trackers. Meridian operates them precisely, with your approval.</p></div>
-        <div class="cap rv" style="--i:4"><span class="anno">// Δ detected: 0.02%</span>
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M3 20L10 8l5 7 3-4 5 9z"/></svg>
-          <h3>Drift Watch</h3><p>Monitors your systems for slow change and flags it before it breaks — dependencies, configs, behavior.</p></div>
-        <div class="cap rv" style="--i:5"><span class="anno">// egress: 0 bytes</span>
+          <h3>Trace<span class="flag live">LIVE</span></h3><p>Every answer shows its reasoning path. Expand any conclusion back to the evidence — the exact files and lines it stands on.</p></div>
+        <div class="cap rv" style="--i:2"><span class="anno">// egress to us: 0 bytes</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="5" y="11" width="16" height="11"/><path d="M9 11V7a4 4 0 018 0v4"/></svg>
-          <h3>Private Core</h3><p>Runs where your data lives. The model comes to the work — the work never leaves the building.</p></div>
+          <h3>Private Core<span class="flag live">LIVE</span></h3><p>We run no servers. Your files and questions travel only from your browser to your AI provider, under your own key.</p></div>
+        <div class="cap road rv" style="--i:3"><span class="anno">// roadmap</span>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M2 13h5l3-8 4 16 3-8h7"/></svg>
+          <h3>Signal Extraction<span class="flag">ROADMAP</span></h3><p>Will separate what matters from what's loud — surfacing the three things worth your attention, not thirty.</p></div>
+        <div class="cap road rv" style="--i:4"><span class="anno">// roadmap</span>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="13" cy="13" r="10"/><path d="M13 6v7l5 3"/></svg>
+          <h3>Instruments<span class="flag">ROADMAP</span></h3><p>Will mount your tools — repos, terminals, trackers — and operate them precisely, with your approval. Not built yet.</p></div>
+        <div class="cap road rv" style="--i:5"><span class="anno">// roadmap</span>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M3 20L10 8l5 7 3-4 5 9z"/></svg>
+          <h3>Drift Watch<span class="flag">ROADMAP</span></h3><p>Will monitor your systems for slow change and flag it before it breaks. Not built yet.</p></div>
       </div>
     </div>
   </section>
@@ -484,9 +487,9 @@
       <div class="sec-head rv"><span class="idx mono">02</span><h2>The system</h2><span class="anno" data-scramble>// clarity in the architecture</span></div>
       <div class="sys-grid">
         <div>
-          <div class="step rv lit" style="--i:0"><div class="k mono">STAGE 01</div><h3>Observe</h3><p>Meridian ingests your repositories, documents, and telemetry, and builds a live model of the project as it actually is — not as the README claims.</p></div>
-          <div class="step rv" style="--i:1"><div class="k mono">STAGE 02</div><h3>Reason</h3><p>Questions run against the live model. Every conclusion carries a trace — the path from evidence to answer stays inspectable, always.</p></div>
-          <div class="step rv" style="--i:2"><div class="k mono">STAGE 03</div><h3>Act</h3><p>With your approval, Meridian operates the mounted instruments — precise, logged, reversible. You hold the controls; it holds the detail.</p></div>
+          <div class="step rv lit" style="--i:0"><div class="k mono">STAGE 01</div><h3>Observe<span class="flag live">LIVE</span></h3><p>You load your repositories and documents straight into the workbench — read into your browser's memory, file by file, with you choosing exactly what's in scope.</p></div>
+          <div class="step rv lit" style="--i:1"><div class="k mono">STAGE 02</div><h3>Reason<span class="flag live">LIVE</span></h3><p>Questions run against the loaded project. Every conclusion carries a trace — the path from evidence to answer stays inspectable, always.</p></div>
+          <div class="step rv" style="--i:2"><div class="k mono">STAGE 03</div><h3>Act<span class="flag">ROADMAP</span></h3><p>Next on the bench: with your approval, Meridian will operate mounted instruments — precise, logged, reversible. Not built yet; the diagram below shows the destination.</p></div>
         </div>
         <div class="diagram rv" style="--i:2" id="diagram">
           <svg viewBox="0 0 460 300" role="img" aria-label="System diagram: sources flow into the core, the core drives instruments">
@@ -511,7 +514,7 @@
   <!-- TRACE DEMO -->
   <section class="block" id="tracedemo">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">03</span><h2>Run a trace</h2><span class="anno" data-scramble>// simulated core — real traces ship with the beta</span></div>
+      <div class="sec-head rv"><span class="idx mono">03</span><h2>Run a trace</h2><span class="anno" data-scramble>// simulated preview — run real traces in the workbench</span></div>
       <div class="trace-grid">
         <div>
           <div class="q-list rv" id="qlist" style="--i:0">
@@ -528,11 +531,12 @@
           </div>
         </div>
       </div>
+      <p class="q-note mono rv" style="margin-top:14px">// this console is a scripted simulation (hence the SIM chip). the real one runs against <b>your</b> project — <a href="app.html" class="trace" style="color:var(--ink-2)">open the workbench</a>.</p>
 
       <!-- STATS -->
       <div class="stats">
-        <div class="stat rv" style="--i:0"><div class="lbl mono">INSTRUMENTS MOUNTED</div><div class="val" data-count="47">0</div><div class="sub mono">across 12 categories</div></div>
-        <div class="stat rv" style="--i:1"><div class="lbl mono">CONTEXT RESIDENT</div><div class="val" data-count="2.4" data-dec="1">0<small> M tokens</small></div><div class="sub mono">per project core</div></div>
+        <div class="stat rv" style="--i:0"><div class="lbl mono">EGRESS TO OUR SERVERS</div><div class="val" data-count="0">0<small> bytes</small></div><div class="sub mono">we run no servers — by architecture</div></div>
+        <div class="stat rv" style="--i:1"><div class="lbl mono">MODEL CONTEXT</div><div class="val" data-count="1" data-dec="0">0<small> M tokens</small></div><div class="sub mono">claude-sonnet-5, via your key</div></div>
         <div class="stat rv live" style="--i:2"><div class="lbl mono">FIELD POINTS</div><div class="val" id="stat-pts">—</div><div class="sub mono">live from this page's hero</div></div>
         <div class="stat rv live" style="--i:3"><div class="lbl mono">SESSION</div><div class="val" id="stat-t">0<small> s</small></div><div class="sub mono">live — you, right now</div></div>
       </div>
@@ -542,28 +546,31 @@
   <!-- PRICING -->
   <section class="block" id="pricing">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">04</span><h2>Pricing</h2><span class="anno" data-scramble>// three doors, no fine print</span></div>
+      <div class="sec-head rv"><span class="idx mono">04</span><h2>Pricing</h2><span class="anno" data-scramble>// planned — everything is free during the beta</span></div>
       <div class="tiers">
         <div class="tier rv" style="--i:0">
+          <span class="chip" style="border-color:var(--line-strong);color:var(--ink-3)">TODAY</span>
           <h3>Observer</h3>
           <div class="price">$0</div>
-          <ul><li>One project resident</li><li>Core instruments</li><li>Trace on every answer</li><li>Community channel</li></ul>
-          <a href="#access" class="btn btn-hairline">Start observing</a>
+          <ul><li>The full workbench, free in beta</li><li>Context engine + traces</li><li>Your own API key — Anthropic bills your usage</li><li>Zero egress to us</li></ul>
+          <a href="app.html" class="btn btn-signal">Launch free beta</a>
         </div>
         <div class="tier hot rv" style="--i:1">
-          <span class="chip"><span class="dot"></span>SIGNAL</span>
+          <span class="chip"><span class="dot"></span>PLANNED</span>
           <h3>Operator</h3>
           <div class="price">$29<small>/mo</small></div>
-          <ul><li>Unlimited projects</li><li>All 47 instruments</li><li>Drift Watch on 5 systems</li><li>Full trace history</li></ul>
-          <a href="#access" class="btn btn-signal">Request access</a>
+          <ul><li>Unlimited projects (roadmap)</li><li>Instruments (roadmap)</li><li>Drift Watch on 5 systems (roadmap)</li><li>Full trace history (roadmap)</li></ul>
+          <a href="#access" class="btn btn-hairline">Register interest</a>
         </div>
         <div class="tier rv" style="--i:2">
+          <span class="chip" style="border-color:var(--line-strong);color:var(--ink-3)">PLANNED</span>
           <h3>Laboratory</h3>
           <div class="price">$120<small>/mo</small></div>
-          <ul><li>Private Core, on your metal</li><li>Drift Watch fleet-wide</li><li>Audit-grade trace export</li><li>A human who answers</li></ul>
-          <a href="#access" class="btn btn-hairline">Talk to the lab</a>
+          <ul><li>Private Core, on your metal (roadmap)</li><li>Drift Watch fleet-wide (roadmap)</li><li>Audit-grade trace export (roadmap)</li><li>A human who answers</li></ul>
+          <a href="#access" class="btn btn-hairline">Register interest</a>
         </div>
       </div>
+      <p class="q-note mono rv" style="margin-top:14px">// planned tiers are shown for transparency: indicative only, subject to change, nothing can be purchased today. the beta is free — see <a href="terms.html" class="trace" style="color:var(--ink-2)">terms</a>.</p>
     </div>
   </section>
 
@@ -574,27 +581,27 @@
       <div class="faq rv" id="faqbox">
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.01</span>Is Meridian real?<span class="x">+</span></button>
-          <div class="faq-a"><p>Honest answer: Meridian is a demonstration product, built to prove the Lucid Engine design system in working code. This page is real — the particle field, the palette, the trace console are all running live in front of you. The product behind them isn't. Yet.</p></div>
+          <div class="faq-a"><p>Yes — as of this beta, the workbench is a real, working instrument: it loads your project into your browser's memory and answers with live evidence traces. Two honest footnotes: the trace console on this page is still a scripted simulation (it wears a SIM chip), and the capabilities marked ROADMAP don't exist yet. Meridian began as a demonstration of the Lucid Engine design system; the demonstration got promoted.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.02</span>Where does my data live?<span class="x">+</span></button>
-          <div class="faq-a"><p>With the Private Core, on your hardware — the model comes to the work. Nothing is uploaded, mirrored, or "telemetried" out. Egress is zero bytes by architecture, not by policy.</p></div>
+          <div class="faq-a"><p>In your browser. We run no servers, so your files, questions, and API key never reach us — egress to us is zero bytes by architecture, not by policy. When you ask a question, your browser sends it (plus the files you selected) directly to Anthropic's API under your own account. Details in the <a href="privacy.html" class="trace">privacy policy</a>.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.03</span>What counts as an instrument?<span class="x">+</span></button>
-          <div class="faq-a"><p>Anything with a surface Meridian can read or operate: a repository, a terminal, a tracker, a deploy pipeline, a metrics endpoint. Instruments are mounted explicitly, one by one — nothing is discovered behind your back.</p></div>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.03</span>What do I need to use it?<span class="x">+</span></button>
+          <div class="faq-a"><p>A modern browser and your own Anthropic API key. Meridian itself is free during the beta; your model usage is billed by Anthropic to you, at their rates. We recommend creating a key with a spend limit. The key is stored in your browser's localStorage and sent to exactly one place: api.anthropic.com.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.04</span>Can I read every trace?<span class="x">+</span></button>
-          <div class="faq-a"><p>Every answer carries its full reasoning path — the evidence, the steps, the confidence. Expand any conclusion back to its sources. If a trace can't be shown, the answer isn't given.</p></div>
+          <div class="faq-a"><p>Every answer carries its reasoning path — the steps, the evidence, the confidence. Evidence chips open the cited file at the cited lines, so you can check the model's work. And you should: traces make verification fast, but they're machine-generated too, and can be wrong. If a trace can't be parsed, the answer says so instead of pretending.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.05</span>Why is the beta only 47 seats?<span class="x">+</span></button>
-          <div class="faq-a"><p>Because every trace gets read by a person during the beta. Forty-seven is the number where that stays true. When it stops being true, the cohort is full.</p></div>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.05</span>Why join the list if the beta is free?<span class="x">+</span></button>
+          <div class="faq-a"><p>The list is how you hear about what ships next — Instruments, Drift Watch, and the planned paid tiers when they become real. It's small on purpose and written by a person, not a sequence.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.06</span>What happens to my email?<span class="x">+</span></button>
-          <div class="faq-a"><p>When the waitlist is live, your address (and tier interest, if you pick one) is sent to Formspree, a form backend, and used for exactly one thing: contacting you about the beta. No newsletters you didn't ask for, no resale, no ad pixels. A copy is mirrored in your own browser's localStorage so this page remembers you — the [ CLEAR LOCAL ENTRY ] button removes it. Want off the list entirely? Reply to any message and you're gone.</p></div>
+          <div class="faq-a"><p>When the waitlist is live, your address (and tier interest, if you pick one) is sent to Formspree, a form backend, and used for exactly one thing: contacting you about Meridian. No newsletters you didn't ask for, no resale, no ad pixels. A copy is mirrored in your own browser's localStorage so this page remembers you — the [ CLEAR LOCAL ENTRY ] button removes it. Want off the list entirely? Reply to any message and you're gone. Full detail: <a href="privacy.html" class="trace">privacy policy</a>.</p></div>
         </div>
       </div>
     </div>
@@ -604,8 +611,8 @@
   <section class="access" id="access">
     <div class="wrap access-grid">
       <div class="rv" style="--i:0">
-        <h2>The beta is small on purpose.</h2>
-        <p>Forty-seven seats per cohort — enough to watch every trace personally. Leave an address; you'll hear from a person, not a sequence.</p>
+        <h2>The beta is live. The list is for what's next.</h2>
+        <p>The workbench is free to use right now — no signup required. Leave an address to hear when roadmap features and paid tiers become real. You'll hear from a person, not a sequence.</p>
       </div>
       <div class="rv" style="--i:1" id="formzone">
         <form id="waitform" novalidate>
@@ -617,9 +624,9 @@
           <label class="field-label tier-label" for="tier">TIER INTEREST — OPTIONAL</label>
           <select id="tier" name="tier">
             <option value="">— undecided, just watching</option>
-            <option value="observer">Observer — $0</option>
-            <option value="operator">Operator — $29/mo</option>
-            <option value="laboratory">Laboratory — $120/mo</option>
+            <option value="observer">Observer — $0 (available now, free beta)</option>
+            <option value="operator">Operator — $29/mo (planned)</option>
+            <option value="laboratory">Laboratory — $120/mo (planned)</option>
           </select>
           <div class="field-err mono" id="fielderr" role="alert" aria-live="polite"></div>
           <div class="field-note mono" id="fieldnote">// stored in this browser only — localStorage. nothing is transmitted.</div>
@@ -633,13 +640,13 @@
       <div class="foot-cols">
         <div>
           <div class="brand">MERIDIAN</div>
-          <div class="brand-sub">A demonstration instrument, built end-to-end on the Lucid Engine design DNA.</div>
+          <div class="brand-sub">A real instrument in free beta, built end-to-end on the Lucid Engine design DNA.</div>
         </div>
         <div>
           <h4>PAGE</h4>
           <ul>
+            <li><a href="app.html">Workbench — launch</a></li>
             <li><a href="#capabilities">Capabilities</a></li>
-            <li><a href="#system">System</a></li>
             <li><a href="#tracedemo">Trace demo</a></li>
             <li><a href="#pricing">Pricing</a></li>
           </ul>
@@ -650,19 +657,22 @@
             <li><a href="dna.html">Design DNA — Lucid Engine</a></li>
             <li><a href="https://github.com/drewosi/lucid-engine/blob/main/DESIGN-DNA.md">DESIGN-DNA.md</a></li>
             <li><a href="#faq">Questions</a></li>
+            <li><a href="https://github.com/drewosi/lucid-engine">Source — GitHub</a></li>
           </ul>
         </div>
         <div>
-          <h4>SOURCE</h4>
+          <h4>LEGAL</h4>
           <ul>
-            <li><a href="https://github.com/drewosi/lucid-engine">GitHub — lucid-engine</a></li>
-            <li><a href="https://github.com/drewosi/lucid-engine/blob/main/index.html">This page's code</a></li>
+            <li><a href="terms.html">Terms of service</a></li>
+            <li><a href="privacy.html">Privacy policy</a></li>
           </ul>
         </div>
       </div>
       <div class="foot">
-        <span><b>MERIDIAN</b> // A LUCID ENGINE DEMONSTRATION</span>
-        <span>DESIGN DNA v1.2 · JUL 2026</span>
+        <span><b>MERIDIAN</b> // BUILT ON LUCID ENGINE</span>
+        <!-- TODO(drew): replace [ENTITY] with your legal name or company before public launch -->
+        <span>© 2026 [ENTITY]</span>
+        <span>NOT AFFILIATED WITH ANTHROPIC</span>
         <span>PRESS <b>?</b> FOR KEYMAP · <b>CTRL-K</b> FOR COMMANDS</span>
       </div>
     </div>
@@ -1155,6 +1165,7 @@
     { g: 'MACHINERY', n: 'Toggle field debug', k: 'd', f: function () { $('debug').classList.toggle('on'); } },
     { g: 'MACHINERY', n: 'Run trace Q.01', k: '', f: function () { go('tracedemo'); runTrace(0); } },
     { g: 'MACHINERY', n: 'Show keymap', k: '?', f: function () { $('keymap').classList.add('on'); } },
+    { g: 'EXTERNAL', n: 'Launch Meridian (workbench)', k: '', f: function () { window.location.href = 'app.html'; } },
     { g: 'EXTERNAL', n: 'Open GitHub repo', k: '', f: function () { window.open(REPO, '_blank', 'noopener'); } },
     { g: 'EXTERNAL', n: 'Open design system (DNA)', k: '', f: function () { window.location.href = 'dna.html'; } },
     { g: 'EXTERNAL', n: 'Copy live URL', k: '', f: function () {

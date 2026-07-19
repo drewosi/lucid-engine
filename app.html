@@ -1,0 +1,1128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MERIDIAN — Workbench</title>
+<meta name="description" content="The Meridian workbench. Load a project into your browser's memory, ask questions, and get answers with inspectable evidence traces. Runs entirely in your browser with your own Anthropic API key.">
+<link rel="canonical" href="https://drewosi.github.io/lucid-engine/app.html">
+<meta property="og:title" content="MERIDIAN — Workbench">
+<meta property="og:description" content="Load a project into your browser's memory and get AI answers with inspectable evidence traces. Browser-only. Your key, your data, zero egress to us.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://drewosi.github.io/lucid-engine/app.html">
+<style>
+  /* ============ LUCID ENGINE TOKENS · v1.2 — keep in sync with index.html ============ */
+  #app {
+    --paper: #0A0B0D;
+    --surface: #101216;
+    --surface-2: #14171C;
+    --ink: #EDECE7;
+    --ink-2: #A9A8A1;
+    --ink-3: #6C6B66;
+    --line: #22242A;
+    --line-strong: #34363E;
+    --accent: #FF5C0A;
+    --accent-ink: #0A0B0D;
+    --err: #E06B4F;
+    --ok: #7BAE7F;
+
+    --ease-out-engine: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-inout-engine: cubic-bezier(0.65, 0, 0.35, 1);
+    --ease-snap: cubic-bezier(0.3, 0, 0, 1);
+    --t-feedback: 120ms;
+    --t-state: 200ms;
+    --t-entrance: 400ms;
+  }
+  #app[data-mode="light"] {
+    --paper: #FAFAF7;
+    --surface: #FFFFFF;
+    --surface-2: #F1F0EA;
+    --ink: #111110;
+    --ink-2: #4A4945;
+    --ink-3: #8A8880;
+    --line: #E4E2DB;
+    --line-strong: #C9C7BE;
+    --accent: #FF4F00;
+    --accent-ink: #FFFFFF;
+    --err: #C4452D;
+    --ok: #3E7A44;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  #app {
+    background: var(--paper); color: var(--ink); height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column;
+    font-family: "Helvetica Neue", "Segoe UI", -apple-system, Arial, sans-serif;
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+    transition: background var(--t-state) var(--ease-inout-engine), color var(--t-state) var(--ease-inout-engine);
+  }
+  .mono { font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  a { color: inherit; text-decoration: none; }
+  :is(a, button, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  kbd { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; border: 1px solid var(--line-strong); border-radius: 3px; padding: 2px 7px; color: var(--ink); }
+
+  .btn { font-family: inherit; font-size: 13.5px; height: 36px; padding: 0 18px; border-radius: 3px; cursor: pointer; letter-spacing: .01em; display: inline-flex; align-items: center; gap: 8px;
+    transition: transform var(--t-feedback) var(--ease-snap), filter var(--t-feedback) var(--ease-snap), border-color var(--t-feedback) var(--ease-snap), background var(--t-feedback) var(--ease-snap); }
+  .btn:active { transform: scale(.985); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-signal { background: var(--accent); color: var(--accent-ink); border: none; font-weight: 700; }
+  .btn-signal:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn-hairline { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+  .btn-hairline:hover:not(:disabled) { border-color: var(--accent); background: var(--surface); }
+  .btn-quiet { background: transparent; border: none; color: var(--ink-3); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .1em; cursor: pointer; padding: 4px 0; }
+  .btn-quiet:hover { color: var(--err); }
+
+  /* ============ NAV ============ */
+  nav.primary { flex: none; z-index: 100; height: 56px; background: var(--paper); border-bottom: 1px solid var(--line); }
+  .nav-in { display: flex; align-items: center; gap: 16px; height: 100%; padding: 0 20px; }
+  .wordmark { font-weight: 700; letter-spacing: .02em; font-size: 15px; display: flex; align-items: baseline; gap: 10px; }
+  .wordmark .tag { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .14em; font-weight: 400; }
+  .nav-status { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .ctx-readout { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .08em; color: var(--ink-3); white-space: nowrap; }
+  .ctx-readout b { color: var(--ink); font-weight: 500; }
+  select.modelsel { height: 32px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .08em; padding: 0 8px; cursor: pointer; }
+  select.modelsel:focus { outline: none; border-color: var(--accent); }
+  .btn-mode, .btn-icon { background: transparent; border: 1px solid var(--line-strong); color: var(--ink-3); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; height: 32px; padding: 0 10px; border-radius: 3px; cursor: pointer; }
+  .btn-mode:hover, .btn-icon:hover { border-color: var(--accent); color: var(--ink); }
+  .btn-icon[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+  @media (max-width: 720px) { .ctx-readout { display: none; } .wordmark .tag { display: none; } }
+
+  /* ============ LAYOUT ============ */
+  main.deck { flex: 1; display: grid; grid-template-columns: 320px 1fr; min-height: 0; }
+  @media (max-width: 860px) {
+    main.deck { grid-template-columns: 1fr; }
+    aside.rail { position: fixed; inset: 56px 0 0 0; z-index: 90; background: var(--paper); display: none; overflow-y: auto; }
+    aside.rail.open { display: block; }
+  }
+  #railbtn { display: none; }
+  @media (max-width: 860px) { #railbtn { display: inline-flex; align-items: center; } }
+
+  /* ============ CONTEXT RAIL ============ */
+  aside.rail { border-right: 1px solid var(--line); overflow-y: auto; padding: 18px 16px 24px; background: var(--paper); }
+  .rail-hd { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--ink-3); margin: 0 0 10px; display: flex; align-items: baseline; }
+  .rail-hd .n { margin-left: auto; color: var(--ink-2); }
+  #dropzone { border: 1px dashed var(--line-strong); border-radius: 4px; padding: 18px 14px; text-align: center; color: var(--ink-3); font-size: 12.5px; transition: border-color var(--t-feedback) var(--ease-snap), background var(--t-feedback) var(--ease-snap); }
+  #dropzone.hot { border-color: var(--accent); background: var(--surface); color: var(--ink-2); }
+  #dropzone .pickrow { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+  #dropzone .pick { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .1em; background: transparent; border: 1px solid var(--line-strong); color: var(--ink-2); border-radius: 3px; padding: 6px 10px; cursor: pointer; }
+  #dropzone .pick:hover { border-color: var(--accent); color: var(--ink); }
+  .rail-note { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .05em; margin: 10px 0 0; line-height: 1.7; }
+  .rail-note b { color: var(--ink-2); font-weight: 500; }
+
+  #budget { margin: 16px 0 4px; }
+  .budget-bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .budget-bar i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width var(--t-state) var(--ease-snap); }
+  .budget-bar.full i { background: var(--err); }
+  .budget-txt { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .06em; margin-top: 5px; display: flex; justify-content: space-between; }
+
+  #tree { margin-top: 12px; font-size: 12.5px; }
+  .dir-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; border: none; color: var(--ink-3); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .08em; padding: 8px 2px 3px; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .dir-row:hover { color: var(--ink-2); }
+  .file-row { display: flex; align-items: center; gap: 8px; padding: 3px 2px 3px 12px; color: var(--ink-2); }
+  .file-row label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .file-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-row input[type="checkbox"] { accent-color: var(--accent); margin: 0; flex: none; }
+  .file-row .tk { margin-left: auto; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 9.5px; color: var(--ink-3); flex: none; }
+  .file-row:hover { color: var(--ink); }
+  #skipnote { margin-top: 10px; }
+  #ctxactions { margin-top: 8px; display: flex; gap: 16px; }
+
+  /* ============ CONVERSATION ============ */
+  section.stage { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  #convo { flex: 1; overflow-y: auto; padding: 26px 24px 12px; scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { #convo { scroll-behavior: auto; } }
+  .convo-in { max-width: 860px; margin: 0 auto; }
+  #empty { color: var(--ink-3); font-size: 13.5px; max-width: 52ch; margin: 8vh auto 0; text-align: left; }
+  #empty h2 { font-size: 21px; letter-spacing: -.01em; color: var(--ink); margin: 0 0 10px; }
+  #empty ol { margin: 14px 0 0; padding-left: 20px; display: grid; gap: 8px; color: var(--ink-2); }
+  #empty .mono { font-size: 11px; color: var(--ink-3); }
+
+  .msg { margin-bottom: 18px; }
+  .msg-u { font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 12.5px; color: var(--ink-2); white-space: pre-wrap; word-break: break-word; padding: 10px 14px; border-left: 2px solid var(--line-strong); }
+  .msg-u::before { content: "> "; color: var(--ink-3); }
+
+  .msg-a { background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+  .msg-a .term-hd { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--line); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); }
+  .msg-a .term-hd .chip { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 1px 8px; font-size: 9.5px; letter-spacing: .1em; }
+  .msg-a .term-hd .chip.dim { border-color: var(--line-strong); color: var(--ink-3); }
+  .msg-a .term-hd .chip.err { border-color: var(--err); color: var(--err); }
+  .msg-a .bd { padding: 16px 18px 18px; font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.7; color: var(--ink); }
+  .msg-a .bd .txt { white-space: pre-wrap; word-break: break-word; }
+  .msg-a .bd .txt b { color: var(--ink); font-weight: 700; }
+  .msg-a .bd .txt code { background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; font-size: 12px; }
+  .msg-a .bd pre { background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 12px 14px; overflow-x: auto; margin: 10px 0; }
+  .msg-a .bd pre code { background: none; border: none; padding: 0; font-size: 12px; line-height: 1.6; }
+  .msg-a .bd .cursor { display: inline-block; width: 1ch; background: var(--accent); height: 1.1em; vertical-align: text-bottom; animation: flare 1s steps(2) infinite; }
+  @keyframes flare { from { opacity: .4; } to { opacity: 1; } }
+  .msg-a .errline { color: var(--err); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; letter-spacing: .03em; }
+
+  /* trace console */
+  .trace-tree { border-top: 1px dashed var(--line-strong); margin-top: 16px; padding-top: 14px; position: relative; }
+  .trace-tree .tt { font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin-bottom: 12px; display: flex; }
+  .trace-tree .tt .cf { margin-left: auto; color: var(--ink-2); }
+  .trace-tree .tt .cf b { color: var(--accent); font-weight: 500; }
+  .tstep { display: flex; gap: 12px; padding: 5px 0; position: relative; z-index: 2; }
+  .tstep .sn { flex: none; font-size: 10px; color: var(--accent); letter-spacing: .1em; padding-top: 2px; }
+  .tstep .sb { min-width: 0; }
+  .tstep .sa { font-size: 12px; color: var(--ink); }
+  .tstep .sd { font-size: 11.5px; color: var(--ink-2); }
+  .ev-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; position: relative; z-index: 2; }
+  .ev { border: 1px solid var(--line-strong); border-radius: 3px; padding: 4px 9px; font-size: 10.5px; color: var(--ink-2); cursor: pointer; background: var(--surface); font-family: inherit; transition: border-color var(--t-feedback) var(--ease-snap), color var(--t-feedback) var(--ease-snap); }
+  .ev:hover, .ev:focus { border-color: var(--accent); color: var(--ink); }
+  .ev .src { color: var(--ink-3); }
+  .ev.dead { opacity: .5; cursor: not-allowed; }
+  .ev.dead:hover { border-color: var(--line-strong); color: var(--ink-2); }
+  .linkcanvas { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+  .trace-wait { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; color: var(--ink-3); border-top: 1px dashed var(--line-strong); margin-top: 16px; padding-top: 14px; }
+  .trace-wait i { display: inline-block; width: 8px; height: 8px; background: var(--accent); animation: flare 1s var(--ease-inout-engine) infinite alternate; margin-right: 8px; }
+
+  /* ============ COMPOSER ============ */
+  .composer { flex: none; border-top: 1px solid var(--line); background: var(--paper); padding: 12px 24px 14px; }
+  .composer-in { max-width: 860px; margin: 0 auto; }
+  #statusline { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .08em; color: var(--ink-3); min-height: 15px; margin-bottom: 6px; display: flex; gap: 24px; }
+  #statusline .err { color: var(--err); }
+  #statusline .cost { margin-left: auto; white-space: nowrap; }
+  .comp-row { display: flex; gap: 10px; align-items: flex-end; }
+  #prompt { flex: 1; min-height: 44px; max-height: 180px; resize: vertical; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.55; padding: 11px 14px; }
+  #prompt:focus { outline: none; border-color: var(--accent); }
+  .comp-note { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 9.5px; color: var(--ink-3); letter-spacing: .05em; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+  .comp-note a { color: var(--ink-2); border-bottom: 1px solid var(--line-strong); }
+  .comp-note a:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ============ MODALS / DRAWER ============ */
+  .veil { position: fixed; inset: 0; z-index: 150; display: none; align-items: center; justify-content: center; background: rgba(10, 11, 13, .6); padding: 20px; }
+  .veil.on { display: flex; }
+  .modal { width: min(560px, 94vw); max-height: 86vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px; padding: 24px 26px 26px; }
+  .modal h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: -.01em; }
+  .modal .k { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--accent); margin-bottom: 14px; }
+  .modal p, .modal li { font-size: 13.5px; color: var(--ink-2); }
+  .modal p b, .modal li b { color: var(--ink); font-weight: 500; }
+  .modal ul { padding-left: 18px; display: grid; gap: 8px; margin: 12px 0 18px; }
+  .modal .row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .modal a.leglink { color: var(--ink); border-bottom: 1px solid var(--line-strong); }
+  .modal a.leglink:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* file viewer */
+  .viewer { width: min(880px, 96vw); max-height: 88vh; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+  .viewer .vh { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .08em; color: var(--ink-2); }
+  .viewer .vh .rng { color: var(--accent); }
+  .viewer .vh button { margin-left: auto; }
+  .viewer .vb { overflow: auto; padding: 12px 0; font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.6; }
+  .viewer .ln { display: flex; white-space: pre; }
+  .viewer .ln .no { flex: none; width: 56px; text-align: right; padding-right: 14px; color: var(--ink-3); user-select: none; }
+  .viewer .ln .tx { padding-right: 18px; }
+  .viewer .ln.hit { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+
+  /* settings drawer */
+  #drawer { position: fixed; top: 56px; right: 0; bottom: 0; z-index: 120; width: min(380px, 94vw); background: var(--surface); border-left: 1px solid var(--line-strong); transform: translateX(102%); transition: transform var(--t-state) var(--ease-out-engine); overflow-y: auto; padding: 22px 22px 30px; }
+  #drawer.open { transform: none; }
+  #drawer h2 { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .14em; color: var(--accent); font-weight: 500; margin: 0 0 18px; }
+  #drawer h3 { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--ink-3); font-weight: 500; margin: 22px 0 8px; }
+  #drawer p { font-size: 12px; color: var(--ink-2); margin: 8px 0; line-height: 1.6; }
+  .key-row { display: flex; gap: 8px; }
+  #keyin { flex: 1; min-width: 0; height: 40px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; padding: 0 12px; }
+  #keyin:focus { outline: none; border-color: var(--accent); }
+  #keystate { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .05em; color: var(--ink-2); margin-top: 8px; min-height: 16px; }
+  #keystate .on { color: var(--ok); }
+  #drawer .note { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .04em; line-height: 1.7; }
+
+  /* toasts */
+  #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 160; display: grid; gap: 8px; }
+  .toast { width: 320px; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--line-strong); border-left: 2px solid var(--accent); border-radius: 3px; padding: 12px 14px; font-size: 13px; color: var(--ink); opacity: 0; transform: translateY(8px); transition: opacity var(--t-entrance) var(--ease-out-engine), transform var(--t-entrance) var(--ease-out-engine); }
+  .toast.in { opacity: 1; transform: none; }
+
+  /* footer strip */
+  footer.strip { flex: none; border-top: 1px solid var(--line); padding: 8px 20px; display: flex; flex-wrap: wrap; gap: 4px 24px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 9.5px; letter-spacing: .08em; color: var(--ink-3); }
+  footer.strip a { border-bottom: 1px solid transparent; }
+  footer.strip a:hover { color: var(--accent); }
+  @media (max-width: 720px) { footer.strip span.opt { display: none; } }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .msg-a .bd .cursor, .trace-wait i { animation: none; }
+    #drawer { transition: none; }
+    .toast, .btn, .budget-bar i { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app" data-mode="dark">
+
+  <a href="#prompt" style="position:absolute;left:-9999px" class="mono">Skip to composer</a>
+
+  <!-- NAV -->
+  <nav class="primary" aria-label="Primary">
+    <div class="nav-in">
+      <a href="index.html" class="wordmark">MERIDIAN <span class="tag">WORKBENCH · FREE BETA</span></a>
+      <button class="btn-icon mono" id="railbtn" type="button" aria-expanded="false" aria-controls="rail">CONTEXT</button>
+      <div class="nav-status">
+        <span class="ctx-readout" id="ctxreadout" aria-live="off">CTX ≈ <b>0</b> tokens · <b>0</b> files</span>
+        <label for="modelsel" style="position:absolute;left:-9999px">Model</label>
+        <select class="modelsel" id="modelsel"></select>
+        <button class="btn-icon mono" id="setbtn" type="button" aria-expanded="false" aria-controls="drawer">SETTINGS</button>
+        <button class="btn-mode mono" id="modebtn" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="deck">
+    <!-- CONTEXT RAIL -->
+    <aside class="rail" id="rail" aria-label="Project context">
+      <h2 class="rail-hd">CONTEXT <span class="n" id="filecount"></span></h2>
+      <div id="dropzone">
+        drop a project folder here
+        <div class="pickrow">
+          <button class="pick" type="button" id="dirbtn">[ PICK FOLDER ]</button>
+          <button class="pick" type="button" id="filebtn">[ PICK FILES ]</button>
+        </div>
+        <input type="file" id="dirpick" webkitdirectory multiple hidden aria-label="Pick a project folder">
+        <input type="file" id="filepick" multiple hidden aria-label="Pick files">
+      </div>
+      <p class="rail-note">// files are read into this tab's memory only. nothing is uploaded to us — <b>we run no servers</b>. selected files are sent to Anthropic with each question, under your key.</p>
+      <div id="budget" hidden>
+        <div class="budget-bar" id="budgetbar"><i></i></div>
+        <div class="budget-txt"><span id="budgettxt">≈ 0 tokens selected</span><span id="budgetmax"></span></div>
+      </div>
+      <div id="tree"></div>
+      <p class="rail-note" id="skipnote" hidden></p>
+      <div id="ctxactions" hidden>
+        <button class="btn-quiet" type="button" id="selall">[ SELECT ALL ]</button>
+        <button class="btn-quiet" type="button" id="selnone">[ SELECT NONE ]</button>
+        <button class="btn-quiet" type="button" id="clearctx">[ UNLOAD PROJECT ]</button>
+      </div>
+    </aside>
+
+    <!-- STAGE -->
+    <section class="stage" aria-label="Conversation">
+      <div id="convo">
+        <div class="convo-in">
+          <div id="empty">
+            <h2>The workbench is live.</h2>
+            <p>Ask a question and the answer arrives with its trace — the reasoning steps, pinned to the exact files and lines they stand on.</p>
+            <ol>
+              <li>Add your Anthropic API key in <b>SETTINGS</b> — it stays in this browser.</li>
+              <li>Load a project folder into <b>CONTEXT</b> (optional, recommended).</li>
+              <li>Ask. Expand any answer's evidence chips to inspect the cited lines.</li>
+            </ol>
+            <p class="mono" style="margin-top:16px">// zero egress to us: your files and questions travel only from this browser to Anthropic's API.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="composer-in">
+          <div id="statusline"><span id="status" role="status" aria-live="polite">CORE IDLE</span><span class="cost" id="costline"></span></div>
+          <form id="askform" class="comp-row">
+            <label for="prompt" style="position:absolute;left:-9999px">Your question</label>
+            <textarea id="prompt" placeholder="ask about the loaded project — or anything…" rows="1"></textarea>
+            <button class="btn btn-signal" type="submit" id="sendbtn">Send</button>
+            <button class="btn btn-hairline" type="button" id="stopbtn" hidden>Stop</button>
+          </form>
+          <div class="comp-note">
+            <span>// enter to send · shift-enter for newline</span>
+            <span>// AI output can be wrong or incomplete — verify before you rely on it</span>
+            <span>// costs are estimates; Anthropic bills actuals — <a href="terms.html">terms</a> · <a href="privacy.html">privacy</a></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- SETTINGS DRAWER -->
+  <div id="drawer" role="dialog" aria-label="Settings" aria-modal="false">
+    <h2>SETTINGS</h2>
+    <h3>ANTHROPIC API KEY</h3>
+    <div class="key-row">
+      <label for="keyin" style="position:absolute;left:-9999px">Anthropic API key</label>
+      <input type="password" id="keyin" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+      <button class="btn btn-hairline" type="button" id="savekey">Save</button>
+    </div>
+    <div id="keystate" aria-live="polite"></div>
+    <p class="note">// stored in this browser's localStorage only. it is sent to exactly one place: api.anthropic.com, with your requests. we never see it — there is no server on our side to see it with.</p>
+    <p class="note">// recommended: create a key in a dedicated Anthropic workspace with a monthly spend limit. any script running on a page can read its own origin's localStorage — this page loads zero third-party scripts, and keeping the blast radius small is still good practice.</p>
+    <button class="btn-quiet" type="button" id="clearkey">[ CLEAR KEY ]</button>
+
+    <h3>MODEL</h3>
+    <p class="note" id="modelnote"></p>
+
+    <h3>LOCAL DATA</h3>
+    <p class="note">// everything meridian stores in this browser: your API key, model choice, color mode, the terms-acceptance record, and (on the landing page) your waitlist entry. loaded files and conversation live in memory only and vanish when the tab closes.</p>
+    <button class="btn-quiet" type="button" id="clearall">[ CLEAR ALL MERIDIAN DATA FROM THIS BROWSER ]</button>
+
+    <h3>LEGAL</h3>
+    <p class="note"><a href="terms.html" style="border-bottom:1px solid var(--line-strong)">terms of service</a> · <a href="privacy.html" style="border-bottom:1px solid var(--line-strong)">privacy policy</a><br>// not affiliated with anthropic. claude is a trademark of anthropic, pbc.</p>
+  </div>
+
+  <!-- FIRST-RUN MODAL -->
+  <div class="veil" id="firstveil">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="fr-title" id="firstrun">
+      <div class="k mono">MERIDIAN // BEFORE YOU BEGIN</div>
+      <h2 id="fr-title">A real instrument, in free beta.</h2>
+      <ul>
+        <li><b>It runs entirely in your browser.</b> We operate no servers. Your files, questions, and key are never sent to us.</li>
+        <li><b>Bring your own Anthropic API key.</b> Requests go directly from this browser to Anthropic under <b>your</b> account — usage is billed by Anthropic to you, at their rates.</li>
+        <li><b>Your key stays local.</b> It is stored in this browser's localStorage and sent only to api.anthropic.com. Use a spend-limited key.</li>
+        <li><b>AI output can be wrong.</b> Answers and traces are machine-generated and may be inaccurate or incomplete. They are not professional advice. Verify before you rely on them.</li>
+      </ul>
+      <p>By continuing you agree to the <a class="leglink" href="terms.html">Terms of Service</a> and acknowledge the <a class="leglink" href="privacy.html">Privacy Policy</a>.</p>
+      <div class="row">
+        <button class="btn btn-signal" type="button" id="fr-accept">I understand — begin</button>
+        <a class="btn btn-hairline" href="index.html">Back to the front door</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- FILE VIEWER -->
+  <div class="veil" id="viewveil">
+    <div class="viewer" role="dialog" aria-modal="true" aria-label="Cited file">
+      <div class="vh"><span id="vtitle">—</span><span class="rng" id="vrange"></span><button class="btn-icon mono" type="button" id="vclose">ESC CLOSE</button></div>
+      <div class="vb" id="vbody" tabindex="0"></div>
+    </div>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+
+  <footer class="strip">
+    <span><b>MERIDIAN</b> // FREE BETA</span>
+    <a href="terms.html">TERMS</a>
+    <a href="privacy.html">PRIVACY</a>
+    <a href="index.html">FRONT DOOR</a>
+    <span class="opt">NOT AFFILIATED WITH ANTHROPIC</span>
+    <!-- TODO(drew): replace [ENTITY] with your legal name or company before public launch -->
+    <span class="opt">© 2026 [ENTITY]</span>
+  </footer>
+
+</div>
+
+<noscript><p style="font-family:monospace;padding:20px">MERIDIAN is a browser application and requires JavaScript.</p></noscript>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ============ HELPERS ============ */
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $('app');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  function toast(msg) {
+    var d = document.createElement('div');
+    d.className = 'toast'; d.textContent = msg;
+    $('toasts').appendChild(d);
+    requestAnimationFrame(function () { d.classList.add('in'); });
+    setTimeout(function () { d.classList.remove('in'); setTimeout(function () { d.remove(); }, 400); }, 3600);
+  }
+  function fmtTok(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+    return String(n);
+  }
+
+  /* ============ MODELS ============ */
+  /* rates are USD per million tokens, approximate as of JUL 2026 — verify at anthropic.com/pricing */
+  var MODELS = {
+    'claude-sonnet-5':  { label: 'SONNET 5',  ctx: 1000000, rIn: 3.00, rOut: 15.00, rCacheW: 3.75, rCacheR: 0.30,
+                          note: 'claude-sonnet-5 — 1M-token context. best reasoning per dollar for traces.' },
+    'claude-haiku-4-5': { label: 'HAIKU 4.5', ctx: 200000,  rIn: 1.00, rOut: 5.00,  rCacheW: 1.25, rCacheR: 0.10,
+                          note: 'claude-haiku-4-5 — 200K-token context. fast and cheap; traces are shallower.' }
+  };
+  var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted' };
+  var model = lsGet(LS.model);
+  if (!MODELS[model]) model = 'claude-sonnet-5';
+
+  var modelsel = $('modelsel');
+  Object.keys(MODELS).forEach(function (id) {
+    var o = document.createElement('option');
+    o.value = id; o.textContent = MODELS[id].label;
+    modelsel.appendChild(o);
+  });
+  modelsel.value = model;
+  function syncModelNote() {
+    $('modelnote').textContent = '// ' + MODELS[model].note + ' rates ≈ $' + MODELS[model].rIn + ' / $' + MODELS[model].rOut + ' per MTok in/out, billed by Anthropic.';
+  }
+  modelsel.addEventListener('change', function () {
+    model = modelsel.value; lsSet(LS.model, model);
+    syncModelNote(); renderBudget();
+  });
+  syncModelNote();
+
+  /* ============ MODE ============ */
+  var modebtn = $('modebtn');
+  function setMode(m) {
+    app.dataset.mode = m; lsSet(LS.mode, m);
+    modebtn.textContent = 'MODE: ' + (m === 'dark' ? 'CEREMONY' : 'DAYLIGHT');
+  }
+  setMode(lsGet(LS.mode) === 'light' ? 'light' : 'dark');
+  modebtn.addEventListener('click', function () { setMode(app.dataset.mode === 'dark' ? 'light' : 'dark'); });
+
+  /* ============ FOCUS TRAP ============ */
+  function trap(container) {
+    function onKey(e) {
+      if (e.key !== 'Tab') return;
+      var els = container.querySelectorAll('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!els.length) return;
+      var first = els[0], last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+    container.addEventListener('keydown', onKey);
+    return function () { container.removeEventListener('keydown', onKey); };
+  }
+
+  /* ============ FIRST RUN ============ */
+  var firstveil = $('firstveil');
+  var accepted = null;
+  try { accepted = JSON.parse(lsGet(LS.accepted) || 'null'); } catch (e) {}
+  var untrapFR = null;
+  if (!accepted || accepted.version !== 1) {
+    firstveil.classList.add('on');
+    untrapFR = trap($('firstrun'));
+    $('fr-accept').focus();
+  }
+  $('fr-accept').addEventListener('click', function () {
+    lsSet(LS.accepted, JSON.stringify({ ts: Date.now(), version: 1 }));
+    firstveil.classList.remove('on');
+    if (untrapFR) untrapFR();
+    $('prompt').focus();
+  });
+
+  /* ============ SETTINGS DRAWER + KEY ============ */
+  var drawer = $('drawer'), setbtn = $('setbtn');
+  function keyMasked(k) { return k.length > 12 ? k.slice(0, 10) + '…' + k.slice(-4) : '…' + k.slice(-4); }
+  function syncKeyState() {
+    var k = lsGet(LS.key);
+    $('keystate').innerHTML = k
+      ? 'key held: <span class="on">' + esc(keyMasked(k)) + '</span> — in this browser only'
+      : 'no key saved. requests cannot run without one.';
+  }
+  syncKeyState();
+  function openDrawer(open) {
+    drawer.classList.toggle('open', open);
+    setbtn.setAttribute('aria-expanded', String(open));
+    if (open) $('keyin').focus();
+  }
+  setbtn.addEventListener('click', function () { openDrawer(!drawer.classList.contains('open')); });
+  $('savekey').addEventListener('click', function () {
+    var v = $('keyin').value.trim();
+    if (!v) { toast('Paste a key first.'); return; }
+    if (v.indexOf('sk-ant-') !== 0) { toast('That does not look like an Anthropic key (sk-ant-…). Saved anyway.'); }
+    lsSet(LS.key, v);
+    $('keyin').value = '';
+    syncKeyState();
+    toast('Key saved — in this browser only.');
+  });
+  $('keyin').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $('savekey').click(); }
+  });
+  $('clearkey').addEventListener('click', function () {
+    lsDel(LS.key); syncKeyState(); toast('Key removed from this browser.');
+  });
+  $('clearall').addEventListener('click', function () {
+    Object.keys(LS).forEach(function (k) { lsDel(LS[k]); });
+    lsDel('meridian.waitlist');
+    toast('All Meridian data cleared from this browser.');
+    setTimeout(function () { location.reload(); }, 600);
+  });
+
+  /* mobile rail toggle */
+  var railbtn = $('railbtn'), rail = $('rail');
+  railbtn.addEventListener('click', function () {
+    var open = !rail.classList.contains('open');
+    rail.classList.toggle('open', open);
+    railbtn.setAttribute('aria-expanded', String(open));
+  });
+
+  /* ============ CONTEXT ENGINE ============ */
+  var files = new Map();       /* path -> {content, lines, tokens, checked} */
+  var skipped = { dirs: 0, binary: 0, big: 0, over: 0 };
+  var IGNORE_DIRS = ['.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', 'target', 'vendor', '__pycache__', '.venv', 'venv', 'coverage', '.cache', '.idea', '.vscode'];
+  var BIN_EXT = /\.(png|jpe?g|gif|webp|avif|ico|icns|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|m4[av]|mov|avi|mkv|webm|ogg|wav|flac|zip|gz|bz2|xz|7z|rar|tar|jar|war|class|pyc|pyo|o|a|so|dylib|dll|exe|bin|dat|db|sqlite3?|pdf|doc[x]?|xls[x]?|ppt[x]?|ds_store|lockb|wasm)$/i;
+  var MAX_FILE = 512 * 1024, MAX_FILES = 2000;
+
+  function ignoredPath(path) {
+    return path.split('/').some(function (seg) { return IGNORE_DIRS.indexOf(seg.toLowerCase()) !== -1 || (seg !== '.' && seg.charAt(0) === '.' && seg !== '.github' && seg !== '.env.example'); });
+  }
+  function looksBinary(buf) {
+    var v = new Uint8Array(buf);
+    for (var i = 0; i < v.length; i++) if (v[i] === 0) return true;
+    return false;
+  }
+  function ingestFile(file, path) {
+    path = (path || file.name).replace(/^\.?\//, '');
+    if (files.size >= MAX_FILES) { skipped.over++; return Promise.resolve(); }
+    if (ignoredPath(path)) { skipped.dirs++; return Promise.resolve(); }
+    if (BIN_EXT.test(path)) { skipped.binary++; return Promise.resolve(); }
+    if (file.size > MAX_FILE) { skipped.big++; return Promise.resolve(); }
+    return file.slice(0, 8192).arrayBuffer().then(function (buf) {
+      if (looksBinary(buf)) { skipped.binary++; return; }
+      return file.text().then(function (text) {
+        files.set(path, {
+          content: text,
+          lines: text.split('\n').length,
+          tokens: Math.ceil(text.length / 4),
+          checked: true
+        });
+      });
+    }).catch(function () { skipped.binary++; });
+  }
+
+  function walkEntry(entry, prefix) {
+    return new Promise(function (resolve) {
+      if (entry.isFile) {
+        entry.file(function (f) { ingestFile(f, prefix + entry.name).then(resolve); }, function () { resolve(); });
+      } else if (entry.isDirectory) {
+        if (IGNORE_DIRS.indexOf(entry.name.toLowerCase()) !== -1 || (entry.name.charAt(0) === '.' && entry.name !== '.github')) { skipped.dirs++; resolve(); return; }
+        var reader = entry.createReader(), all = [];
+        (function read() {
+          reader.readEntries(function (batch) {
+            /* Chrome returns ≤100 entries per call — keep reading until empty */
+            if (batch.length) { all = all.concat(Array.prototype.slice.call(batch)); read(); }
+            else {
+              Promise.all(all.map(function (e2) { return walkEntry(e2, prefix + entry.name + '/'); })).then(resolve);
+            }
+          }, function () { resolve(); });
+        })();
+      } else resolve();
+    });
+  }
+
+  function afterIngest() {
+    contextDirty = true;
+    renderTree(); renderBudget();
+    var s = [];
+    if (skipped.binary) s.push(skipped.binary + ' binary');
+    if (skipped.big) s.push(skipped.big + ' oversized');
+    if (skipped.dirs) s.push(skipped.dirs + ' ignored-dir');
+    if (skipped.over) s.push(skipped.over + ' over the ' + MAX_FILES + '-file cap');
+    var note = $('skipnote');
+    note.hidden = !s.length;
+    if (s.length) note.textContent = '// skipped: ' + s.join(', ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files.';
+    toast(files.size + ' file' + (files.size === 1 ? '' : 's') + ' loaded into memory.');
+  }
+
+  var dz = $('dropzone');
+  ['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('hot'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('hot'); }); });
+  dz.addEventListener('drop', function (e) {
+    var items = e.dataTransfer.items;
+    var jobs = [];
+    if (items && items.length && items[0].webkitGetAsEntry) {
+      for (var i = 0; i < items.length; i++) {
+        var entry = items[i].webkitGetAsEntry && items[i].webkitGetAsEntry();
+        if (entry) jobs.push(walkEntry(entry, ''));
+      }
+    } else if (e.dataTransfer.files) {
+      for (var j = 0; j < e.dataTransfer.files.length; j++) jobs.push(ingestFile(e.dataTransfer.files[j], null));
+    }
+    Promise.all(jobs).then(afterIngest);
+  });
+  $('dirbtn').addEventListener('click', function () { $('dirpick').click(); });
+  $('filebtn').addEventListener('click', function () { $('filepick').click(); });
+  function pickHandler(input) {
+    var list = Array.prototype.slice.call(input.files || []);
+    Promise.all(list.map(function (f) { return ingestFile(f, f.webkitRelativePath || f.name); })).then(afterIngest);
+    input.value = '';
+  }
+  $('dirpick').addEventListener('change', function () { pickHandler(this); });
+  $('filepick').addEventListener('change', function () { pickHandler(this); });
+
+  function sortedPaths() { return Array.from(files.keys()).sort(); }
+
+  function renderTree() {
+    var tree = $('tree');
+    tree.innerHTML = '';
+    var paths = sortedPaths();
+    $('filecount').textContent = paths.length ? paths.length + ' FILES' : '';
+    $('ctxactions').hidden = !paths.length;
+    $('budget').hidden = !paths.length;
+    var lastDir = null;
+    paths.forEach(function (p) {
+      var dir = p.indexOf('/') === -1 ? '' : p.slice(0, p.lastIndexOf('/'));
+      if (dir !== lastDir) {
+        lastDir = dir;
+        var d = document.createElement('button');
+        d.type = 'button'; d.className = 'dir-row mono';
+        d.textContent = (dir || './') + ' — toggle';
+        d.setAttribute('aria-label', 'Toggle all files in ' + (dir || 'project root'));
+        d.dataset.dir = dir;
+        d.addEventListener('click', function () {
+          var mine = paths.filter(function (q) { return (q.indexOf('/') === -1 ? '' : q.slice(0, q.lastIndexOf('/'))) === this.dataset.dir; }, this);
+          var anyOff = mine.some(function (q) { return !files.get(q).checked; });
+          mine.forEach(function (q) { files.get(q).checked = anyOff; });
+          contextDirty = true; renderTree(); renderBudget();
+        });
+        tree.appendChild(d);
+      }
+      var f = files.get(p);
+      var row = document.createElement('div');
+      row.className = 'file-row';
+      var lab = document.createElement('label');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = f.checked;
+      cb.addEventListener('change', function () { f.checked = cb.checked; contextDirty = true; renderBudget(); });
+      var nm = document.createElement('span');
+      nm.className = 'nm'; nm.textContent = p.slice(dir ? dir.length + 1 : 0);
+      nm.title = p;
+      lab.appendChild(cb); lab.appendChild(nm);
+      var tk = document.createElement('span');
+      tk.className = 'tk'; tk.textContent = '≈' + fmtTok(f.tokens);
+      row.appendChild(lab); row.appendChild(tk);
+      tree.appendChild(row);
+    });
+  }
+
+  function selectedTokens() {
+    var t = 0, n = 0;
+    files.forEach(function (f) { if (f.checked) { t += f.tokens; n++; } });
+    return { tokens: t, count: n };
+  }
+  function renderBudget() {
+    var sel = selectedTokens();
+    var cap = MODELS[model].ctx;
+    var pct = Math.min(100, (sel.tokens / cap) * 100);
+    var bar = $('budgetbar');
+    bar.querySelector('i').style.width = pct + '%';
+    bar.classList.toggle('full', pct > 90);
+    $('budgettxt').textContent = '≈ ' + fmtTok(sel.tokens) + ' tokens · ' + sel.count + ' selected';
+    $('budgetmax').textContent = MODELS[model].label + ' · ' + fmtTok(cap);
+    $('ctxreadout').innerHTML = 'CTX ≈ <b>' + fmtTok(sel.tokens) + '</b> tokens · <b>' + sel.count + '</b> files';
+  }
+
+  $('selall').addEventListener('click', function () { files.forEach(function (f) { f.checked = true; }); contextDirty = true; renderTree(); renderBudget(); });
+  $('selnone').addEventListener('click', function () { files.forEach(function (f) { f.checked = false; }); contextDirty = true; renderTree(); renderBudget(); });
+  $('clearctx').addEventListener('click', function () {
+    files.clear(); skipped = { dirs: 0, binary: 0, big: 0, over: 0 };
+    contextDirty = true; renderTree(); renderBudget();
+    $('skipnote').hidden = true;
+    toast('Project unloaded from memory.');
+  });
+
+  /* ============ PROMPT ASSEMBLY ============ */
+  var FENCE = '```meridian-trace';
+  var INSTRUCTIONS = [
+    'You are MERIDIAN, an AI instrument that answers questions with full evidence traces.',
+    '',
+    'Rules:',
+    '- Ground answers in the provided project files whenever they are relevant. If the loaded context is insufficient to answer, say so plainly and lower your confidence.',
+    '- Be precise and concise. Plain prose; short code snippets only when they help.',
+    '- After the answer, output exactly one fenced code block tagged meridian-trace containing only valid JSON of this shape:',
+    '',
+    FENCE,
+    '{"steps":[{"n":1,"action":"short verb phrase","note":"what this step established","evidence":[{"file":"path/exactly/as/given.js","startLine":12,"endLine":30,"quote":"short verbatim excerpt"}]}],"confidence":0.87}',
+    '```',
+    '',
+    '- steps: 1 to 6 items, in reasoning order.',
+    '- evidence: each item MUST cite a file path exactly as it appears after "FILE:" in the context, with 1-indexed line numbers matching the numbered lines, and a verbatim quote of at most 120 characters. Never invent files or line numbers. A pure-reasoning step may have an empty evidence array.',
+    '- confidence: a number from 0 to 1 — your honest estimate.',
+    '- If no project files are loaded, still emit the block with reasoning steps and empty evidence arrays.',
+    '- Output nothing after the closing fence of the meridian-trace block.'
+  ].join('\n');
+
+  var contextDirty = true, contextCache = '';
+  function assembleContext() {
+    if (!contextDirty) return contextCache;
+    var parts = [];
+    sortedPaths().forEach(function (p) {
+      var f = files.get(p);
+      if (!f.checked) return;
+      var body = f.content.split('\n').map(function (ln, i) { return (i + 1) + '│' + ln; }).join('\n');
+      parts.push('═══ FILE: ' + p + ' ═══\n' + body);
+    });
+    contextCache = parts.length
+      ? 'The user\'s loaded project files follow. Each file begins with "═══ FILE: <path> ═══" and every line is prefixed with its 1-indexed line number and "│".\n\n' + parts.join('\n\n')
+      : '';
+    contextDirty = false;
+    return contextCache;
+  }
+
+  /* ============ COST ============ */
+  var spent = { in: 0, out: 0, cacheW: 0, cacheR: 0 };
+  function renderCost() {
+    var m = MODELS[model];
+    var usd = (spent.in * m.rIn + spent.out * m.rOut + spent.cacheW * m.rCacheW + spent.cacheR * m.rCacheR) / 1e6;
+    if (spent.in + spent.out + spent.cacheW + spent.cacheR === 0) { $('costline').textContent = ''; return; }
+    $('costline').textContent = 'SESSION ≈ in ' + fmtTok(spent.in + spent.cacheW + spent.cacheR) + ' · out ' + fmtTok(spent.out) + ' · $' + (usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)) + ' est';
+  }
+
+  /* ============ RENDERING ============ */
+  function renderRich(raw) {
+    /* markdown-lite: fenced code blocks, inline code, bold — everything HTML-escaped first */
+    var out = '', rest = raw;
+    while (true) {
+      var m = rest.match(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)(```|$)/);
+      if (!m) { out += inline(rest); break; }
+      out += inline(rest.slice(0, m.index));
+      out += '<pre><code>' + esc(m[2]) + '</code></pre>';
+      rest = rest.slice(m.index + m[0].length);
+    }
+    function inline(s) {
+      s = esc(s);
+      s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+      s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+      return s;
+    }
+    return out;
+  }
+
+  var convo = $('convo'), convoIn = convo.querySelector('.convo-in');
+  function scrollEnd() { convo.scrollTop = convo.scrollHeight; }
+
+  function addUserMsg(text) {
+    $('empty') && $('empty').remove();
+    var d = document.createElement('div');
+    d.className = 'msg msg-u'; d.textContent = text;
+    convoIn.appendChild(d); scrollEnd();
+  }
+  function addAiMsg() {
+    var d = document.createElement('div');
+    d.className = 'msg msg-a';
+    d.innerHTML = '<div class="term-hd mono">MERIDIAN CORE — ' + MODELS[model].label + ' <span class="chip"><span></span>LIVE</span></div>'
+      + '<div class="bd"><div class="txt"></div></div>';
+    convoIn.appendChild(d); scrollEnd();
+    return d;
+  }
+
+  /* ============ TRACE ============ */
+  function extractTrace(raw) {
+    var m = raw.match(/```meridian-trace\s*\n([\s\S]*?)\n?```/);
+    if (!m) return { answer: raw, trace: null };
+    var answer = (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim();
+    var trace = null;
+    try {
+      var t = JSON.parse(m[1]);
+      if (t && Array.isArray(t.steps)) trace = t;
+    } catch (e) {}
+    return { answer: answer, trace: trace };
+  }
+
+  function renderTrace(msgEl, trace) {
+    var bd = msgEl.querySelector('.bd');
+    var wait = bd.querySelector('.trace-wait');
+    if (wait) wait.remove();
+    var chip = msgEl.querySelector('.term-hd .chip');
+    if (!trace) {
+      chip.className = 'chip dim'; chip.textContent = 'TRACE UNAVAILABLE';
+      return;
+    }
+    chip.className = 'chip'; chip.textContent = 'TRACED';
+    var tree = document.createElement('div');
+    tree.className = 'trace-tree';
+    var conf = (typeof trace.confidence === 'number') ? Math.max(0, Math.min(1, trace.confidence)).toFixed(2) : null;
+    tree.innerHTML = '<div class="tt mono">TRACE // EVIDENCE CHAIN' + (conf ? '<span class="cf">confidence <b>' + conf + '</b></span>' : '') + '</div>'
+      + '<svg class="linkcanvas" aria-hidden="true"></svg>';
+    trace.steps.slice(0, 8).forEach(function (st, i) {
+      var s = document.createElement('div');
+      s.className = 'tstep';
+      s.innerHTML = '<span class="sn mono">' + String(i + 1).padStart(2, '0') + '</span><div class="sb"></div>';
+      var sb = s.querySelector('.sb');
+      var sa = document.createElement('div'); sa.className = 'sa'; sa.textContent = String(st.action || 'step'); sb.appendChild(sa);
+      if (st.note) { var sd = document.createElement('div'); sd.className = 'sd'; sd.textContent = String(st.note); sb.appendChild(sd); }
+      var evs = Array.isArray(st.evidence) ? st.evidence : [];
+      if (evs.length) {
+        var row = document.createElement('div');
+        row.className = 'ev-row';
+        evs.slice(0, 8).forEach(function (ev) {
+          if (!ev || typeof ev.file !== 'string') return;
+          var known = files.has(ev.file);
+          var a = Math.max(1, parseInt(ev.startLine, 10) || 1);
+          var b = Math.max(a, parseInt(ev.endLine, 10) || a);
+          if (known) {
+            var len = files.get(ev.file).lines;
+            a = Math.min(a, len); b = Math.min(b, len);
+          }
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'ev mono' + (known ? '' : ' dead');
+          btn.innerHTML = '<span class="src"></span>';
+          btn.querySelector('.src').textContent = 'ctx://';
+          btn.appendChild(document.createTextNode(ev.file + ':' + a + '–' + b));
+          if (known) {
+            btn.addEventListener('click', function () { openViewer(ev.file, a, b, ev.quote); });
+          } else {
+            btn.disabled = true;
+            btn.title = 'File is not in the loaded context — the citation cannot be verified.';
+          }
+          row.appendChild(btn);
+        });
+        sb.appendChild(row);
+      }
+      tree.appendChild(s);
+    });
+    bd.appendChild(tree);
+
+    /* Constellation Link — lines from the trace header to hovered evidence */
+    var svg = tree.querySelector('.linkcanvas');
+    function drawLinks(activeEl) {
+      svg.innerHTML = '';
+      svg.setAttribute('width', tree.clientWidth); svg.setAttribute('height', tree.clientHeight);
+      var tr = tree.getBoundingClientRect();
+      tree.querySelectorAll('.ev:not(.dead)').forEach(function (ev) {
+        var er = ev.getBoundingClientRect();
+        var ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        ln.setAttribute('x1', 14); ln.setAttribute('y1', 10);
+        ln.setAttribute('x2', er.left - tr.left + er.width / 2); ln.setAttribute('y2', er.top - tr.top);
+        ln.setAttribute('stroke', ev === activeEl ? getComputedStyle(app).getPropertyValue('--accent').trim() : getComputedStyle(app).getPropertyValue('--line').trim());
+        ln.setAttribute('stroke-width', '1');
+        svg.appendChild(ln);
+      });
+    }
+    if (!reduced) {
+      drawLinks(null);
+      tree.querySelectorAll('.ev').forEach(function (ev) {
+        ev.addEventListener('mouseenter', function () { drawLinks(ev); });
+        ev.addEventListener('mouseleave', function () { drawLinks(null); });
+        ev.addEventListener('focus', function () { drawLinks(ev); });
+        ev.addEventListener('blur', function () { drawLinks(null); });
+      });
+    }
+  }
+
+  /* ============ FILE VIEWER ============ */
+  var viewveil = $('viewveil'), untrapView = null;
+  function openViewer(path, a, b) {
+    var f = files.get(path);
+    if (!f) return;
+    $('vtitle').textContent = path;
+    $('vrange').textContent = 'L' + a + '–' + b;
+    var vb = $('vbody');
+    vb.innerHTML = '';
+    var frag = document.createDocumentFragment();
+    var lines = f.content.split('\n');
+    var hitEl = null;
+    lines.forEach(function (ln, i) {
+      var n = i + 1;
+      var row = document.createElement('div');
+      row.className = 'ln' + (n >= a && n <= b ? ' hit' : '');
+      var no = document.createElement('span'); no.className = 'no'; no.textContent = n;
+      var tx = document.createElement('span'); tx.className = 'tx'; tx.textContent = ln === '' ? ' ' : ln;
+      row.appendChild(no); row.appendChild(tx);
+      if (n === a) hitEl = row;
+      frag.appendChild(row);
+    });
+    vb.appendChild(frag);
+    viewveil.classList.add('on');
+    untrapView = trap(viewveil.querySelector('.viewer'));
+    if (hitEl) hitEl.scrollIntoView({ block: 'center' });
+    vb.focus();
+  }
+  function closeViewer() {
+    viewveil.classList.remove('on');
+    if (untrapView) { untrapView(); untrapView = null; }
+  }
+  $('vclose').addEventListener('click', closeViewer);
+  viewveil.addEventListener('click', function (e) { if (e.target === viewveil) closeViewer(); });
+
+  /* ============ CHAT ============ */
+  var history = [];   /* {role, content} */
+  var streaming = false, aborter = null;
+  var promptEl = $('prompt'), sendbtn = $('sendbtn'), stopbtn = $('stopbtn'), statusEl = $('status');
+
+  function setStatus(txt, isErr) {
+    statusEl.textContent = txt;
+    statusEl.className = isErr ? 'err' : '';
+  }
+
+  promptEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('askform').requestSubmit(); }
+  });
+
+  $('askform').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (streaming) return;
+    var q = promptEl.value.trim();
+    if (!q) return;
+    var key = lsGet(LS.key);
+    if (!key) {
+      setStatus('NO KEY — add your Anthropic API key in settings', true);
+      openDrawer(true);
+      toast('Add your Anthropic API key first — it stays in this browser.');
+      return;
+    }
+    promptEl.value = '';
+    ask(q, key);
+  });
+
+  stopbtn.addEventListener('click', function () { if (aborter) aborter.abort(); });
+
+  function httpErrorText(status, body) {
+    var detail = '';
+    try { detail = JSON.parse(body).error.message || ''; } catch (e) {}
+    if (status === 401) return 'KEY REJECTED (401) — check it in settings.';
+    if (status === 403) return 'FORBIDDEN (403) — this key cannot use this model. ' + detail;
+    if (status === 404) return 'MODEL NOT FOUND (404) — ' + detail;
+    if (status === 429) return 'RATE LIMITED (429) — slow down or raise your Anthropic limits. ' + detail;
+    if (status === 400 && /token|context|length/i.test(detail)) return 'CONTEXT TOO LARGE (400) — deselect some files and retry.';
+    if (status === 400) return 'BAD REQUEST (400) — ' + detail;
+    if (status === 529 || status >= 500) return 'PROVIDER OVERLOADED (' + status + ') — retry in a moment.';
+    return 'HTTP ' + status + ' — ' + detail;
+  }
+
+  function ask(q, key) {
+    addUserMsg(q);
+    var msgEl = addAiMsg();
+    var txtEl = msgEl.querySelector('.txt');
+    var raw = '', fenceIdx = -1, waitShown = false;
+    streaming = true;
+    sendbtn.hidden = true; stopbtn.hidden = false;
+    setStatus('CORE REASONING — ' + MODELS[model].label);
+    aborter = new AbortController();
+
+    var system = [{ type: 'text', text: INSTRUCTIONS }];
+    var ctx = assembleContext();
+    if (ctx) system.push({ type: 'text', text: ctx, cache_control: { type: 'ephemeral' } });
+
+    var body = {
+      model: model,
+      max_tokens: 8192,
+      stream: true,
+      system: system,
+      messages: history.concat([{ role: 'user', content: q }])
+    };
+
+    function paint(final) {
+      /* hide the trace fence (and any partial fence tail) while streaming */
+      var shown = raw;
+      fenceIdx = raw.indexOf(FENCE);
+      if (fenceIdx !== -1) {
+        shown = raw.slice(0, fenceIdx);
+        if (!waitShown && !final) {
+          waitShown = true;
+          var w = document.createElement('div');
+          w.className = 'trace-wait mono';
+          w.innerHTML = '<i></i>TRACE // ASSEMBLING…';
+          msgEl.querySelector('.bd').appendChild(w);
+        }
+      } else if (!final) {
+        /* hold back a partial fence opener at the tail */
+        var nl = shown.lastIndexOf('\n');
+        var tail = shown.slice(nl + 1);
+        if (tail && FENCE.indexOf(tail) === 0) shown = shown.slice(0, nl + 1);
+      }
+      txtEl.innerHTML = renderRich(shown.replace(/\s+$/, '')) + (final ? '' : '<span class="cursor"></span>');
+      scrollEnd();
+    }
+
+    fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: aborter.signal,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function (t) {
+          var he = new Error('http error'); he.httpStatus = res.status; he.httpBody = t; throw he;
+        });
+      }
+      var reader = res.body.getReader(), dec = new TextDecoder(), buf = '';
+      var stopReason = null;
+      function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) return finish();
+          buf += dec.decode(r.value, { stream: true });
+          var events = buf.split('\n\n');
+          buf = events.pop();
+          events.forEach(function (evt) {
+            var data = null;
+            evt.split('\n').forEach(function (line) {
+              if (line.indexOf('data:') === 0) data = line.slice(5).trim();
+            });
+            if (!data) return;
+            var p;
+            try { p = JSON.parse(data); } catch (e) { return; }
+            if (p.type === 'message_start' && p.message && p.message.usage) {
+              var u = p.message.usage;
+              spent.in += u.input_tokens || 0;
+              spent.cacheW += u.cache_creation_input_tokens || 0;
+              spent.cacheR += u.cache_read_input_tokens || 0;
+              renderCost();
+            } else if (p.type === 'content_block_delta' && p.delta) {
+              if (p.delta.type === 'text_delta') { raw += p.delta.text; paint(false); }
+              /* thinking_delta blocks are skipped — not rendered */
+            } else if (p.type === 'message_delta') {
+              if (p.usage) { spent.out += p.usage.output_tokens || 0; renderCost(); }
+              if (p.delta && p.delta.stop_reason) stopReason = p.delta.stop_reason;
+            } else if (p.type === 'error') {
+              var se = new Error('stream error'); se.streamMsg = (p.error && p.error.message) || 'stream error'; throw se;
+            }
+          });
+          return pump();
+        });
+      }
+      function finish() {
+        var parsed = extractTrace(raw);
+        raw = parsed.answer;
+        paint(true);
+        renderTrace(msgEl, parsed.trace);
+        if (stopReason === 'max_tokens') {
+          var n = document.createElement('div');
+          n.className = 'errline'; n.textContent = '// output truncated at max_tokens';
+          msgEl.querySelector('.bd').appendChild(n);
+        }
+        if (stopReason === 'refusal') {
+          var n2 = document.createElement('div');
+          n2.className = 'errline'; n2.textContent = '// the model declined this request';
+          msgEl.querySelector('.bd').appendChild(n2);
+        }
+        history.push({ role: 'user', content: q });
+        history.push({ role: 'assistant', content: parsed.answer || '(empty)' });
+        setStatus('CORE IDLE — response complete');
+        scrollEnd();
+      }
+      return pump();
+    }).catch(function (err) {
+      var line;
+      if (err.name === 'AbortError') {
+        line = '// stopped by operator';
+        paint(true);
+        renderTrace(msgEl, null);
+        if (raw.trim()) { history.push({ role: 'user', content: q }); history.push({ role: 'assistant', content: extractTrace(raw).answer || '(stopped)' }); }
+        setStatus('STOPPED BY OPERATOR');
+      } else if (err.httpStatus) {
+        line = '// ' + httpErrorText(err.httpStatus, err.httpBody || '');
+        if (err.httpStatus === 401) openDrawer(true);
+        setStatus('REQUEST FAILED', true);
+      } else if (err.streamMsg) {
+        line = '// stream error — ' + err.streamMsg;
+        setStatus('STREAM ERROR', true);
+      } else {
+        line = '// network unreachable — check your connection and any ad/tracker blocker. requests go straight from this browser to api.anthropic.com.';
+        setStatus('NETWORK ERROR', true);
+      }
+      var d = document.createElement('div');
+      d.className = 'errline'; d.textContent = line;
+      msgEl.querySelector('.bd').appendChild(d);
+      var chip = msgEl.querySelector('.term-hd .chip');
+      if (!raw.trim()) { chip.className = 'chip err'; chip.textContent = 'FAILED'; }
+      scrollEnd();
+    }).finally(function () {
+      streaming = false; aborter = null;
+      sendbtn.hidden = false; stopbtn.hidden = true;
+      promptEl.focus();
+    });
+  }
+
+  /* ============ GLOBAL KEYS ============ */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      if (viewveil.classList.contains('on')) { closeViewer(); return; }
+      if (drawer.classList.contains('open')) { openDrawer(false); return; }
+      if (rail.classList.contains('open')) { rail.classList.remove('open'); railbtn.setAttribute('aria-expanded', 'false'); return; }
+    }
+  });
+
+  renderBudget();
+  console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— free beta. zero egress to us; requests go browser → api.anthropic.com under your key.');
+})();
+</script>
+</body>
+</html>

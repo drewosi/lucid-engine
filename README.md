@@ -1,6 +1,6 @@
 # LUCID ENGINE
 
-**Drew's personal design DNA — and MERIDIAN, the demonstration built to prove it.**
+**Drew's personal design DNA — and MERIDIAN, the instrument built on it. Now a real, working product in free beta.**
 
 > Lucid Engine is the combination of **hospitable clarity**, **visible engineering**, and **cinematic depth**.
 > *"The front door is a museum. The basement is a laboratory."*
@@ -9,25 +9,60 @@
 
 | Page | URL |
 |------|-----|
-| **MERIDIAN** — demo landing page | https://drewosi.github.io/lucid-engine/ |
+| **MERIDIAN** — landing page | https://drewosi.github.io/lucid-engine/ |
+| **MERIDIAN Workbench** — the app (free beta) | https://drewosi.github.io/lucid-engine/app.html |
 | **Design DNA** — the system itself | https://drewosi.github.io/lucid-engine/dna.html |
+| Terms · Privacy | [terms.html](https://drewosi.github.io/lucid-engine/terms.html) · [privacy.html](https://drewosi.github.io/lucid-engine/privacy.html) |
+
+## What MERIDIAN is now
+
+A **browser-only AI workbench**. You bring your own Anthropic API key, load a project folder into your browser's memory, and ask questions. Every answer streams back with a **trace** — the reasoning steps, pinned to the exact files and lines they stand on, as clickable evidence chips that open the cited file at the cited range.
+
+The architecture *is* the privacy story:
+
+- **No backend.** The whole product is static files on GitHub Pages. There is no server of ours to receive your data.
+- **BYO key.** Requests go directly from the browser to `api.anthropic.com` under the user's own account (via Anthropic's CORS support). The key lives in localStorage only.
+- **Zero egress to us.** Files and conversations exist in tab memory and vanish on close.
+- **Prompt caching.** The loaded context is sent as a cached system block, so multi-turn conversations over a big project cost ~10× less on input after the first turn.
+
+Honest-labeling rule, upgraded: everything simulated or unbuilt says so on the surface — the landing page's trace console wears a `SIM` chip, unbuilt capabilities wear `ROADMAP` chips, and future pricing wears `PLANNED` chips with a "nothing can be purchased today" note.
 
 ## What's in here
 
-- **[index.html](index.html)** — MERIDIAN, a fictional AI instrument's launch page, built as a single dependency-free file. Live Canvas particle field (Fibonacci-lattice sphere with an orange meridian ring, projected by hand), command palette (`Ctrl-K`), interactive trace console, counter-rolled stats fed by the page's own machinery, FAQ accordion, toast queue, wayfinder, ceremony/daylight modes, and a debug panel (`d`) that operates the hero in real time. No frameworks, no build step, no external requests — except the waitlist form, which posts to Formspree once configured (see below).
+- **[index.html](index.html)** — the MERIDIAN landing page. Single dependency-free file: live Canvas particle field, command palette (`Ctrl-K`), simulated trace console (labeled SIM), FAQ, waitlist form, ceremony/daylight modes, debug panel (`d`).
+- **[app.html](app.html)** — the workbench. Also a single dependency-free file: key management, folder ingestion (drag-and-drop or picker, with binary sniffing and ignore-dir filters), token budgeting, streaming Anthropic Messages API calls, trace parsing/rendering with evidence chips + file viewer, session cost estimates. Loads **zero third-party scripts**.
+- **[privacy.html](privacy.html)** / **[terms.html](terms.html)** — the legal layer, written for this exact architecture (no servers, BYO key, localStorage-only storage).
 - **[dna.html](dna.html)** — the Lucid Engine design system as a browsable page.
-- **[DESIGN-DNA.md](DESIGN-DNA.md)** — the full system spec (v1.2): identity, ranked personality attributes, visual language, a named Motion Library, UX pattern library, UI component specs, design tensions, hard bans, reference library, decision rubric, and a paste-ready instruction block for AI design tools (§10).
+- **[DESIGN-DNA.md](DESIGN-DNA.md)** — the full system spec (v1.2), including a paste-ready instruction block for AI design tools (§10).
+
+## Before public launch — fill the legal placeholders
+
+The legal pages ship with clearly marked placeholders. Find them all with:
+
+```
+grep -rn "TODO(drew)" *.html
+```
+
+- `[ENTITY]` — your legal name or company (footers, privacy §01, terms §01).
+- `[JURISDICTION]` — governing law (terms §15).
+- The terms/privacy are strong standard-practice templates tailored to this architecture, **not legal advice** — have an attorney review before charging money or marketing broadly.
 
 ## Make the waitlist real
 
-The MERIDIAN page is a demand-validation funnel: it exists to answer *"should this product get built?"* Out of the box the waitlist form falls back to localStorage (entries never leave the visitor's browser, and the page says so). Two steps make it live:
+Out of the box the waitlist form falls back to localStorage (entries never leave the visitor's browser, and the page says so). Two steps make it live:
 
-1. **Email capture (required).** Create a free form at [formspree.io](https://formspree.io), copy the id from its endpoint (`formspree.io/f/<id>`), and paste it into the `FORMSPREE_ID` constant in `index.html` (search for `YOUR_FORM_ID`). Submissions — email plus optional tier interest — then land in your Formspree inbox with email notifications. The page's copy switches to disclose the transmission automatically.
-2. **Analytics (optional).** Create a free site at [goatcounter.com](https://www.goatcounter.com) (privacy-friendly, no cookies, no consent banner needed), then uncomment the snippet at the bottom of `index.html` and replace `YOURCODE`. Now you can see visitors → signups conversion, not just signups.
+1. **Email capture (required).** Create a free form at [formspree.io](https://formspree.io), copy the id from its endpoint (`formspree.io/f/<id>`), and paste it into the `FORMSPREE_ID` constant in `index.html` (search for `YOUR_FORM_ID`). The page's copy switches to disclose the transmission automatically — and the privacy policy already describes both states.
+2. **Analytics (optional).** Create a free site at [goatcounter.com](https://www.goatcounter.com) (privacy-friendly, no cookies, no consent banner needed), then uncomment the snippet at the bottom of `index.html` and replace `YOURCODE`. Never add analytics to `app.html` — the workbench's zero-third-party-scripts guarantee is part of the privacy policy.
 
-**What to watch:** weekly signups, and the tier-interest split (Observer $0 / Operator $29 / Laboratory $120). Steady signups with real Operator/Laboratory interest is the go signal for building Meridian. Silence is an answer too — and it will have cost nothing but this page.
+## Developing / verifying
 
-Nice-to-have later: an `og:image` (the head already carries Open Graph/Twitter tags, text-only for now).
+No build step. Serve locally and click around:
+
+```
+python3 -m http.server 8000
+```
+
+Key flows to check: first-run modal on the workbench (once per browser), folder load with skipped-file report, Send without a key (should prompt, not request), a real question with a spend-limited key (streaming → trace console → evidence chip → file viewer), Stop mid-stream, wrong key (401 state), `[ CLEAR KEY ]` and the clear-all-data button.
 
 ## The three laws
 
@@ -43,4 +78,4 @@ Nice-to-have later: an `og:image` (the head already carries Open Graph/Twitter t
 
 ---
 
-MERIDIAN is a fictional product; the page says so wherever it simulates anything (the honest-demo rule). The design system, the machinery, and the code are real.
+MERIDIAN started as a fictional product built to prove this design system. The workbench made it real. The honest-demo rule still holds: wherever the site simulates or promises, it says so — `SIM`, `ROADMAP`, and `PLANNED` chips mark the line between what runs today and what's on the bench.

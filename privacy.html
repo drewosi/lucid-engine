@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MERIDIAN — Privacy Policy</title>
+<meta name="description" content="Privacy policy for MERIDIAN. Short version: we run no servers, so your files, prompts, and API key never reach us.">
+<link rel="canonical" href="https://drewosi.github.io/lucid-engine/privacy.html">
+<style>
+  /* ============ LUCID ENGINE TOKENS · v1.2 — keep in sync with index.html ============ */
+  #app {
+    --paper: #0A0B0D; --surface: #101216; --surface-2: #14171C;
+    --ink: #EDECE7; --ink-2: #A9A8A1; --ink-3: #6C6B66;
+    --line: #22242A; --line-strong: #34363E;
+    --accent: #FF5C0A; --accent-ink: #0A0B0D; --err: #E06B4F;
+    --ease-snap: cubic-bezier(0.3, 0, 0, 1); --t-feedback: 120ms;
+  }
+  #app[data-mode="light"] {
+    --paper: #FAFAF7; --surface: #FFFFFF; --surface-2: #F1F0EA;
+    --ink: #111110; --ink-2: #4A4945; --ink-3: #8A8880;
+    --line: #E4E2DB; --line-strong: #C9C7BE;
+    --accent: #FF4F00; --accent-ink: #FFFFFF; --err: #C4452D;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  #app { background: var(--paper); color: var(--ink); min-height: 100vh;
+    font-family: "Helvetica Neue", "Segoe UI", -apple-system, Arial, sans-serif; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--line-strong); transition: color var(--t-feedback) var(--ease-snap), border-color var(--t-feedback) var(--ease-snap); }
+  a:hover { color: var(--accent); border-color: var(--accent); }
+  :is(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  nav.primary { height: 56px; border-bottom: 1px solid var(--line); display: flex; align-items: center; }
+  nav.primary .in { width: min(760px, 100%); margin: 0 auto; padding: 0 24px; display: flex; align-items: baseline; gap: 14px; }
+  .wordmark { font-weight: 700; font-size: 15px; border: none; }
+  .wordmark .tag { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .14em; font-weight: 400; margin-left: 8px; }
+  main { width: min(760px, 100%); margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -.02em; line-height: 1.05; margin: 0 0 6px; }
+  .updated { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .1em; color: var(--ink-3); margin-bottom: 40px; }
+  .lede { border: 1px solid var(--line-strong); border-left: 2px solid var(--accent); background: var(--surface); padding: 18px 20px; font-size: 15px; color: var(--ink-2); margin: 0 0 44px; }
+  .lede b { color: var(--ink); font-weight: 500; }
+  section { margin-bottom: 40px; }
+  h2 { font-size: 19px; letter-spacing: -.01em; margin: 0 0 12px; display: flex; align-items: baseline; gap: 12px; }
+  h2 .idx { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; color: var(--accent); letter-spacing: .1em; }
+  p, li { font-size: 14.5px; color: var(--ink-2); max-width: 68ch; }
+  p b, li b { color: var(--ink); font-weight: 500; }
+  ul { padding-left: 20px; display: grid; gap: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); vertical-align: top; }
+  th { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; color: var(--ink-3); font-weight: 500; }
+  td:first-child { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink); white-space: nowrap; padding-right: 18px; }
+  footer { border-top: 1px solid var(--line); padding: 20px 24px 28px; }
+  footer .in { width: min(760px, 100%); margin: 0 auto; display: flex; flex-wrap: wrap; gap: 6px 26px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .1em; color: var(--ink-3); }
+  footer a { border-bottom: none; }
+</style>
+</head>
+<body>
+<div id="app" data-mode="dark">
+  <nav class="primary" aria-label="Primary">
+    <div class="in"><a class="wordmark" href="index.html">MERIDIAN<span class="tag">PRIVACY POLICY</span></a></div>
+  </nav>
+  <main>
+    <h1>Privacy Policy</h1>
+    <p class="updated">LAST UPDATED · 19 JUL 2026 · APPLIES TO drewosi.github.io/lucid-engine</p>
+
+    <p class="lede"><b>The short version:</b> Meridian runs entirely in your browser. We operate <b>no servers</b> and therefore <b>cannot see</b> your files, your questions, your AI conversations, or your API key. The only personal data that can ever reach us is an email address you choose to submit to the waitlist — and only once that form is switched on. Everything else stays on your machine or travels directly between your browser and Anthropic under your own account.</p>
+
+    <section>
+      <h2><span class="idx">§01</span>Who we are</h2>
+      <!-- TODO(drew): replace [ENTITY] with your legal name or company, and add a postal address if/when required (e.g., by GDPR Art. 13 or CAN-SPAM once you send emails). -->
+      <p>This site and the Meridian workbench are operated by <b>[ENTITY]</b> ("we", "us"). Contact for anything in this policy, including privacy requests: <a href="mailto:drewosipenko@gmail.com">drewosipenko@gmail.com</a>.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§02</span>What the architecture makes impossible</h2>
+      <p>Meridian is a static site with no backend. There is no database, no account system, no server-side logging of your activity by us. Concretely, we never receive:</p>
+      <ul>
+        <li>the project files you load into the workbench — they are read into your browser tab's memory only;</li>
+        <li>your questions and the AI's answers;</li>
+        <li>your Anthropic API key.</li>
+      </ul>
+      <p>This is a property of the architecture, not just a promise: you can verify it in the <a href="https://github.com/drewosi/lucid-engine">public source code</a> or in your browser's network inspector.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§03</span>Data stored in your browser (localStorage)</h2>
+      <p>Meridian stores a small amount of data in your own browser's localStorage so the pages can function. This data never leaves your device unless noted below, and you can delete all of it at any time.</p>
+      <table>
+        <tr><th>KEY</th><th>WHAT IT HOLDS</th><th>HOW TO CLEAR</th></tr>
+        <tr><td>meridian.key</td><td>Your Anthropic API key (workbench). Sent only to api.anthropic.com with your requests.</td><td>Settings → [ CLEAR KEY ]</td></tr>
+        <tr><td>meridian.model</td><td>Your chosen model.</td><td>Settings → clear-all button</td></tr>
+        <tr><td>meridian.app.mode</td><td>Color mode preference (workbench).</td><td>Settings → clear-all button</td></tr>
+        <tr><td>meridian.accepted</td><td>A timestamp recording that you accepted the terms on first run.</td><td>Settings → clear-all button</td></tr>
+        <tr><td>meridian.waitlist</td><td>A local mirror of your waitlist entry (landing page), so the page remembers you.</td><td>[ CLEAR LOCAL ENTRY ] on the landing page</td></tr>
+      </table>
+      <p>The workbench settings panel includes a single button that removes every Meridian key from your browser. Loaded project files and conversation history are held in memory only and are gone when the tab closes.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§04</span>Data sent to Anthropic (your AI provider)</h2>
+      <p>When you use the workbench, your browser sends your question, the project files you selected, and your API key <b>directly to Anthropic's API</b> (api.anthropic.com). That processing happens under <b>your own Anthropic account</b> and Anthropic's own terms — we are not a party to it, do not sit in the middle of it, and cannot access it.</p>
+      <p>Review how Anthropic handles API data in the <a href="https://www.anthropic.com/legal/privacy">Anthropic Privacy Policy</a> and their <a href="https://www.anthropic.com/legal/commercial-terms">Commercial Terms</a>. You choose what to send: only the files you check in the context panel are transmitted.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§05</span>The waitlist (the only data we can receive)</h2>
+      <p>The landing page has an optional waitlist form (email address plus an optional tier interest).</p>
+      <ul>
+        <li><b>Current state:</b> until the form's transmission backend is configured, entries are stored in your browser's localStorage only and are never transmitted anywhere. The form says so beneath the field.</li>
+        <li><b>When live:</b> entries are sent to <a href="https://formspree.io/legal/privacy-policy/">Formspree</a>, a form-processing service acting as our processor, and arrive in our inbox. The form's caption changes automatically to disclose this.</li>
+        <li><b>Purpose and retention:</b> we use your address for exactly one thing — contacting you about Meridian's beta. No newsletters you didn't ask for, no resale, no ad pixels. We keep it until the beta communication purpose is over or you ask off the list, whichever comes first.</li>
+        <li><b>Opt out:</b> reply to any message we send, or email us, and the address is deleted.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="idx">§06</span>Cookies and analytics</h2>
+      <p><b>We set no cookies.</b> There are no advertising trackers, no social pixels, no fingerprinting.</p>
+      <p>If we enable analytics, it will be <a href="https://www.goatcounter.com/help/privacy">GoatCounter</a>, a privacy-respecting, cookieless counter that stores no personal data and requires no consent banner. Analytics are <b>currently disabled</b>, and will never run on the workbench page. The site is hosted on GitHub Pages; GitHub may log standard web-server data (such as IP addresses) to operate the service — see the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§07</span>Your rights — GDPR (EEA/UK)</h2>
+      <p>If you are in the EEA or UK: for the waitlist email address, [ENTITY] is the data controller, processing on the basis of your consent (Art. 6(1)(a) GDPR), which you can withdraw at any time. You have the rights of access, rectification, erasure, restriction, portability, and objection, and the right to lodge a complaint with your supervisory authority.</p>
+      <p>To exercise any of them, email <a href="mailto:drewosipenko@gmail.com">drewosipenko@gmail.com</a>. Note that for everything except the waitlist, your data never reaches us — access and erasure are self-service via the clear buttons described in §03, and processing by Anthropic under your own account is governed by your relationship with Anthropic.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§08</span>Your rights — California (CCPA/CPRA)</h2>
+      <p>We do not sell or share personal information as those terms are defined in the CCPA/CPRA, and we collect no sensitive personal information. California residents may request access to or deletion of the only personal information we could hold (a waitlist email) at the contact address above. We do not discriminate against anyone for exercising privacy rights.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§09</span>Children</h2>
+      <p>Meridian is not directed at children and we do not knowingly collect personal information from anyone under 16. If you believe a child has submitted an email address, contact us and we will delete it.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§10</span>Changes</h2>
+      <p>If this policy changes, the new version will be posted here with an updated date, and the change history is public in the <a href="https://github.com/drewosi/lucid-engine">site's git repository</a>. Material changes to how waitlist data is used will be communicated to the list before they take effect.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§11</span>Contact</h2>
+      <p><a href="mailto:drewosipenko@gmail.com">drewosipenko@gmail.com</a></p>
+    </section>
+  </main>
+  <footer>
+    <div class="in">
+      <span><b>MERIDIAN</b> // FREE BETA</span>
+      <a href="index.html">FRONT DOOR</a>
+      <a href="app.html">WORKBENCH</a>
+      <a href="terms.html">TERMS</a>
+      <span>NOT AFFILIATED WITH ANTHROPIC</span>
+      <!-- TODO(drew): replace [ENTITY] with your legal name or company before public launch -->
+      <span>© 2026 [ENTITY]</span>
+    </div>
+  </footer>
+</div>
+</body>
+</html>

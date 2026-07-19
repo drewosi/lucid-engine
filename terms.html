@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MERIDIAN — Terms of Service</title>
+<meta name="description" content="Terms of service for the MERIDIAN free beta — a browser-only AI workbench you run with your own Anthropic API key.">
+<link rel="canonical" href="https://drewosi.github.io/lucid-engine/terms.html">
+<style>
+  /* ============ LUCID ENGINE TOKENS · v1.2 — keep in sync with index.html ============ */
+  #app {
+    --paper: #0A0B0D; --surface: #101216; --surface-2: #14171C;
+    --ink: #EDECE7; --ink-2: #A9A8A1; --ink-3: #6C6B66;
+    --line: #22242A; --line-strong: #34363E;
+    --accent: #FF5C0A; --accent-ink: #0A0B0D; --err: #E06B4F;
+    --ease-snap: cubic-bezier(0.3, 0, 0, 1); --t-feedback: 120ms;
+  }
+  #app[data-mode="light"] {
+    --paper: #FAFAF7; --surface: #FFFFFF; --surface-2: #F1F0EA;
+    --ink: #111110; --ink-2: #4A4945; --ink-3: #8A8880;
+    --line: #E4E2DB; --line-strong: #C9C7BE;
+    --accent: #FF4F00; --accent-ink: #FFFFFF; --err: #C4452D;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  #app { background: var(--paper); color: var(--ink); min-height: 100vh;
+    font-family: "Helvetica Neue", "Segoe UI", -apple-system, Arial, sans-serif; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--line-strong); transition: color var(--t-feedback) var(--ease-snap), border-color var(--t-feedback) var(--ease-snap); }
+  a:hover { color: var(--accent); border-color: var(--accent); }
+  :is(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  nav.primary { height: 56px; border-bottom: 1px solid var(--line); display: flex; align-items: center; }
+  nav.primary .in { width: min(760px, 100%); margin: 0 auto; padding: 0 24px; display: flex; align-items: baseline; gap: 14px; }
+  .wordmark { font-weight: 700; font-size: 15px; border: none; }
+  .wordmark .tag { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .14em; font-weight: 400; margin-left: 8px; }
+  main { width: min(760px, 100%); margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -.02em; line-height: 1.05; margin: 0 0 6px; }
+  .updated { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .1em; color: var(--ink-3); margin-bottom: 40px; }
+  .lede { border: 1px solid var(--line-strong); border-left: 2px solid var(--accent); background: var(--surface); padding: 18px 20px; font-size: 15px; color: var(--ink-2); margin: 0 0 44px; }
+  .lede b { color: var(--ink); font-weight: 500; }
+  section { margin-bottom: 40px; }
+  h2 { font-size: 19px; letter-spacing: -.01em; margin: 0 0 12px; display: flex; align-items: baseline; gap: 12px; }
+  h2 .idx { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; color: var(--accent); letter-spacing: .1em; }
+  p, li { font-size: 14.5px; color: var(--ink-2); max-width: 68ch; }
+  p b, li b { color: var(--ink); font-weight: 500; }
+  ul { padding-left: 20px; display: grid; gap: 8px; }
+  .caps { text-transform: uppercase; font-size: 13px; letter-spacing: .02em; }
+  footer { border-top: 1px solid var(--line); padding: 20px 24px 28px; }
+  footer .in { width: min(760px, 100%); margin: 0 auto; display: flex; flex-wrap: wrap; gap: 6px 26px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .1em; color: var(--ink-3); }
+  footer a { border-bottom: none; }
+</style>
+</head>
+<body>
+<div id="app" data-mode="dark">
+  <nav class="primary" aria-label="Primary">
+    <div class="in"><a class="wordmark" href="index.html">MERIDIAN<span class="tag">TERMS OF SERVICE</span></a></div>
+  </nav>
+  <main>
+    <h1>Terms of Service</h1>
+    <p class="updated">LAST UPDATED · 19 JUL 2026 · APPLIES TO drewosi.github.io/lucid-engine</p>
+    <!-- TODO(drew): these terms are a strong standard-practice template tailored to Meridian's architecture, but they are not legal advice. Have an attorney review them before charging money or marketing broadly. -->
+
+    <p class="lede"><b>The short version:</b> Meridian is a <b>free beta</b> tool that runs in your browser with <b>your own Anthropic API key</b>. You pay Anthropic for your own usage; you pay us nothing. It's provided as-is, AI output can be wrong, and you're responsible for verifying anything you rely on.</p>
+
+    <section>
+      <h2><span class="idx">§01</span>Acceptance</h2>
+      <!-- TODO(drew): replace [ENTITY] with your legal name or company before public launch. -->
+      <p>These Terms of Service ("Terms") are an agreement between you and <b>[ENTITY]</b> ("we", "us"). By using this site or the Meridian workbench (together, the "Service"), you agree to these Terms. If you don't agree, don't use the Service.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§02</span>The Service</h2>
+      <p>Meridian is a browser-based AI workbench, currently in <b>free beta</b>. It loads files you choose into your browser's memory and sends your questions — together with the files you select — directly from your browser to Anthropic's API, using an API key you supply. We operate no servers and receive none of that data. Features described on the site as "roadmap" or "planned" do not exist yet and may never ship.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§03</span>License</h2>
+      <p>We grant you a personal, non-exclusive, non-transferable, revocable license to use the Service. The site's source code is public on <a href="https://github.com/drewosi/lucid-engine">GitHub</a>; any use of the code itself is governed by that repository's license terms, not by this section.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§04</span>Your API key and provider costs</h2>
+      <ul>
+        <li>The workbench requires an Anthropic API key that <b>you</b> obtain and control. Your use of Anthropic's API is governed by your agreement with Anthropic, including their <a href="https://www.anthropic.com/legal/aup">Usage Policy</a> — you are responsible for complying with it.</li>
+        <li><b>All API usage is billed by Anthropic to you.</b> Cost figures shown in the workbench are estimates only; Anthropic's billing is authoritative. We strongly recommend a key with a spend limit.</li>
+        <li>You are responsible for keeping your key secure. The workbench stores it in your browser's localStorage and sends it only to Anthropic; clearing it is always one click away in settings.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="idx">§05</span>Acceptable use</h2>
+      <p>You agree not to use the Service to violate any law, to infringe others' rights, to attempt to attack or disrupt the Service or third-party services, or to violate Anthropic's Usage Policy. You are responsible for having the necessary rights to any files you load into the workbench.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§06</span>AI output</h2>
+      <p><b>Machine-generated output can be wrong.</b> Answers, traces, evidence citations, and confidence scores are generated by an AI model and may be inaccurate, incomplete, or misleading — including in ways that look convincing. Output is provided for information only and is <b>not</b> professional, legal, medical, financial, or engineering advice. You are solely responsible for reviewing and verifying output before relying on it or acting on it. Trace citations are a tool for your verification, not a guarantee of correctness.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§07</span>Beta status; disclaimer of warranties</h2>
+      <p class="caps">The Service is a beta and is provided "as is" and "as available", without warranties of any kind, express or implied, including merchantability, fitness for a particular purpose, non-infringement, and any warranty of accuracy, availability, or error-free operation. Your use is at your own risk.</p>
+      <p>We may change, suspend, or discontinue the Service (or any part of it) at any time without notice.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§08</span>Limitation of liability</h2>
+      <p class="caps">To the maximum extent permitted by law, we will not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits, data, or goodwill, arising from or related to the Service — including damages arising from reliance on AI output or from API charges you incur with your provider. Our total aggregate liability for all claims relating to the Service is limited to the greater of one hundred US dollars ($100) or the amounts you have paid us for the Service in the twelve months before the claim (which, during the free beta, is $0).</p>
+      <p>Some jurisdictions do not allow certain exclusions or limitations; where that applies, these limitations apply to the fullest extent permitted.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§09</span>Indemnity</h2>
+      <p>You agree to indemnify and hold us harmless from claims and expenses (including reasonable attorneys' fees) arising from your misuse of the Service, your violation of these Terms, or your violation of any third party's rights, including your provider agreement with Anthropic.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§10</span>Intellectual property</h2>
+      <p>We (and our licensors) own the Service, including the Lucid Engine design system and the Meridian name and interface. As between you and us, <b>you own your content</b> — the files you load and the prompts you write — and <b>you own the output</b> generated from them, to the extent we hold any rights in it. Your relationship with Anthropic may impose its own terms regarding model output.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§11</span>Third-party services; no affiliation</h2>
+      <p>The Service interoperates with third-party services that have their own terms: Anthropic (AI API), GitHub Pages (hosting), and — for the waitlist, when enabled — Formspree. We are not responsible for third-party services. <b>Meridian is an independent project, not affiliated with, endorsed by, or sponsored by Anthropic, PBC.</b> "Claude" and "Anthropic" are trademarks of Anthropic, PBC.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§12</span>Pricing</h2>
+      <p>During the beta, the Service is free. Pricing tiers displayed on the landing page are <b>planned future pricing shown for transparency</b>: they are indicative only, subject to change or withdrawal, and nothing can be purchased today. If paid plans launch, they will come with their own billing terms, and continued use of any paid feature will require your explicit agreement to them.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§13</span>Termination</h2>
+      <p>You can stop using the Service at any time — clearing your browser data removes everything Meridian stored. We may suspend or terminate access to the Service at any time. Sections 6–11 and 14–15 survive termination.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§14</span>Changes to these Terms</h2>
+      <p>We may update these Terms; the current version always lives at this URL with its "last updated" date, and the full change history is public in the <a href="https://github.com/drewosi/lucid-engine">site's git repository</a>. Material changes take effect when posted; continued use after that constitutes acceptance.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§15</span>Governing law; severability</h2>
+      <!-- TODO(drew): replace [JURISDICTION] with your state/country, e.g. "the State of Washington, USA". Consider adding a venue clause on attorney advice. -->
+      <p>These Terms are governed by the laws of <b>[JURISDICTION]</b>, without regard to conflict-of-law rules. If any provision of these Terms is held unenforceable, the remaining provisions stay in full effect.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§16</span>Contact</h2>
+      <p><a href="mailto:drewosipenko@gmail.com">drewosipenko@gmail.com</a></p>
+    </section>
+  </main>
+  <footer>
+    <div class="in">
+      <span><b>MERIDIAN</b> // FREE BETA</span>
+      <a href="index.html">FRONT DOOR</a>
+      <a href="app.html">WORKBENCH</a>
+      <a href="privacy.html">PRIVACY</a>
+      <span>NOT AFFILIATED WITH ANTHROPIC</span>
+      <!-- TODO(drew): replace [ENTITY] with your legal name or company before public launch -->
+      <span>© 2026 [ENTITY]</span>
+    </div>
+  </footer>
+</div>
+</body>
+</html>
