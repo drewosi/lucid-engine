@@ -229,11 +229,14 @@
   .act-card { border-top: 1px dashed var(--line-strong); margin-top: 14px; padding-top: 12px; }
   .act-hd { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin-bottom: 6px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .act-hd .exp { border: 1px solid var(--err); color: var(--err); border-radius: 3px; padding: 0 6px; font-size: 9px; letter-spacing: .1em; }
-  .act { display: flex; gap: 8px; align-items: center; padding: 6px 0; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+  .act { display: flex; gap: 8px; align-items: center; padding: 7px 0; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
   .act:last-child { border-bottom: none; }
+  .act .abadge { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 1px 7px; font-size: 9px; letter-spacing: .12em; flex: none; }
+  .act .abadge.dim { border-color: var(--line-strong); color: var(--ink-3); }
   .act code.cmd { background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 3px 8px; font-size: 11.5px; word-break: break-all; }
   .act .why { font-size: 11px; color: var(--ink-2); flex-basis: 100%; margin: 0; }
   .act .ares { flex-basis: 100%; }
+  .act .ares .sumline { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-2); letter-spacing: .04em; padding: 2px 0; }
 
   /* ============ COMPOSER ============ */
   .composer { flex: none; border-top: 1px solid var(--line); background: var(--paper); padding: 12px 24px 14px; }
@@ -1688,7 +1691,7 @@
     '- Context may include a PROJECT MAP block (file tree + key-file heads) and a question-relevant subset of files. Excerpted files keep their true line numbers; gaps are marked "··· lines A–B omitted ···". Cite only line ranges you can actually see.',
     '- If the map shows a file you cannot see that would answer better, name it and suggest the user ask again mentioning it.',
     '- confidence: a number from 0 to 1 — your honest estimate.',
-    '- Optionally include "actions": up to 3 items of {"kind":"search"|"open"|"git","command":"…","why":"short reason"}. These are read-only suggestions the user must approve. kind "search": a substring or regex to find in the loaded files. kind "open": a context file path worth inspecting. kind "git": a read-only git command (status, diff, log, show, blame) for the user\'s own terminal. Never propose anything that writes, deletes, or installs.',
+    '- Optionally include "actions": up to 4 items of {"kind":"search"|"def"|"refs"|"dir"|"recent"|"open"|"git","command":"…","filter":"optional path glob (search only)","why":"short reason"}. All are read-only and run only after the user clicks. Kinds — search: substring/regex over loaded files, optional "filter" narrows paths (* wildcard); def: find likely definition sites of a symbol; refs: find all references to a symbol; dir: summarize a loaded directory (command = its path); recent: list recently modified files (command = a count, e.g. "10"); open: a context file path worth inspecting; git: a read-only git command (status, diff, log, show, blame) for the user\'s own terminal. Never propose anything that writes, deletes, or installs.',
     '- If no project files are loaded, still emit the block with reasoning steps and empty evidence arrays.',
     '- Output nothing after the closing fence of the meridian-trace block.'
   ].join('\n');
@@ -1883,35 +1886,103 @@
        open   → opens the built-in file viewer
        git    → display + copy only; meridian never executes shell commands  */
 
-  function runLocalSearch(query, resEl) {
+  function actGlobToRe(g) {
+    return new RegExp('(^|/)' + g.replace(/[.+^${}()|[\]\\?]/g, '\\$&').replace(/\*/g, '.*') + '($|/)', 'i');
+  }
+  function evChip(resEl, label, path, line) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'ev mono';
+    b.textContent = label;
+    b.addEventListener('click', function () { openViewer(path, line || 1, line || 1); });
+    resEl.appendChild(b);
+    return b;
+  }
+  function resNote(resEl, txt) {
+    var d = document.createElement('div');
+    d.className = 'sumline';
+    d.textContent = txt;
+    resEl.appendChild(d);
+  }
+
+  /* one engine behind search / def / refs — all in-memory, nothing touches disk */
+  function runLocalSearch(query, resEl, mode, filterGlob) {
     resEl.innerHTML = '';
-    var re = null;
-    try { re = new RegExp(query, 'i'); } catch (e) {}
-    var lq = query.toLowerCase(), hits = 0;
+    var fRe = null;
+    if (filterGlob) { try { fRe = actGlobToRe(filterGlob); } catch (e) {} }
+    var re = null, lq = query.toLowerCase();
+    var sym = query.replace(/[^\w$.]/g, '').replace(/^.*\./, ''); /* last segment of a dotted symbol */
+    var symEsc = sym.replace(/\$/g, '\\$');
+    if (mode === 'def' && sym) {
+      /* definition-ish lines across common languages */
+      re = new RegExp('\\b(function|class|def|interface|type|struct|enum|trait|impl|const|let|var|fn|func|module|package|sub|proc)\\b[^\\n]{0,80}\\b' + symEsc + '\\b'
+        + '|\\b' + symEsc + '\\s*[:=]\\s*(async\\s+)?(function|class|\\()', '');
+    } else if (mode === 'refs' && sym) {
+      re = new RegExp('\\b' + symEsc + '\\b');
+    } else {
+      try { re = new RegExp(query, 'i'); } catch (e) { re = null; }
+    }
+    var cap = mode === 'refs' ? 40 : 30, hits = 0, filesHit = 0;
     files.forEach(function (f, p) {
-      if (hits >= 30) return;
-      var lines = f.content.split('\n');
-      for (var i = 0; i < lines.length && hits < 30; i++) {
+      if (hits >= cap) return;
+      if (fRe && !fRe.test(p)) return;
+      var lines = f.content.split('\n'), had = false;
+      for (var i = 0; i < lines.length && hits < cap; i++) {
         var hit = re ? re.test(lines[i]) : lines[i].toLowerCase().indexOf(lq) !== -1;
         if (!hit) continue;
-        hits++;
-        var b = document.createElement('button');
-        b.type = 'button'; b.className = 'ev mono';
-        b.textContent = p + ':' + (i + 1);
-        (function (pp, ln) {
-          b.addEventListener('click', function () { openViewer(pp, ln, ln); });
-        })(p, i + 1);
-        resEl.appendChild(b);
+        hits++; had = true;
+        evChip(resEl, p + ':' + (i + 1), p, i + 1);
       }
+      if (had) filesHit++;
     });
-    if (!hits) {
-      var none = document.createElement('span');
-      none.className = 'rail-note';
-      none.textContent = '// no matches in loaded files';
-      resEl.appendChild(none);
-    }
-    toast(hits >= 30 ? '30+ matches (showing first 30).' : hits + ' match' + (hits === 1 ? '' : 'es') + ' in loaded files.');
+    if (!hits) resNote(resEl, '// no matches in loaded files' + (filterGlob ? ' under filter ' + filterGlob : ''));
+    else resNote(resEl, '// ' + (hits >= cap ? cap + '+ ' : hits + ' ') + (mode === 'def' ? 'definition-shaped ' : '') + 'match' + (hits === 1 ? '' : 'es') + ' in ' + filesHit + ' file' + (filesHit === 1 ? '' : 's') + ' — click a chip to inspect');
   }
+
+  /* local directory summary — file count, tokens, largest, newest */
+  function runDirSummary(dirPath, resEl) {
+    resEl.innerHTML = '';
+    var clean = dirPath.replace(/\/+$/, '');
+    var prefix = clean === '.' || clean === '' ? '' : clean + '/';
+    var items = [];
+    files.forEach(function (f, p) {
+      if (!prefix || p.indexOf(prefix) === 0) items.push({ p: p, f: f });
+    });
+    if (!items.length) { resNote(resEl, '// no loaded files under “' + dirPath + '”'); return; }
+    var tok = 0;
+    items.forEach(function (it) { tok += it.f.tokens; });
+    resNote(resEl, '// ' + (prefix || './') + ' — ' + items.length + ' files ≈' + fmtTok(tok) + ' tokens');
+    resNote(resEl, '// largest:');
+    items.slice().sort(function (a, b) { return b.f.tokens - a.f.tokens; }).slice(0, 3)
+      .forEach(function (it) { evChip(resEl, it.p + ' ≈' + fmtTok(it.f.tokens), it.p, 1); });
+    resNote(resEl, '// most recently modified:');
+    items.slice().sort(function (a, b) { return b.f.mtime - a.f.mtime; }).slice(0, 3)
+      .forEach(function (it) { evChip(resEl, it.p + (it.f.mtime ? ' · ' + new Date(it.f.mtime).toISOString().slice(0, 10) : ''), it.p, 1); });
+  }
+
+  /* recent changes across the whole loaded project, from file mtimes */
+  function runRecent(countStr, resEl) {
+    resEl.innerHTML = '';
+    var n = Math.min(Math.max(parseInt(countStr, 10) || 10, 1), 20);
+    var all = [];
+    files.forEach(function (f, p) { all.push({ p: p, m: f.mtime }); });
+    if (!all.length) { resNote(resEl, '// no files loaded'); return; }
+    all.sort(function (a, b) { return b.m - a.m; });
+    resNote(resEl, '// ' + Math.min(n, all.length) + ' most recently modified (from file mtimes):');
+    all.slice(0, n).forEach(function (it) {
+      evChip(resEl, it.p + (it.m ? ' · ' + new Date(it.m).toISOString().slice(0, 10) : ''), it.p, 1);
+    });
+  }
+
+  /* kind registry: badge label + how to run it locally (null = copy-only) */
+  var ACT_KINDS = {
+    search: { badge: 'SEARCH',    run: function (a, res) { runLocalSearch(a.command, res, 'text', a.filter); } },
+    def:    { badge: 'FIND DEF',  run: function (a, res) { runLocalSearch(a.command, res, 'def'); } },
+    refs:   { badge: 'FIND REFS', run: function (a, res) { runLocalSearch(a.command, res, 'refs'); } },
+    dir:    { badge: 'DIR SUM',   run: function (a, res) { runDirSummary(a.command, res); } },
+    recent: { badge: 'RECENT',    run: function (a, res) { runRecent(a.command, res); } },
+    open:   { badge: 'OPEN',      run: null },
+    git:    { badge: 'TERMINAL',  run: null }
+  };
 
   function renderActions(bd, actions) {
     if (!Array.isArray(actions) || !actions.length) return;
@@ -1919,24 +1990,30 @@
     card.className = 'act-card';
     var hd = document.createElement('div');
     hd.className = 'act-hd';
-    hd.innerHTML = 'PROPOSED ACTIONS <span class="exp">EXPERIMENTAL</span><span style="margin-left:auto">nothing runs without your click</span>';
+    hd.innerHTML = 'PROPOSED ACTIONS <span class="exp">EXPERIMENTAL</span><span style="margin-left:auto">nothing runs without your click · all local · read-only</span>';
     card.appendChild(hd);
-    actions.slice(0, 3).forEach(function (a) {
+    actions.slice(0, 4).forEach(function (a) {
       if (!a || typeof a.command !== 'string' || !a.command.trim()) return;
-      var kind = a.kind === 'search' || a.kind === 'open' ? a.kind : 'git';
+      var kind = ACT_KINDS[a.kind] ? a.kind : 'git'; /* unknown kinds degrade to copy-only */
+      var K = ACT_KINDS[kind];
       var row = document.createElement('div');
       row.className = 'act';
+      var badge = document.createElement('span');
+      badge.className = 'abadge' + (K.run || kind === 'open' ? '' : ' dim');
+      badge.textContent = K.badge;
+      badge.title = kind === 'git' ? 'Copy-only — meridian never executes shell commands' : 'Runs locally, against in-memory files only';
+      row.appendChild(badge);
       var cmd = document.createElement('code');
       cmd.className = 'cmd mono';
-      cmd.textContent = (kind === 'search' ? 'search: ' : kind === 'open' ? 'open: ' : '$ ') + a.command;
+      cmd.textContent = (kind === 'git' ? '$ ' : '') + a.command + (kind === 'search' && a.filter ? '   [' + a.filter + ']' : '');
       row.appendChild(cmd);
-      if (kind === 'search') {
+      var res = document.createElement('div');
+      res.className = 'ev-row ares';
+      if (K.run) {
         var run = document.createElement('button');
         run.type = 'button'; run.className = 'ev mono'; run.textContent = '[ RUN LOCALLY ]';
-        var res = document.createElement('div');
-        res.className = 'ev-row ares';
-        run.addEventListener('click', function () { runLocalSearch(a.command, res); });
-        row.appendChild(run); row.appendChild(res);
+        run.addEventListener('click', function () { K.run(a, res); });
+        row.appendChild(run);
       } else if (kind === 'open') {
         var op = document.createElement('button');
         op.type = 'button'; op.className = 'ev mono' + (files.has(a.command) ? '' : ' dead');
@@ -1963,6 +2040,7 @@
         why.className = 'why'; why.textContent = '// ' + a.why;
         row.appendChild(why);
       }
+      row.appendChild(res);
       card.appendChild(row);
     });
     bd.appendChild(card);
