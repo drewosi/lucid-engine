@@ -53,7 +53,7 @@
   html, body { margin: 0; padding: 0; height: 100%; }
   #app {
     background: var(--paper); color: var(--ink); height: 100vh; height: 100dvh;
-    display: flex; flex-direction: column;
+    display: flex; flex-direction: column; overflow-x: clip;
     font-family: "Helvetica Neue", "Segoe UI", -apple-system, Arial, sans-serif;
     line-height: 1.55; -webkit-font-smoothing: antialiased;
     transition: background var(--t-state) var(--ease-inout-engine), color var(--t-state) var(--ease-inout-engine);
@@ -71,7 +71,7 @@
   .btn-signal:hover:not(:disabled) { filter: brightness(1.08); }
   .btn-hairline { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
   .btn-hairline:hover:not(:disabled) { border-color: var(--accent); background: var(--surface); }
-  .btn-quiet { background: transparent; border: none; color: var(--ink-3); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .1em; cursor: pointer; padding: 4px 0; }
+  .btn-quiet { background: transparent; border: none; color: var(--ink-3); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .1em; cursor: pointer; padding: 4px 0; white-space: nowrap; }
   .btn-quiet:hover { color: var(--err); }
 
   /* ============ NAV ============ */
@@ -88,6 +88,21 @@
   .btn-mode:hover, .btn-icon:hover { border-color: var(--accent); color: var(--ink); }
   .btn-icon[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
   @media (max-width: 720px) { .ctx-readout { display: none; } .wordmark .tag { display: none; } }
+  @media (max-width: 640px) {
+    .nav-in { padding: 0 12px; gap: 8px; }
+    .nav-status { gap: 8px; }
+    .wordmark { font-size: 14px; }
+    select.modelsel { padding: 0 4px; font-size: 10px; }
+    .btn-icon { padding: 0 8px; }
+    #modebtn { display: none; }
+  }
+  @media (max-width: 380px) {
+    .nav-in { padding: 0 8px; gap: 6px; }
+    .nav-status { gap: 6px; }
+    .wordmark { font-size: 13px; }
+    select.modelsel { font-size: 9.5px; padding: 0 2px; }
+    .btn-icon { padding: 0 6px; font-size: 9.5px; letter-spacing: .06em; }
+  }
 
   /* ============ LAYOUT ============ */
   main.deck { flex: 1; display: grid; grid-template-columns: 320px 1fr; min-height: 0; }
@@ -127,7 +142,7 @@
   .file-row .tk { margin-left: auto; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 9.5px; color: var(--ink-3); flex: none; }
   .file-row:hover { color: var(--ink); }
   #skipnote { margin-top: 10px; }
-  #ctxactions { margin-top: 8px; display: flex; gap: 16px; }
+  #ctxactions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
 
   /* ============ CONVERSATION ============ */
   section.stage { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
@@ -181,9 +196,16 @@
   /* ============ COMPOSER ============ */
   .composer { flex: none; border-top: 1px solid var(--line); background: var(--paper); padding: 12px 24px 14px; }
   .composer-in { max-width: 860px; margin: 0 auto; }
-  #statusline { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .08em; color: var(--ink-3); min-height: 15px; margin-bottom: 6px; display: flex; gap: 24px; }
+  #statusline { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .08em; color: var(--ink-3); min-height: 15px; margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 4px 24px; }
   #statusline .err { color: var(--err); }
   #statusline .cost { margin-left: auto; white-space: nowrap; }
+  @media (max-width: 720px) {
+    #statusline .cost { margin-left: 0; white-space: normal; flex-basis: 100%; }
+    #convo { padding: 16px 14px 10px; }
+    .composer { padding: 10px 14px 12px; }
+    .msg-a .bd { padding: 14px; }
+    .comp-note .kbd-hint { display: none; }
+  }
   .comp-row { display: flex; gap: 10px; align-items: flex-end; }
   #prompt { flex: 1; min-height: 44px; max-height: 180px; resize: vertical; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.55; padding: 11px 14px; }
   #prompt:focus { outline: none; border-color: var(--accent); }
@@ -203,6 +225,11 @@
   .modal .row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
   .modal a.leglink { color: var(--ink); border-bottom: 1px solid var(--line-strong); }
   .modal a.leglink:hover { color: var(--accent); border-color: var(--accent); }
+  @media (max-width: 560px) {
+    .veil { align-items: flex-start; padding: 12px; }
+    .modal { max-height: calc(100dvh - 24px); padding: 18px 16px 20px; }
+    .modal h2 { font-size: 18px; }
+  }
 
   /* file viewer */
   .viewer { width: min(880px, 96vw); max-height: 88vh; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
@@ -321,7 +348,7 @@
             <button class="btn btn-hairline" type="button" id="stopbtn" hidden>Stop</button>
           </form>
           <div class="comp-note">
-            <span>// enter to send · shift-enter for newline</span>
+            <span class="kbd-hint">// enter to send · shift-enter for newline</span>
             <span>// AI output can be wrong or incomplete — verify before you rely on it</span>
             <span>// costs are estimates; Anthropic bills actuals — <a href="terms.html">terms</a> · <a href="privacy.html">privacy</a></span>
           </div>
@@ -346,6 +373,9 @@
 
     <h3>MODEL</h3>
     <p class="note" id="modelnote"></p>
+
+    <h3>DISPLAY</h3>
+    <button class="btn-mode mono" id="modebtn2" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
 
     <h3>LOCAL DATA</h3>
     <p class="note">// everything meridian stores in this browser: your API key, model choice, color mode, the terms-acceptance record, and (on the landing page) your waitlist entry. loaded files and conversation live in memory only and vanish when the tab closes.</p>
@@ -452,13 +482,16 @@
   syncModelNote();
 
   /* ============ MODE ============ */
-  var modebtn = $('modebtn');
+  var modebtn = $('modebtn'), modebtn2 = $('modebtn2');
   function setMode(m) {
     app.dataset.mode = m; lsSet(LS.mode, m);
-    modebtn.textContent = 'MODE: ' + (m === 'dark' ? 'CEREMONY' : 'DAYLIGHT');
+    var label = 'MODE: ' + (m === 'dark' ? 'CEREMONY' : 'DAYLIGHT');
+    modebtn.textContent = label; modebtn2.textContent = label;
   }
   setMode(lsGet(LS.mode) === 'light' ? 'light' : 'dark');
-  modebtn.addEventListener('click', function () { setMode(app.dataset.mode === 'dark' ? 'light' : 'dark'); });
+  function flipMode() { setMode(app.dataset.mode === 'dark' ? 'light' : 'dark'); }
+  modebtn.addEventListener('click', flipMode);
+  modebtn2.addEventListener('click', flipMode);
 
   /* ============ FOCUS TRAP ============ */
   function trap(container) {
