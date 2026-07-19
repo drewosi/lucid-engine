@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MERIDIAN — An AI instrument for people who build</title>
 <meta name="description" content="Meridian holds your entire project in working memory, shows the reasoning behind every answer, and operates your tools with your hands on the controls. A Lucid Engine demonstration.">
+<link rel="canonical" href="https://drewosi.github.io/lucid-engine/">
+<meta property="og:title" content="MERIDIAN — An AI instrument for people who build">
+<meta property="og:description" content="Holds your entire project in working memory, shows the reasoning behind every answer, and operates your tools with your hands on the controls. Private beta — 47 seats per cohort.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://drewosi.github.io/lucid-engine/">
+<meta property="og:site_name" content="MERIDIAN">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="MERIDIAN — An AI instrument for people who build">
+<meta name="twitter:description" content="Holds your entire project in working memory, shows the reasoning behind every answer, and operates your tools with your hands on the controls. Private beta — 47 seats per cohort.">
 <style>
   /* ============ LUCID ENGINE TOKENS · v1.2 ============ */
   #app {
@@ -242,6 +251,9 @@
   input[type="email"] { flex: 1; min-width: 0; height: 44px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: inherit; font-size: 14.5px; padding: 0 14px; transition: border-color var(--t-feedback) var(--ease-snap); }
   input[type="email"]:focus { outline: none; border-color: var(--accent); }
   input[type="email"].bad { border-color: var(--err); }
+  select#tier { width: 100%; height: 44px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: inherit; font-size: 14.5px; padding: 0 10px; transition: border-color var(--t-feedback) var(--ease-snap); }
+  select#tier:focus { outline: none; border-color: var(--accent); }
+  .tier-label { margin-top: 14px; }
   .field-err { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; color: var(--err); margin-top: 8px; min-height: 16px; letter-spacing: .04em; }
   .field-note { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-3); margin-top: 4px; letter-spacing: .04em; }
   .field-ok { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12.5px; color: var(--ink); letter-spacing: .04em; line-height: 1.8; }
@@ -580,6 +592,10 @@
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.05</span>Why is the beta only 47 seats?<span class="x">+</span></button>
           <div class="faq-a"><p>Because every trace gets read by a person during the beta. Forty-seven is the number where that stays true. When it stops being true, the cohort is full.</p></div>
         </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.06</span>What happens to my email?<span class="x">+</span></button>
+          <div class="faq-a"><p>When the waitlist is live, your address (and tier interest, if you pick one) is sent to Formspree, a form backend, and used for exactly one thing: contacting you about the beta. No newsletters you didn't ask for, no resale, no ad pixels. A copy is mirrored in your own browser's localStorage so this page remembers you — the [ CLEAR LOCAL ENTRY ] button removes it. Want off the list entirely? Reply to any message and you're gone.</p></div>
+        </div>
       </div>
     </div>
   </section>
@@ -598,8 +614,15 @@
             <input type="email" id="email" name="email" placeholder="name@domain.com" autocomplete="email">
             <button class="btn btn-signal" type="submit">Join the list</button>
           </div>
+          <label class="field-label tier-label" for="tier">TIER INTEREST — OPTIONAL</label>
+          <select id="tier" name="tier">
+            <option value="">— undecided, just watching</option>
+            <option value="observer">Observer — $0</option>
+            <option value="operator">Operator — $29/mo</option>
+            <option value="laboratory">Laboratory — $120/mo</option>
+          </select>
           <div class="field-err mono" id="fielderr" role="alert" aria-live="polite"></div>
-          <div class="field-note mono">// stored in this browser only — localStorage. nothing is transmitted.</div>
+          <div class="field-note mono" id="fieldnote">// stored in this browser only — localStorage. nothing is transmitted.</div>
         </form>
       </div>
     </div>
@@ -1039,25 +1062,44 @@
     }
   });
 
-  /* ============ WAITLIST (local persistence) ============ */
+  /* ============ WAITLIST (Formspree + local mirror) ============ */
+  /* Setup (see README "Make the waitlist real"): create a free form at
+     https://formspree.io and replace YOUR_FORM_ID below with the id from
+     its endpoint (formspree.io/f/<id>). Until then, entries are held in
+     localStorage only and a warning is printed to this console. */
+  var FORMSPREE_ID = 'YOUR_FORM_ID';
+  var FS_LIVE = FORMSPREE_ID !== 'YOUR_FORM_ID';
   var LS_KEY = 'meridian.waitlist';
   var formzone = $('formzone');
-  function okState(email) {
-    var pos = 200 + (Math.abs(email.split('').reduce(function (h, c) { return (h * 31 + c.charCodeAt(0)) | 0; }, 7)) % 97);
+  var TIER_LABEL = { observer: 'Observer — $0', operator: 'Operator — $29/mo', laboratory: 'Laboratory — $120/mo' };
+  function okState(email, tier, sent) {
+    var line = sent
+      ? 'ENTRY RECEIVED — <span class="acc">cohort 06</span>. you\'ll hear from a person, not a sequence.'
+      : 'ENTRY HELD — <span class="acc">in this browser only</span>. transmission unavailable.';
+    var note = sent
+      ? '// sent to the waitlist + mirrored locally. no trackers, no resale.'
+      : '// stored in this browser only — localStorage. nothing was transmitted.';
     formzone.innerHTML =
-      '<div class="field-ok" role="status">ENTRY LOGGED — <span class="acc">#0' + pos + '</span> in line for cohort 06.<br>' +
-      'address held: ' + email.replace(/</g, '&lt;') + '<br>' +
-      '<span style="opacity:.6">// stored in this browser only — localStorage. nothing was transmitted.</span></div>' +
-      '<button class="clear-btn" type="button" id="clearwl">[ CLEAR ENTRY ]</button>';
+      '<div class="field-ok" role="status">' + line + '<br>' +
+      'address held: ' + email.replace(/</g, '&lt;') +
+      (tier && TIER_LABEL[tier] ? '<br>tier interest: ' + TIER_LABEL[tier] : '') + '<br>' +
+      '<span style="opacity:.6">' + note + '</span></div>' +
+      '<button class="clear-btn" type="button" id="clearwl">[ CLEAR LOCAL ENTRY ]</button>';
     $('clearwl').addEventListener('click', function () {
       try { localStorage.removeItem(LS_KEY); } catch (e) {}
       toast('Waitlist entry cleared from this browser.');
       location.reload();
     });
   }
+  if (!FS_LIVE) {
+    console.warn('[meridian] FORMSPREE_ID is not configured — waitlist entries stay in localStorage and never reach you. See README.');
+  } else {
+    var fnote = $('fieldnote');
+    if (fnote) fnote.textContent = '// sent to the waitlist (formspree) + mirrored locally. no trackers, no resale.';
+  }
   try {
     var saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-    if (saved && saved.email) okState(saved.email);
+    if (saved && saved.email) okState(saved.email, saved.tier, !!saved.sent);
   } catch (e) {}
   var form = $('waitform');
   if (form) {
@@ -1071,14 +1113,32 @@
     var showErr = function (m) { err.textContent = m; email.classList.toggle('bad', !!m); };
     email.addEventListener('blur', function () { touched = true; showErr(validate()); });
     email.addEventListener('input', function () { if (touched) showErr(validate()); });
+    var finish = function (v, tier, sent) {
+      try { localStorage.setItem(LS_KEY, JSON.stringify({ email: v, tier: tier, ts: Date.now(), sent: sent })); } catch (e2) {}
+      okState(v, tier, sent);
+      toast(sent ? 'Entry received — welcome to the list.' : 'Entry held locally — nothing was sent.');
+    };
     form.addEventListener('submit', function (e) {
       e.preventDefault(); touched = true;
       var m = validate();
       if (m) { showErr(m); email.focus(); return; }
       var v = email.value.trim();
-      try { localStorage.setItem(LS_KEY, JSON.stringify({ email: v, ts: Date.now() })); } catch (e2) {}
-      okState(v);
-      toast('Entry logged — stored locally, nothing sent.');
+      var tier = ($('tier') && $('tier').value) || '';
+      if (!FS_LIVE) { finish(v, tier, false); return; }
+      var btn = form.querySelector('button[type="submit"]');
+      btn.disabled = true; btn.textContent = 'Sending…';
+      fetch('https://formspree.io/f/' + FORMSPREE_ID, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body: new FormData(form)
+      }).then(function (res) {
+        if (!res.ok) throw new Error('formspree ' + res.status);
+        finish(v, tier, true);
+      }).catch(function (fe) {
+        console.warn('[meridian] waitlist transmission failed — held locally.', fe);
+        btn.disabled = false; btn.textContent = 'Join the list';
+        finish(v, tier, false);
+      });
     });
   }
 
@@ -1181,5 +1241,10 @@
     'color:#FF5C0A;font-weight:bold;font-family:monospace', 'color:#6C6B66;font-family:monospace');
 })();
 </script>
+<!-- ANALYTICS — off by default. Privacy-friendly, no cookies, no banner needed.
+     To enable: create a free account at https://www.goatcounter.com, pick a site
+     code, replace YOURCODE below, and uncomment. See README "Make the waitlist real".
+<script data-goatcounter="https://YOURCODE.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+-->
 </body>
 </html>
