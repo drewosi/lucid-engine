@@ -143,6 +143,9 @@
   .file-row:hover { color: var(--ink); }
   #skipnote { margin-top: 10px; }
   #ctxactions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  #ctxmoderow { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .btn-quiet.acc:hover { color: var(--accent); }
+  .btn-quiet.on { color: var(--accent); }
 
   /* ============ CONVERSATION ============ */
   section.stage { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
@@ -249,8 +252,8 @@
   #drawer h3 { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--ink-3); font-weight: 500; margin: 22px 0 8px; }
   #drawer p { font-size: 12px; color: var(--ink-2); margin: 8px 0; line-height: 1.6; }
   .key-row { display: flex; gap: 8px; }
-  #keyin { flex: 1; min-width: 0; height: 40px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; padding: 0 12px; }
-  #keyin:focus { outline: none; border-color: var(--accent); }
+  .key-row input { flex: 1; min-width: 0; height: 40px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; padding: 0 12px; }
+  .key-row input:focus { outline: none; border-color: var(--accent); }
   #keystate { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .05em; color: var(--ink-2); margin-top: 8px; min-height: 16px; }
   #keystate .on { color: var(--ok); }
   #drawer .note { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .04em; line-height: 1.7; }
@@ -312,6 +315,10 @@
         <div class="budget-bar" id="budgetbar"><i></i></div>
         <div class="budget-txt"><span id="budgettxt">≈ 0 tokens selected</span><span id="budgetmax"></span></div>
       </div>
+      <div id="ctxmoderow" hidden>
+        <button class="btn-quiet acc" type="button" id="ctxmodebtn" aria-pressed="false">[ CONTEXT: FULL ]</button>
+      </div>
+      <p class="rail-note" id="smartnote" hidden></p>
       <div id="tree"></div>
       <p class="rail-note" id="skipnote" hidden></p>
       <div id="ctxactions" hidden>
@@ -373,6 +380,15 @@
 
     <h3>MODEL</h3>
     <p class="note" id="modelnote"></p>
+
+    <h3>CONTEXT ENGINE</h3>
+    <p class="note">// FULL sends every checked file whole. SMART sends a project map plus the files most relevant to each question, packed into a token budget — use it for medium and large projects.</p>
+    <div class="key-row">
+      <label for="budgetin" style="position:absolute;left:-9999px">Smart context token budget</label>
+      <input type="number" id="budgetin" min="4000" step="1000" placeholder="smart budget (tokens)">
+      <button class="btn btn-hairline" type="button" id="savebudget">Set</button>
+    </div>
+    <p class="note" id="budgetstate" aria-live="polite"></p>
 
     <h3>DISPLAY</h3>
     <button class="btn-mode mono" id="modebtn2" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
@@ -461,7 +477,7 @@
     'claude-haiku-4-5': { label: 'HAIKU 4.5', ctx: 200000,  rIn: 1.00, rOut: 5.00,  rCacheW: 1.25, rCacheR: 0.10,
                           note: 'claude-haiku-4-5 — 200K-token context. fast and cheap; traces are shallower.' }
   };
-  var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted' };
+  var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget' };
   var model = lsGet(LS.model);
   if (!MODELS[model]) model = 'claude-sonnet-5';
 
@@ -477,7 +493,7 @@
   }
   modelsel.addEventListener('change', function () {
     model = modelsel.value; lsSet(LS.model, model);
-    syncModelNote(); renderBudget();
+    syncModelNote(); renderBudget(); maybeAutoSmart();
   });
   syncModelNote();
 
@@ -575,7 +591,7 @@
   var skipped = { dirs: 0, binary: 0, big: 0, over: 0 };
   var IGNORE_DIRS = ['.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', 'target', 'vendor', '__pycache__', '.venv', 'venv', 'coverage', '.cache', '.idea', '.vscode'];
   var BIN_EXT = /\.(png|jpe?g|gif|webp|avif|ico|icns|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|m4[av]|mov|avi|mkv|webm|ogg|wav|flac|zip|gz|bz2|xz|7z|rar|tar|jar|war|class|pyc|pyo|o|a|so|dylib|dll|exe|bin|dat|db|sqlite3?|pdf|doc[x]?|xls[x]?|ppt[x]?|ds_store|lockb|wasm)$/i;
-  var MAX_FILE = 512 * 1024, MAX_FILES = 2000;
+  var MAX_FILE = 512 * 1024, MAX_FILES = 4000;
 
   function ignoredPath(path) {
     return path.split('/').some(function (seg) { return IGNORE_DIRS.indexOf(seg.toLowerCase()) !== -1 || (seg !== '.' && seg.charAt(0) === '.' && seg !== '.github' && seg !== '.env.example'); });
@@ -598,8 +614,11 @@
           content: text,
           lines: text.split('\n').length,
           tokens: Math.ceil(text.length / 4),
+          mtime: file.lastModified || 0,
+          base: staticScore(path),
           checked: true
         });
+        if (files.size % 100 === 0) setStatus('INGESTING — ' + files.size + ' FILES…');
       });
     }).catch(function () { skipped.binary++; });
   }
@@ -625,7 +644,7 @@
   }
 
   function afterIngest() {
-    contextDirty = true;
+    contextDirty = true; mapDirty = true;
     renderTree(); renderBudget();
     var s = [];
     if (skipped.binary) s.push(skipped.binary + ' binary');
@@ -636,6 +655,8 @@
     note.hidden = !s.length;
     if (s.length) note.textContent = '// skipped: ' + s.join(', ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files.';
     toast(files.size + ' file' + (files.size === 1 ? '' : 's') + ' loaded into memory.');
+    setStatus('CORE IDLE — ' + files.size + ' files in memory');
+    maybeAutoSmart();
   }
 
   var dz = $('dropzone');
@@ -673,6 +694,8 @@
     $('filecount').textContent = paths.length ? paths.length + ' FILES' : '';
     $('ctxactions').hidden = !paths.length;
     $('budget').hidden = !paths.length;
+    $('ctxmoderow').hidden = !paths.length;
+    $('smartnote').hidden = !paths.length || ctxMode !== 'smart';
     var lastDir = null;
     paths.forEach(function (p) {
       var dir = p.indexOf('/') === -1 ? '' : p.slice(0, p.lastIndexOf('/'));
@@ -687,7 +710,7 @@
           var mine = paths.filter(function (q) { return (q.indexOf('/') === -1 ? '' : q.slice(0, q.lastIndexOf('/'))) === this.dataset.dir; }, this);
           var anyOff = mine.some(function (q) { return !files.get(q).checked; });
           mine.forEach(function (q) { files.get(q).checked = anyOff; });
-          contextDirty = true; renderTree(); renderBudget();
+          contextDirty = true; mapDirty = true; renderTree(); renderBudget();
         });
         tree.appendChild(d);
       }
@@ -697,7 +720,7 @@
       var lab = document.createElement('label');
       var cb = document.createElement('input');
       cb.type = 'checkbox'; cb.checked = f.checked;
-      cb.addEventListener('change', function () { f.checked = cb.checked; contextDirty = true; renderBudget(); });
+      cb.addEventListener('change', function () { f.checked = cb.checked; contextDirty = true; mapDirty = true; renderBudget(); });
       var nm = document.createElement('span');
       nm.className = 'nm'; nm.textContent = p.slice(dir ? dir.length + 1 : 0);
       nm.title = p;
@@ -717,23 +740,265 @@
   function renderBudget() {
     var sel = selectedTokens();
     var cap = MODELS[model].ctx;
-    var pct = Math.min(100, (sel.tokens / cap) * 100);
+    var smart = ctxMode === 'smart';
+    /* in smart mode the bar shows the per-question send target, not the raw pile */
+    var pct = Math.min(100, ((smart ? Math.min(sel.tokens, getBudget()) : sel.tokens) / cap) * 100);
     var bar = $('budgetbar');
     bar.querySelector('i').style.width = pct + '%';
-    bar.classList.toggle('full', pct > 90);
-    $('budgettxt').textContent = '≈ ' + fmtTok(sel.tokens) + ' tokens · ' + sel.count + ' selected';
+    bar.classList.toggle('full', !smart && pct > 90);
+    $('budgettxt').textContent = smart
+      ? '≈ ' + fmtTok(sel.tokens) + ' loaded · sends ≤ ' + fmtTok(getBudget())
+      : '≈ ' + fmtTok(sel.tokens) + ' tokens · ' + sel.count + ' selected';
     $('budgetmax').textContent = MODELS[model].label + ' · ' + fmtTok(cap);
-    $('ctxreadout').innerHTML = 'CTX ≈ <b>' + fmtTok(sel.tokens) + '</b> tokens · <b>' + sel.count + '</b> files';
+    $('ctxreadout').innerHTML = smart
+      ? 'CTX <b>SMART</b> · <b>' + sel.count + '</b> files · sends ≤ <b>' + fmtTok(getBudget()) + '</b>'
+      : 'CTX ≈ <b>' + fmtTok(sel.tokens) + '</b> tokens · <b>' + sel.count + '</b> files';
   }
 
-  $('selall').addEventListener('click', function () { files.forEach(function (f) { f.checked = true; }); contextDirty = true; renderTree(); renderBudget(); });
-  $('selnone').addEventListener('click', function () { files.forEach(function (f) { f.checked = false; }); contextDirty = true; renderTree(); renderBudget(); });
+  $('selall').addEventListener('click', function () { files.forEach(function (f) { f.checked = true; }); contextDirty = true; mapDirty = true; renderTree(); renderBudget(); });
+  $('selnone').addEventListener('click', function () { files.forEach(function (f) { f.checked = false; }); contextDirty = true; mapDirty = true; renderTree(); renderBudget(); });
   $('clearctx').addEventListener('click', function () {
     files.clear(); skipped = { dirs: 0, binary: 0, big: 0, over: 0 };
-    contextDirty = true; renderTree(); renderBudget();
+    contextDirty = true; mapDirty = true; renderTree(); renderBudget();
     $('skipnote').hidden = true;
     toast('Project unloaded from memory.');
   });
+
+  /* ============ SMART CONTEXT ENGINE ============
+     Instead of sending every checked file whole (FULL mode), SMART mode:
+       1. scores each file — type weight + recency + path depth + query relevance,
+       2. always sends a compact PROJECT MAP (tree + key-file heads) so the model
+          sees the whole project's shape,
+       3. greedily packs the highest-scoring files into a token budget; files too
+          large to send whole are excerpted with their TRUE line numbers kept, so
+          evidence citations stay verifiable in the viewer.                      */
+
+  var ctxMode = lsGet(LS.ctxmode) === 'smart' ? 'smart' : 'full';
+  var SMART_DEFAULT_BUDGET = 120000; /* tokens per question, before user override */
+  var WHOLE_FILE_MAX = 12000;        /* files above this many tokens get excerpted */
+  var SMART_MAX_FILES = 60;          /* max files packed into one request */
+  var AUTO_SMART_FRAC = 0.7;         /* auto-enable smart above this fraction of model ctx */
+
+  var SRC_EXT = { ts: 9, tsx: 9, js: 9, jsx: 9, mjs: 9, cjs: 9, py: 9, go: 9, rs: 9, java: 8, rb: 8, php: 8, c: 8, h: 8, cc: 8, cpp: 8, hpp: 8, cs: 8, swift: 8, kt: 8, scala: 8, svelte: 9, vue: 9, html: 7, css: 6, scss: 6, less: 6, sql: 7, sh: 7, bash: 7, zsh: 7, md: 8, mdx: 8, rst: 7, txt: 5, json: 5, yml: 6, yaml: 6, toml: 6, xml: 4, ini: 5, cfg: 5, env: 5, graphql: 7, proto: 7, tf: 6, lua: 7, ex: 8, exs: 8, erl: 7, ml: 7, hs: 7, zig: 8, dart: 8, r: 7, jl: 7 };
+  var CONFIG_NAMES = /^(package\.json|tsconfig[^\/]*\.json|pyproject\.toml|setup\.(py|cfg)|go\.(mod|sum)|cargo\.toml|gemfile|makefile|justfile|dockerfile|docker-compose\.ya?ml|\.env\.example|vite\.config\.[jt]s|webpack\.config\.[jt]s|next\.config\.[jt]s|rollup\.config\.[jt]s|requirements\.txt|composer\.json|build\.gradle(\.kts)?|pom\.xml)$/i;
+  var ENTRY_NAMES = /^(index|main|app|server|cli|core|__init__|mod|lib)\.[a-z]+$/i;
+  var README_NAMES = /^readme(\.|$)/i;
+  var LOWVALUE_PATH = /(\.min\.|\.lock$|-lock\.|\.snap$|\.map$|\.d\.ts$|\bfixtures?\b|\b__snapshots__\b|\bmigrations\b|\bgenerated\b)/i;
+  var TEST_PATH = /(\.test\.|\.spec\.|_test\.|\btests?\/|\b__tests__\b)/i;
+
+  /* query-independent importance, computed once per file at ingest */
+  function staticScore(path) {
+    var name = path.slice(path.lastIndexOf('/') + 1);
+    var ext = name.indexOf('.') === -1 ? '' : name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+    var s = SRC_EXT[ext] || 2;
+    if (CONFIG_NAMES.test(name)) s += 6;
+    if (README_NAMES.test(name)) s += 7;
+    if (ENTRY_NAMES.test(name)) s += 4;
+    if (TEST_PATH.test(path)) s -= 3;
+    if (LOWVALUE_PATH.test(path)) s -= 6;
+    s -= Math.min(4, path.split('/').length - 1); /* mild depth penalty */
+    return s;
+  }
+
+  var STOPWORDS = { the: 1, and: 1, for: 1, with: 1, this: 1, that: 1, are: 1, was: 1, does: 1, how: 1, what: 1, where: 1, why: 1, when: 1, which: 1, who: 1, can: 1, could: 1, would: 1, should: 1, you: 1, from: 1, into: 1, about: 1, file: 1, files: 1, code: 1, project: 1, please: 1, explain: 1, show: 1, tell: 1, work: 1, works: 1, use: 1, used: 1, using: 1, not: 1, all: 1, any: 1, here: 1 };
+  function queryTerms(q) {
+    var seen = {}, out = [];
+    var words = q.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().match(/[a-z0-9_]{3,}/g) || [];
+    words.forEach(function (w) { if (!STOPWORDS[w] && !seen[w]) { seen[w] = 1; out.push(w); } });
+    return out.slice(0, 12);
+  }
+
+  function countHits(hay, needle) {
+    var n = 0, i = 0;
+    while (n < 20 && (i = hay.indexOf(needle, i)) !== -1) { n++; i += needle.length; }
+    return n;
+  }
+
+  function numberLines(text, startLineNo) {
+    return text.split('\n').map(function (ln, i) { return (startLineNo + i) + '│' + ln; }).join('\n');
+  }
+
+  /* Line-number-true excerpt: file head + windows around query-term hits.
+     Omitted ranges are marked so the model never cites lines it cannot see. */
+  function excerptFile(f, terms, maxTokens) {
+    var lines = f.content.split('\n');
+    var keep = {}, HEAD = 50, WIN = 20, hits = 0, i;
+    for (i = 0; i < Math.min(HEAD, lines.length); i++) keep[i] = 1;
+    if (terms.length) {
+      for (var li = HEAD; li < lines.length && hits < 8; li++) {
+        var ll = lines[li].toLowerCase();
+        for (var ti = 0; ti < terms.length; ti++) {
+          if (ll.indexOf(terms[ti]) !== -1) {
+            hits++;
+            var hi = Math.min(lines.length - 1, li + WIN);
+            for (var w = Math.max(0, li - WIN); w <= hi; w++) keep[w] = 1;
+            li += WIN; /* jump ahead so clustered hits share one window */
+            break;
+          }
+        }
+      }
+    }
+    var out = [], chars = 0, budget = maxTokens * 4, last = -1, truncated = false;
+    for (var n = 0; n < lines.length; n++) {
+      if (!keep[n]) continue;
+      if (chars > budget) { truncated = true; break; }
+      if (n > last + 1) out.push('··· lines ' + (last + 2) + '–' + n + ' omitted ···');
+      var row = (n + 1) + '│' + lines[n];
+      out.push(row); chars += row.length + 1;
+      last = n;
+    }
+    if (truncated || last < lines.length - 1) out.push('··· lines ' + (last + 2) + '–' + lines.length + ' omitted ···');
+    return { text: out.join('\n'), tokens: Math.ceil(chars / 4) + 10 };
+  }
+
+  /* Score all checked files against the question and pack the winners into the budget. */
+  function packSmartContext(q, budgetTokens) {
+    var terms = queryTerms(q);
+    var paths = [];
+    files.forEach(function (f, p) { if (f.checked) paths.push(p); });
+    if (!paths.length) return { text: '', count: 0, total: 0, tokens: 0 };
+
+    /* recency: rank-normalized mtime, worth up to 6 points */
+    var byM = paths.slice().sort(function (a, b) { return files.get(a).mtime - files.get(b).mtime; });
+    var recRank = {};
+    byM.forEach(function (p, i) { recRank[p] = byM.length > 1 ? (i / (byM.length - 1)) * 6 : 3; });
+
+    /* pass 1 — cheap: static importance + recency + path term hits */
+    var scored = paths.map(function (p) {
+      var f = files.get(p), s = f.base + recRank[p], lp = p.toLowerCase();
+      for (var i = 0; i < terms.length; i++) if (lp.indexOf(terms[i]) !== -1) s += 30;
+      return { p: p, f: f, s: s };
+    });
+    scored.sort(function (a, b) { return b.s - a.s; });
+
+    /* pass 2 — content hits, but only for the top candidates (lowercase cached lazily) */
+    if (terms.length) {
+      var scan = Math.min(scored.length, 200);
+      for (var si = 0; si < scan; si++) {
+        var it = scored[si];
+        if (it.f.lc === undefined) it.f.lc = it.f.content.toLowerCase();
+        for (var t = 0; t < terms.length; t++) it.s += Math.min(countHits(it.f.lc, terms[t]), 12) * 2;
+      }
+      scored.sort(function (a, b) { return b.s - a.s; });
+    }
+
+    /* greedy pack: whole small files, excerpts for big ones */
+    var parts = [], used = 0, count = 0;
+    for (var k = 0; k < scored.length && count < SMART_MAX_FILES; k++) {
+      var remaining = budgetTokens - used;
+      if (remaining < 400) break;
+      var e = scored[k], body, tok;
+      if (e.f.tokens <= WHOLE_FILE_MAX && e.f.tokens <= remaining) {
+        body = numberLines(e.f.content, 1); tok = e.f.tokens;
+      } else {
+        var ex = excerptFile(e.f, terms, Math.min(remaining, Math.max(1500, WHOLE_FILE_MAX / 2)));
+        if (ex.tokens > remaining) continue;
+        body = ex.text; tok = ex.tokens;
+      }
+      parts.push('═══ FILE: ' + e.p + ' ═══\n' + body);
+      used += tok; count++;
+    }
+    return { text: parts.join('\n\n'), count: count, total: paths.length, tokens: used };
+  }
+
+  /* PROJECT MAP — full shape of the project in few tokens; cached until context changes */
+  function pickKeyFiles(paths) {
+    var picks = [];
+    function firstMatch(re) {
+      var best = null, bestDepth = 99;
+      paths.forEach(function (p) {
+        var name = p.slice(p.lastIndexOf('/') + 1), d = p.split('/').length;
+        if (re.test(name) && d < bestDepth && picks.indexOf(p) === -1) { best = p; bestDepth = d; }
+      });
+      if (best) picks.push(best);
+    }
+    firstMatch(README_NAMES);
+    firstMatch(/^(package\.json|pyproject\.toml|go\.mod|cargo\.toml|composer\.json)$/i);
+    firstMatch(ENTRY_NAMES);
+    return picks.slice(0, 4);
+  }
+
+  var mapDirty = true, mapCache = '';
+  function buildProjectMap() {
+    if (!mapDirty) return mapCache;
+    var paths = [];
+    files.forEach(function (f, p) { if (f.checked) paths.push(p); });
+    paths.sort();
+    if (!paths.length) { mapCache = ''; mapDirty = false; return ''; }
+    var byDir = {};
+    paths.forEach(function (p) {
+      var dir = p.indexOf('/') === -1 ? '.' : p.slice(0, p.lastIndexOf('/'));
+      (byDir[dir] = byDir[dir] || []).push(p);
+    });
+    var out = [], collapse = paths.length > 400;
+    Object.keys(byDir).sort().forEach(function (d) {
+      var list = byDir[d];
+      if (collapse && list.length > 8) {
+        var tot = 0;
+        list.forEach(function (p) { tot += files.get(p).tokens; });
+        var top = list.slice().sort(function (a, b) { return files.get(b).base - files.get(a).base; })
+          .slice(0, 3).map(function (p) { return p.slice(p.lastIndexOf('/') + 1); });
+        out.push(d + '/ — ' + list.length + ' files ≈' + fmtTok(tot) + ' tok (incl. ' + top.join(', ') + ')');
+      } else {
+        out.push(d === '.' ? './' : d + '/');
+        list.forEach(function (p) {
+          out.push('  ' + p.slice(p.lastIndexOf('/') + 1) + ' ≈' + fmtTok(files.get(p).tokens));
+        });
+      }
+    });
+    var keyTxt = [];
+    pickKeyFiles(paths).forEach(function (p) {
+      var f = files.get(p), lines = f.content.split('\n');
+      var n = Math.min(40, lines.length);
+      keyTxt.push('--- KEY FILE HEAD (' + (lines.length > n ? 'first ' + n + ' of ' + lines.length + ' lines' : n + ' lines') + '): ' + p + ' ---\n'
+        + numberLines(lines.slice(0, n).join('\n'), 1));
+    });
+    mapCache = 'PROJECT MAP — the full shape of the loaded project (' + paths.length + ' files, path ≈tokens). Only a question-relevant subset of files is included in full after the map. If a mapped file you cannot see would answer better, say which one.\n\n'
+      + out.join('\n') + (keyTxt.length ? '\n\n' + keyTxt.join('\n\n') : '');
+    mapDirty = false;
+    return mapCache;
+  }
+
+  function getBudget() {
+    var cap = MODELS[model] ? MODELS[model].ctx : 200000;
+    var v = parseInt(lsGet(LS.ctxbudget), 10);
+    if (!v || v < 4000) v = Math.min(Math.floor(cap * 0.4), SMART_DEFAULT_BUDGET);
+    return Math.min(v, cap);
+  }
+
+  var ctxmodebtn = $('ctxmodebtn');
+  function setCtxMode(m) {
+    ctxMode = m; lsSet(LS.ctxmode, m);
+    ctxmodebtn.textContent = '[ CONTEXT: ' + (m === 'smart' ? 'SMART' : 'FULL') + ' ]';
+    ctxmodebtn.setAttribute('aria-pressed', String(m === 'smart'));
+    ctxmodebtn.classList.toggle('on', m === 'smart');
+    var note = $('smartnote');
+    note.hidden = m !== 'smart' || !files.size;
+    if (m === 'smart') note.textContent = '// smart select: each question sends a project map plus the most relevant files, packed into ≈' + fmtTok(getBudget()) + ' tokens. unchecked files are always excluded.';
+    renderBudget();
+  }
+  ctxmodebtn.addEventListener('click', function () { setCtxMode(ctxMode === 'smart' ? 'full' : 'smart'); });
+
+  function maybeAutoSmart() {
+    if (ctxMode === 'smart') return;
+    var sel = selectedTokens();
+    if (sel.tokens > MODELS[model].ctx * AUTO_SMART_FRAC) {
+      setCtxMode('smart');
+      toast(sel.count + ' files ≈ ' + fmtTok(sel.tokens) + ' tokens — smart selection enabled.');
+    }
+  }
+
+  function syncBudgetState() {
+    $('budgetstate').textContent = '// current smart budget ≈ ' + fmtTok(getBudget()) + ' tokens per question' + (lsGet(LS.ctxbudget) ? ' (custom).' : ' (auto: 40% of model ctx, max 120K).');
+  }
+  $('savebudget').addEventListener('click', function () {
+    var v = parseInt($('budgetin').value, 10);
+    if (!v || v < 4000) { lsDel(LS.ctxbudget); toast('Smart budget reset to auto.'); }
+    else { lsSet(LS.ctxbudget, String(v)); toast('Smart budget set ≈ ' + fmtTok(v) + ' tokens.'); }
+    $('budgetin').value = '';
+    syncBudgetState(); setCtxMode(ctxMode);
+  });
+  syncBudgetState();
 
   /* ============ PROMPT ASSEMBLY ============ */
   var FENCE = '```meridian-trace';
@@ -751,10 +1016,14 @@
     '',
     '- steps: 1 to 6 items, in reasoning order.',
     '- evidence: each item MUST cite a file path exactly as it appears after "FILE:" in the context, with 1-indexed line numbers matching the numbered lines, and a verbatim quote of at most 120 characters. Never invent files or line numbers. A pure-reasoning step may have an empty evidence array.',
+    '- Context may include a PROJECT MAP block (file tree + key-file heads) and a question-relevant subset of files. Excerpted files keep their true line numbers; gaps are marked "··· lines A–B omitted ···". Cite only line ranges you can actually see.',
+    '- If the map shows a file you cannot see that would answer better, name it and suggest the user ask again mentioning it.',
     '- confidence: a number from 0 to 1 — your honest estimate.',
     '- If no project files are loaded, still emit the block with reasoning steps and empty evidence arrays.',
     '- Output nothing after the closing fence of the meridian-trace block.'
   ].join('\n');
+
+  var CTX_PREAMBLE = 'The user\'s loaded project files follow. Each file begins with "═══ FILE: <path> ═══" and every line is prefixed with its 1-indexed line number and "│".';
 
   var contextDirty = true, contextCache = '';
   function assembleContext() {
@@ -763,14 +1032,33 @@
     sortedPaths().forEach(function (p) {
       var f = files.get(p);
       if (!f.checked) return;
-      var body = f.content.split('\n').map(function (ln, i) { return (i + 1) + '│' + ln; }).join('\n');
-      parts.push('═══ FILE: ' + p + ' ═══\n' + body);
+      parts.push('═══ FILE: ' + p + ' ═══\n' + numberLines(f.content, 1));
     });
-    contextCache = parts.length
-      ? 'The user\'s loaded project files follow. Each file begins with "═══ FILE: <path> ═══" and every line is prefixed with its 1-indexed line number and "│".\n\n' + parts.join('\n\n')
-      : '';
+    contextCache = parts.length ? CTX_PREAMBLE + '\n\n' + parts.join('\n\n') : '';
     contextDirty = false;
     return contextCache;
+  }
+
+  /* Builds the system blocks for one question, honoring the context mode.
+     Returns { blocks, note } — note is a short human-readable summary for the statusline. */
+  function buildContextBlocks(q) {
+    if (ctxMode !== 'smart') {
+      var ctx = assembleContext();
+      return {
+        blocks: ctx ? [{ type: 'text', text: ctx, cache_control: { type: 'ephemeral' } }] : [],
+        note: null
+      };
+    }
+    var map = buildProjectMap();
+    if (!map) return { blocks: [], note: null };
+    var packed = packSmartContext(q, getBudget());
+    /* cache the stable map block; the packed subset varies per question */
+    var blocks = [{ type: 'text', text: map, cache_control: { type: 'ephemeral' } }];
+    if (packed.text) {
+      blocks.push({ type: 'text', text: 'SELECTED FILES — the subset most relevant to this question. ' + CTX_PREAMBLE + ' Excerpted files keep true line numbers; omitted ranges are marked.\n\n' + packed.text });
+    }
+    var mapTok = Math.ceil(map.length / 4);
+    return { blocks: blocks, note: 'SMART CTX ' + packed.count + '/' + packed.total + ' FILES ≈ ' + fmtTok(packed.tokens + mapTok) + ' TOK' };
   }
 
   /* ============ COST ============ */
@@ -1002,12 +1290,11 @@
     var raw = '', fenceIdx = -1, waitShown = false;
     streaming = true;
     sendbtn.hidden = true; stopbtn.hidden = false;
-    setStatus('CORE REASONING — ' + MODELS[model].label);
     aborter = new AbortController();
 
-    var system = [{ type: 'text', text: INSTRUCTIONS }];
-    var ctx = assembleContext();
-    if (ctx) system.push({ type: 'text', text: ctx, cache_control: { type: 'ephemeral' } });
+    var cb = buildContextBlocks(q);
+    setStatus('CORE REASONING — ' + MODELS[model].label + (cb.note ? ' · ' + cb.note : ''));
+    var system = [{ type: 'text', text: INSTRUCTIONS }].concat(cb.blocks);
 
     var body = {
       model: model,
@@ -1153,7 +1440,7 @@
     }
   });
 
-  renderBudget();
+  setCtxMode(ctxMode); /* also renders the budget */
   console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— free beta. zero egress to us; requests go browser → api.anthropic.com under your key.');
 })();
 </script>
