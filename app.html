@@ -147,6 +147,18 @@
   .btn-quiet.acc:hover { color: var(--accent); }
   .btn-quiet.on { color: var(--accent); }
 
+  /* saved projects shelf */
+  #projshelf { margin-bottom: 18px; }
+  .proj-row { display: flex; align-items: center; gap: 8px; padding: 5px 2px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-2); border-bottom: 1px solid var(--line); }
+  .proj-row .pn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: none; border: none; color: var(--ink-2); font-family: inherit; font-size: inherit; text-align: left; cursor: pointer; padding: 0; }
+  .proj-row .pn:hover { color: var(--accent); }
+  .proj-row .pm { color: var(--ink-3); font-size: 9.5px; white-space: nowrap; flex: none; }
+  .proj-row .px { background: none; border: none; color: var(--ink-3); cursor: pointer; font-family: inherit; font-size: 10.5px; padding: 0 2px; flex: none; }
+  .proj-row .px:hover { color: var(--err); }
+
+  #ignorein { width: 100%; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; padding: 8px 10px; resize: vertical; box-sizing: border-box; }
+  #ignorein:focus { outline: none; border-color: var(--accent); }
+
   /* ============ CONVERSATION ============ */
   section.stage { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   #convo { flex: 1; overflow-y: auto; padding: 26px 24px 12px; scroll-behavior: smooth; }
@@ -300,6 +312,12 @@
   <main class="deck">
     <!-- CONTEXT RAIL -->
     <aside class="rail" id="rail" aria-label="Project context">
+      <div id="projshelf" hidden>
+        <h2 class="rail-hd">PROJECTS <span class="n" id="projcount"></span></h2>
+        <div id="projlist"></div>
+        <button class="btn-quiet acc" type="button" id="saveproj">[ SAVE PROJECT ]</button>
+        <p class="rail-note" id="projnote" hidden></p>
+      </div>
       <h2 class="rail-hd">CONTEXT <span class="n" id="filecount"></span></h2>
       <div id="dropzone">
         drop a project folder here
@@ -390,11 +408,17 @@
     </div>
     <p class="note" id="budgetstate" aria-live="polite"></p>
 
+    <h3>IGNORE PATTERNS</h3>
+    <p class="note">// one pattern per line; <b>*</b> matches anything (e.g. <b>*.test.ts</b>, <b>docs/*</b>). applied at ingest and saved with the project. lines starting with # are comments.</p>
+    <label for="ignorein" style="position:absolute;left:-9999px">Ignore patterns</label>
+    <textarea id="ignorein" rows="3" spellcheck="false" placeholder="*.test.ts&#10;docs/*"></textarea>
+    <button class="btn btn-hairline" type="button" id="saveignore" style="margin-top:8px">Apply</button>
+
     <h3>DISPLAY</h3>
     <button class="btn-mode mono" id="modebtn2" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
 
     <h3>LOCAL DATA</h3>
-    <p class="note">// everything meridian stores in this browser: your API key, model choice, color mode, the terms-acceptance record, and (on the landing page) your waitlist entry. loaded files and conversation live in memory only and vanish when the tab closes.</p>
+    <p class="note">// everything meridian stores in this browser: your API key(s), model choice, color mode, context settings, ignore patterns, the terms-acceptance record, saved-project metadata in IndexedDB (file tree + settings — never file contents), and (on the landing page) your waitlist entry. loaded file contents and conversation live in memory only and vanish when the tab closes.</p>
     <button class="btn-quiet" type="button" id="clearall">[ CLEAR ALL MERIDIAN DATA FROM THIS BROWSER ]</button>
 
     <h3>LEGAL</h3>
@@ -477,7 +501,7 @@
     'claude-haiku-4-5': { label: 'HAIKU 4.5', ctx: 200000,  rIn: 1.00, rOut: 5.00,  rCacheW: 1.25, rCacheR: 0.10,
                           note: 'claude-haiku-4-5 — 200K-token context. fast and cheap; traces are shallower.' }
   };
-  var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget' };
+  var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget', ignore: 'meridian.ignore' };
   var model = lsGet(LS.model);
   if (!MODELS[model]) model = 'claude-sonnet-5';
 
@@ -574,6 +598,7 @@
   $('clearall').addEventListener('click', function () {
     Object.keys(LS).forEach(function (k) { lsDel(LS[k]); });
     lsDel('meridian.waitlist');
+    try { if (idb) idb.close(); indexedDB.deleteDatabase('meridian'); } catch (e) {}
     toast('All Meridian data cleared from this browser.');
     setTimeout(function () { location.reload(); }, 600);
   });
@@ -587,8 +612,8 @@
   });
 
   /* ============ CONTEXT ENGINE ============ */
-  var files = new Map();       /* path -> {content, lines, tokens, checked} */
-  var skipped = { dirs: 0, binary: 0, big: 0, over: 0 };
+  var files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
+  var skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
   var IGNORE_DIRS = ['.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', 'target', 'vendor', '__pycache__', '.venv', 'venv', 'coverage', '.cache', '.idea', '.vscode'];
   var BIN_EXT = /\.(png|jpe?g|gif|webp|avif|ico|icns|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|m4[av]|mov|avi|mkv|webm|ogg|wav|flac|zip|gz|bz2|xz|7z|rar|tar|jar|war|class|pyc|pyo|o|a|so|dylib|dll|exe|bin|dat|db|sqlite3?|pdf|doc[x]?|xls[x]?|ppt[x]?|ds_store|lockb|wasm)$/i;
   var MAX_FILE = 512 * 1024, MAX_FILES = 4000;
@@ -605,6 +630,7 @@
     path = (path || file.name).replace(/^\.?\//, '');
     if (files.size >= MAX_FILES) { skipped.over++; return Promise.resolve(); }
     if (ignoredPath(path)) { skipped.dirs++; return Promise.resolve(); }
+    if (matchesIgnore(path)) { skipped.user++; return Promise.resolve(); }
     if (BIN_EXT.test(path)) { skipped.binary++; return Promise.resolve(); }
     if (file.size > MAX_FILE) { skipped.big++; return Promise.resolve(); }
     return file.slice(0, 8192).arrayBuffer().then(function (buf) {
@@ -644,12 +670,15 @@
   }
 
   function afterIngest() {
+    applyPendingProject();
     contextDirty = true; mapDirty = true;
     renderTree(); renderBudget();
+    renderProjects();
     var s = [];
     if (skipped.binary) s.push(skipped.binary + ' binary');
     if (skipped.big) s.push(skipped.big + ' oversized');
     if (skipped.dirs) s.push(skipped.dirs + ' ignored-dir');
+    if (skipped.user) s.push(skipped.user + ' ignore-pattern');
     if (skipped.over) s.push(skipped.over + ' over the ' + MAX_FILES + '-file cap');
     var note = $('skipnote');
     note.hidden = !s.length;
@@ -663,6 +692,7 @@
   ['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('hot'); }); });
   ['dragleave', 'drop'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('hot'); }); });
   dz.addEventListener('drop', function (e) {
+    lastDirHandle = null; /* dropped folders have no persistent handle */
     var items = e.dataTransfer.items;
     var jobs = [];
     if (items && items.length && items[0].webkitGetAsEntry) {
@@ -675,9 +705,23 @@
     }
     Promise.all(jobs).then(afterIngest);
   });
-  $('dirbtn').addEventListener('click', function () { $('dirpick').click(); });
+  /* Prefer the File System Access API when available — its directory handle can be
+     persisted to IndexedDB, enabling one-click project reload later. */
+  $('dirbtn').addEventListener('click', function () {
+    if (window.showDirectoryPicker) {
+      window.showDirectoryPicker({ mode: 'read' }).then(function (h) {
+        lastDirHandle = h;
+        return walkHandle(h, h.name + '/').then(afterIngest);
+      }).catch(function (e) {
+        if (e && e.name === 'AbortError') return;
+        toast('Folder pick failed — using the fallback picker.');
+        $('dirpick').click();
+      });
+    } else $('dirpick').click();
+  });
   $('filebtn').addEventListener('click', function () { $('filepick').click(); });
   function pickHandler(input) {
+    lastDirHandle = null;
     var list = Array.prototype.slice.call(input.files || []);
     Promise.all(list.map(function (f) { return ingestFile(f, f.webkitRelativePath || f.name); })).then(afterIngest);
     input.value = '';
@@ -758,7 +802,7 @@
   $('selall').addEventListener('click', function () { files.forEach(function (f) { f.checked = true; }); contextDirty = true; mapDirty = true; renderTree(); renderBudget(); });
   $('selnone').addEventListener('click', function () { files.forEach(function (f) { f.checked = false; }); contextDirty = true; mapDirty = true; renderTree(); renderBudget(); });
   $('clearctx').addEventListener('click', function () {
-    files.clear(); skipped = { dirs: 0, binary: 0, big: 0, over: 0 };
+    files.clear(); skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
     contextDirty = true; mapDirty = true; renderTree(); renderBudget();
     $('skipnote').hidden = true;
     toast('Project unloaded from memory.');
@@ -999,6 +1043,214 @@
     syncBudgetState(); setCtxMode(ctxMode);
   });
   syncBudgetState();
+
+  /* ============ PROJECT MEMORY (IndexedDB) ============
+     Saves named projects: file-tree summary, selection, ignore patterns and
+     context prefs — NEVER file contents. When the folder was opened through
+     showDirectoryPicker() the directory handle itself is persisted too, so a
+     saved project can be reloaded from disk in one click (after the browser
+     re-confirms read permission). Drag-dropped projects restore settings only
+     and ask you to re-drop the folder to hydrate contents.                   */
+
+  var lastDirHandle = null;   /* set when the current project came from showDirectoryPicker */
+  var pendingProject = null;  /* saved record waiting for its files to arrive */
+
+  var idb = null;
+  function idbOpen() {
+    return new Promise(function (resolve, reject) {
+      if (idb) return resolve(idb);
+      if (!window.indexedDB) return reject(new Error('IndexedDB unavailable'));
+      var req = indexedDB.open('meridian', 1);
+      req.onupgradeneeded = function () { req.result.createObjectStore('projects', { keyPath: 'name' }); };
+      req.onsuccess = function () { idb = req.result; resolve(idb); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+  function idbPut(rec) {
+    return idbOpen().then(function (db) {
+      return new Promise(function (res, rej) {
+        var tx = db.transaction('projects', 'readwrite');
+        tx.objectStore('projects').put(rec);
+        tx.oncomplete = res;
+        tx.onerror = tx.onabort = function () { rej(tx.error || new Error('write failed')); };
+      });
+    });
+  }
+  function idbAll() {
+    return idbOpen().then(function (db) {
+      return new Promise(function (res, rej) {
+        var rq = db.transaction('projects', 'readonly').objectStore('projects').getAll();
+        rq.onsuccess = function () { res(rq.result || []); };
+        rq.onerror = function () { rej(rq.error); };
+      });
+    });
+  }
+  function idbDel(name) {
+    return idbOpen().then(function (db) {
+      return new Promise(function (res, rej) {
+        var tx = db.transaction('projects', 'readwrite');
+        tx.objectStore('projects').delete(name);
+        tx.oncomplete = res;
+        tx.onerror = function () { rej(tx.error); };
+      });
+    });
+  }
+
+  /* re-read a directory handle's contents (File System Access API, Chromium) */
+  function walkHandle(dir, prefix) {
+    if (!dir.values) return Promise.resolve();
+    return (async function () {
+      var jobs = [];
+      for await (const entry of dir.values()) {
+        if (entry.kind === 'file') {
+          jobs.push(entry.getFile().then(function (f) { return ingestFile(f, prefix + entry.name); }).catch(function () { skipped.binary++; }));
+        } else if (entry.kind === 'directory') {
+          if (IGNORE_DIRS.indexOf(entry.name.toLowerCase()) !== -1 || (entry.name.charAt(0) === '.' && entry.name !== '.github')) { skipped.dirs++; continue; }
+          jobs.push(walkHandle(entry, prefix + entry.name + '/'));
+        }
+      }
+      return Promise.all(jobs);
+    })();
+  }
+
+  function guessProjectName() {
+    var it = files.keys().next();
+    if (it.done) return 'project';
+    var p = it.value;
+    return p.indexOf('/') !== -1 ? p.slice(0, p.indexOf('/')) : 'project';
+  }
+
+  function applyPendingProject() {
+    if (!pendingProject) return;
+    var un = pendingProject.unchecked || [];
+    un.forEach(function (p) { var f = files.get(p); if (f) f.checked = false; });
+    pendingProject = null;
+    $('projnote').hidden = true;
+  }
+
+  function applyProjectPrefs(rec) {
+    if (rec.prefs) {
+      if (rec.prefs.budget) lsSet(LS.ctxbudget, String(rec.prefs.budget)); else lsDel(LS.ctxbudget);
+      setCtxMode(rec.prefs.ctxmode === 'smart' ? 'smart' : 'full');
+      syncBudgetState();
+    }
+    setIgnoreText(rec.ignore || '');
+  }
+
+  function loadProject(rec) {
+    applyProjectPrefs(rec);
+    pendingProject = rec;
+    if (rec.handle && rec.handle.queryPermission) {
+      rec.handle.queryPermission({ mode: 'read' }).then(function (st) {
+        return st === 'granted' ? st : rec.handle.requestPermission({ mode: 'read' });
+      }).then(function (st) {
+        if (st !== 'granted') { toast('Read permission declined — drop the folder instead.'); return; }
+        files.clear(); skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
+        lastDirHandle = rec.handle;
+        setStatus('RELOADING “' + rec.name + '”…');
+        return walkHandle(rec.handle, rec.handle.name + '/').then(afterIngest);
+      }).catch(function (e) {
+        toast('Reload failed: ' + ((e && e.message) || 'unknown error') + ' — drop the folder instead.');
+      });
+    } else {
+      var note = $('projnote');
+      note.hidden = false;
+      note.textContent = '// “' + rec.name + '”: settings + selection restored. drop the folder (or pick it) to reload its files — contents are never stored.';
+      toast('“' + rec.name + '” restored — re-drop the folder to hydrate files.');
+    }
+  }
+
+  function renderProjects() {
+    idbAll().then(function (recs) {
+      recs.sort(function (a, b) { return (b.savedAt || 0) - (a.savedAt || 0); });
+      var shelf = $('projshelf'), list = $('projlist');
+      shelf.hidden = !recs.length && !files.size;
+      $('projcount').textContent = recs.length ? recs.length + ' SAVED' : '';
+      list.innerHTML = '';
+      recs.forEach(function (rec) {
+        var row = document.createElement('div');
+        row.className = 'proj-row';
+        var pn = document.createElement('button');
+        pn.type = 'button'; pn.className = 'pn';
+        pn.textContent = rec.name + (rec.handle ? ' ⟳' : '');
+        pn.title = rec.handle ? 'Reload from disk (one click)' : 'Restore settings; re-drop folder for contents';
+        pn.addEventListener('click', function () { loadProject(rec); });
+        var pm = document.createElement('span');
+        pm.className = 'pm';
+        pm.textContent = rec.fileCount + 'f · ' + fmtTok(rec.totalTokens || 0) + ' · ' + new Date(rec.savedAt).toISOString().slice(0, 10);
+        var px = document.createElement('button');
+        px.type = 'button'; px.className = 'px'; px.textContent = '✕';
+        px.setAttribute('aria-label', 'Delete saved project ' + rec.name);
+        px.addEventListener('click', function () {
+          idbDel(rec.name).then(renderProjects);
+          toast('“' + rec.name + '” deleted from saved projects.');
+        });
+        row.appendChild(pn); row.appendChild(pm); row.appendChild(px);
+        list.appendChild(row);
+      });
+    }).catch(function () { $('projshelf').hidden = !files.size; });
+  }
+
+  $('saveproj').addEventListener('click', function () {
+    if (!files.size) { toast('Load a project first.'); return; }
+    var name = window.prompt('Save project as:', guessProjectName());
+    if (name === null) return;
+    name = name.trim().slice(0, 60) || 'project';
+    var tree = [], unchecked = [], total = 0;
+    files.forEach(function (f, p) {
+      tree.push({ path: p, tokens: f.tokens, mtime: f.mtime });
+      total += f.tokens;
+      if (!f.checked) unchecked.push(p);
+    });
+    var rec = {
+      name: name, savedAt: Date.now(), fileCount: files.size, totalTokens: total,
+      tree: tree, unchecked: unchecked, ignore: getIgnoreText(),
+      prefs: { ctxmode: ctxMode, budget: parseInt(lsGet(LS.ctxbudget), 10) || 0 },
+      handle: lastDirHandle || null
+    };
+    idbPut(rec).then(function () {
+      toast('“' + name + '” saved — tree + settings only, no file contents.');
+      renderProjects();
+    }).catch(function (e) {
+      /* a handle that cannot be cloned (rare) — retry without it */
+      rec.handle = null;
+      idbPut(rec).then(function () { toast('“' + name + '” saved (without reload handle).'); renderProjects(); })
+        .catch(function () { toast('Save failed: ' + ((e && e.message) || 'IndexedDB unavailable.')); });
+    });
+  });
+
+  /* ---- ignore patterns (glob-lite: * matches anything) ---- */
+  var ignoreRes = [];
+  function compileIgnore(txt) {
+    ignoreRes = [];
+    (txt || '').split('\n').forEach(function (ln) {
+      ln = ln.trim();
+      if (!ln || ln.charAt(0) === '#') return;
+      var re = ln.replace(/[.+^${}()|[\]\\?]/g, '\\$&').replace(/\*/g, '.*');
+      try { ignoreRes.push(new RegExp('(^|/)' + re + '($|/)', 'i')); } catch (e) {}
+    });
+  }
+  function matchesIgnore(path) {
+    for (var i = 0; i < ignoreRes.length; i++) if (ignoreRes[i].test(path)) return true;
+    return false;
+  }
+  function setIgnoreText(txt) {
+    $('ignorein').value = txt || '';
+    lsSet(LS.ignore, txt || '');
+    compileIgnore(txt);
+  }
+  function getIgnoreText() { return $('ignorein').value; }
+  $('saveignore').addEventListener('click', function () {
+    setIgnoreText($('ignorein').value);
+    var removed = 0;
+    Array.from(files.keys()).forEach(function (p) {
+      if (matchesIgnore(p)) { files.delete(p); removed++; }
+    });
+    if (removed) { contextDirty = true; mapDirty = true; renderTree(); renderBudget(); }
+    toast(removed ? removed + ' loaded file' + (removed === 1 ? '' : 's') + ' removed by patterns.' : 'Ignore patterns saved.');
+  });
+  setIgnoreText(lsGet(LS.ignore) || '');
+  renderProjects();
 
   /* ============ PROMPT ASSEMBLY ============ */
   var FENCE = '```meridian-trace';
