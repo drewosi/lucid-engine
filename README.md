@@ -29,16 +29,16 @@ The architecture *is* the privacy story:
 
 Medium and large codebases no longer blow the context window. In **SMART** mode (auto-enabled when the loaded project exceeds ~70% of the model's context) each question sends:
 
-1. a **project map** — the full file tree with token counts plus the heads of key files (README, main config, entry point), so the model always sees the whole project's shape;
-2. the **most relevant files**, scored by type weight, recency, path depth, and query keywords, greedily packed into an adjustable token budget (default ≤120K). Files too large to send whole are excerpted **with their true line numbers kept** and omitted ranges marked — so evidence citations stay verifiable in the viewer.
+1. a **project map** — the full file tree with language-aware token counts, package roots marked (`◆ PACKAGE`, monorepo-aware: package.json / Cargo.toml / pyproject.toml / go.mod detected per directory), plus the heads of key files (READMEs, manifests, entry points — including the largest sub-packages');
+2. the **most relevant files**, scored by type weight, recency (file *and* directory), path depth, and query keywords — debug-worded questions boost test files, onboarding-worded questions boost docs — greedily packed into an adjustable token budget (default ≤120K). Files too large to send whole are excerpted **with their true line numbers kept** and omitted ranges marked — so evidence citations stay verifiable in the viewer.
 
-**FULL** mode (every checked file, whole) remains one click away, and the rail reports exactly what will be sent.
+**FULL** mode (every checked file, whole) remains one click away. `[ PREVIEW SEND ]` shows exactly what the next question will transmit — map, file list, whole-vs-excerpt, token estimates — computed by the same code path as the real request. Skipped files (binary / oversized / pattern) are summarized in the rail with a `[ REVIEW SKIPPED ]` modal that can pull individual files back in.
 
 ### Also on the bench
 
 - **Project memory** — save named projects (tree + selection + ignore patterns + context prefs, never contents). Folders opened via the File System Access API reload from disk in one click.
 - **Ignore patterns** — per-project glob-lite filters applied at ingest.
-- **Propose Action** *(experimental)* — the model may suggest read-only actions; `search` runs locally against in-memory files after a click, `open` opens the viewer, `git` commands are display + copy only. Nothing ever executes without approval.
+- **Propose Action** *(experimental)* — the model may suggest read-only actions: `search` (with optional path filter), `def` / `refs` symbol navigation, `dir` summaries, `recent` changes — all run locally against in-memory files after a click; `open` opens the viewer, `git` commands are display + copy only. Nothing ever executes without approval; shell is never executed.
 - **Exportable traces** — the whole session (answers, traces, and the actual cited lines) as Markdown or a self-contained zero-asset HTML page.
 - **Command palette** — `Ctrl-K` in the workbench, plus `Ctrl-E` export, `Ctrl-.` settings, `Ctrl-Shift-O` pick folder, `?` keymap.
 

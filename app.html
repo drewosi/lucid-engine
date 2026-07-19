@@ -352,7 +352,7 @@
       <div class="nav-status">
         <span class="ctx-readout" id="ctxreadout" aria-live="off">CTX ≈ <b>0</b> tokens · <b>0</b> files</span>
         <label for="modelsel" style="position:absolute;left:-9999px">Model</label>
-        <select class="modelsel" id="modelsel"></select>
+        <select class="modelsel" id="modelsel" title="Model for the selected provider — switch providers in settings"></select>
         <button class="btn-icon mono" id="setbtn" type="button" aria-expanded="false" aria-controls="drawer">SETTINGS</button>
         <button class="btn-mode mono" id="modebtn" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
       </div>
@@ -379,12 +379,12 @@
         <input type="file" id="filepick" multiple hidden aria-label="Pick files">
       </div>
       <p class="rail-note">// files are read into this tab's memory only. nothing is uploaded to us — <b>we run no servers</b>. selected files are sent to your chosen model provider with each question, under your key.</p>
-      <div id="budget" hidden>
+      <div id="budget" hidden title="Estimated tokens vs the model's context window — the estimate is language-aware (code counts denser than prose)">
         <div class="budget-bar" id="budgetbar"><i></i></div>
         <div class="budget-txt"><span id="budgettxt">≈ 0 tokens selected</span><span id="budgetmax"></span></div>
       </div>
       <div id="ctxmoderow" hidden>
-        <button class="btn-quiet acc" type="button" id="ctxmodebtn" aria-pressed="false">[ CONTEXT: FULL ]</button>
+        <button class="btn-quiet acc" type="button" id="ctxmodebtn" aria-pressed="false" title="SMART sends a project map + the most relevant files packed into a token budget; FULL sends every checked file whole">[ CONTEXT: FULL ]</button>
         <button class="btn-quiet acc" type="button" id="prevbtn" title="See exactly what the next question will send — map, files, token estimates">[ PREVIEW SEND ]</button>
       </div>
       <p class="rail-note" id="smartnote" hidden></p>
@@ -430,8 +430,8 @@
             <span class="kbd-hint">// enter to send · ctrl-k commands · ? keymap</span>
             <span>// AI output can be wrong or incomplete — verify before you rely on it</span>
             <span>// costs are estimates; your provider bills actuals — <a href="terms.html">terms</a> · <a href="privacy.html">privacy</a></span>
-            <button class="btn-quiet acc" type="button" id="exportmd">[ EXPORT MD ]</button>
-            <button class="btn-quiet acc" type="button" id="exporthtml">[ EXPORT HTML ]</button>
+            <button class="btn-quiet acc" type="button" id="exportmd" title="Download the session — answers, traces and the actual cited lines — as Markdown (Ctrl+E)">[ EXPORT MD ]</button>
+            <button class="btn-quiet acc" type="button" id="exporthtml" title="Download the session as a self-contained HTML page — zero external assets">[ EXPORT HTML ]</button>
           </div>
         </div>
       </div>
@@ -443,7 +443,7 @@
     <h2>SETTINGS</h2>
     <h3>PROVIDER</h3>
     <label for="provsel" style="position:absolute;left:-9999px">Model provider</label>
-    <select class="modelsel" id="provsel" style="width:100%;height:36px">
+    <select class="modelsel" id="provsel" style="width:100%;height:36px" title="Where requests go — directly from this browser, under your key. Each provider keeps its own key.">
       <option value="anthropic">ANTHROPIC</option>
       <option value="openai">OPENAI</option>
       <option value="custom">CUSTOM (OPENAI-COMPATIBLE)</option>
