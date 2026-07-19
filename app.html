@@ -159,6 +159,16 @@
   #ignorein { width: 100%; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; padding: 8px 10px; resize: vertical; box-sizing: border-box; }
   #ignorein:focus { outline: none; border-color: var(--accent); }
 
+  /* context send preview */
+  .prev-sec { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin: 14px 0 6px; }
+  .prev-note { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-2); letter-spacing: .04em; line-height: 1.6; margin: 0 0 4px; }
+  .prev-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--line); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-2); }
+  .prev-row .pp { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prev-row .pt { color: var(--ink-3); font-size: 10px; flex: none; }
+  .prev-row .pk { flex: none; border: 1px solid var(--line-strong); border-radius: 3px; padding: 0 6px; font-size: 9px; letter-spacing: .1em; color: var(--ink-3); }
+  .prev-row .pk.ex { border-color: var(--accent); color: var(--accent); }
+  #prevbody pre.mapview { background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px; font-size: 11px; line-height: 1.5; overflow-x: auto; white-space: pre; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; }
+
   /* skipped-file review */
   #skiplist { max-height: 46vh; overflow-y: auto; margin-top: 4px; }
   .skip-grp { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin: 14px 0 4px; }
@@ -372,6 +382,7 @@
       </div>
       <div id="ctxmoderow" hidden>
         <button class="btn-quiet acc" type="button" id="ctxmodebtn" aria-pressed="false">[ CONTEXT: FULL ]</button>
+        <button class="btn-quiet acc" type="button" id="prevbtn" title="See exactly what the next question will send — map, files, token estimates">[ PREVIEW SEND ]</button>
       </div>
       <p class="rail-note" id="smartnote" hidden></p>
       <div id="tree"></div>
@@ -511,6 +522,14 @@
     <div class="viewer" role="dialog" aria-modal="true" aria-label="Cited file">
       <div class="vh"><span id="vtitle">—</span><span class="rng" id="vrange"></span><button class="btn-icon mono" type="button" id="vclose">ESC CLOSE</button></div>
       <div class="vb" id="vbody" tabindex="0"></div>
+    </div>
+  </div>
+
+  <!-- CONTEXT SEND PREVIEW -->
+  <div class="veil" id="prevveil">
+    <div class="viewer" role="dialog" aria-modal="true" aria-label="Context send preview">
+      <div class="vh"><span>CONTEXT // SEND PREVIEW</span><span class="rng" id="prevstat"></span><button class="btn-icon mono" type="button" id="prevclose">ESC CLOSE</button></div>
+      <div class="vb" id="prevbody" tabindex="0" style="padding:14px 18px"></div>
     </div>
   </div>
 
@@ -1060,6 +1079,71 @@
   $('skipclose').addEventListener('click', closeSkipReview);
   skipveil.addEventListener('click', function (e) { if (e.target === skipveil) closeSkipReview(); });
 
+  /* ---- context send preview ----
+     Shows exactly what the next question will send, computed by the SAME
+     functions the request uses (buildProjectMap / packSmartContext /
+     assembleContext) — the preview cannot drift from reality. */
+  var prevveil = $('prevveil'), untrapPrev = null;
+  function openPreview() {
+    if (!files.size) { toast('Load a project first.'); return; }
+    var q = promptEl.value.trim();
+    var body = $('prevbody');
+    body.innerHTML = '';
+    function sec(txt) { var d = document.createElement('div'); d.className = 'prev-sec'; d.textContent = txt; body.appendChild(d); }
+    function note(txt) { var p = document.createElement('p'); p.className = 'prev-note'; p.textContent = txt; body.appendChild(p); }
+    function fileRow(path, tok, whole) {
+      var r = document.createElement('div');
+      r.className = 'prev-row';
+      var pk = document.createElement('span'); pk.className = 'pk' + (whole ? '' : ' ex'); pk.textContent = whole ? 'WHOLE' : 'EXCERPT';
+      var pp = document.createElement('span'); pp.className = 'pp'; pp.textContent = path; pp.title = path;
+      var pt = document.createElement('span'); pt.className = 'pt'; pt.textContent = '≈' + fmtTok(tok);
+      r.appendChild(pk); r.appendChild(pp); r.appendChild(pt);
+      body.appendChild(r);
+    }
+    var smart = ctxMode === 'smart';
+    if (smart) {
+      var map = buildProjectMap();
+      var packed = packSmartContext(q, getBudget());
+      var mapTok = estTokens(map);
+      $('prevstat').textContent = 'SMART · ' + packed.count + '/' + packed.total + ' FILES · ≈' + fmtTok(packed.tokens + mapTok) + ' TOK';
+      note(q ? '// packed for the question currently in the composer: “' + q.slice(0, 80) + (q.length > 80 ? '…' : '') + '”'
+             : '// no question typed — packed by importance and recency alone. type a question first for a query-aware preview.');
+      note('// budget ≈' + fmtTok(getBudget()) + ' tokens · instructions block adds ≈' + fmtTok(estTokens(INSTRUCTIONS)) + ' more.');
+      sec('BLOCK 1 — PROJECT MAP ≈' + fmtTok(mapTok) + ' TOK (cached between questions)');
+      var pre = document.createElement('pre');
+      pre.className = 'mapview';
+      pre.textContent = map.length > 20000 ? map.slice(0, 20000) + '\n… truncated for display — the full map is sent' : map;
+      body.appendChild(pre);
+      sec('BLOCK 2 — SELECTED FILES · ' + packed.count + ' OF ' + packed.total + ' · ≈' + fmtTok(packed.tokens) + ' TOK');
+      packed.included.forEach(function (it) { fileRow(it.p, it.tok, it.whole); });
+      if (!packed.included.length) note('// nothing fit the budget — raise it in settings.');
+    } else {
+      var sel = selectedTokens();
+      $('prevstat').textContent = 'FULL · ' + sel.count + ' FILES · ≈' + fmtTok(sel.tokens) + ' TOK';
+      note('// FULL mode sends every checked file whole, no map. switch to SMART in the rail for budgeted selection.');
+      note('// instructions block adds ≈' + fmtTok(estTokens(INSTRUCTIONS)) + ' more.');
+      sec('ALL CHECKED FILES — ' + sel.count + ' · ≈' + fmtTok(sel.tokens) + ' TOK');
+      var shown = 0;
+      sortedPaths().some(function (p) {
+        var f = files.get(p);
+        if (!f.checked) return false;
+        fileRow(p, f.tokens, true);
+        return ++shown >= 300;
+      });
+      if (sel.count > shown) note('// … ' + (sel.count - shown) + ' more files not listed here (all are sent).');
+    }
+    prevveil.classList.add('on');
+    untrapPrev = trap(prevveil.querySelector('.viewer'));
+    body.focus();
+  }
+  function closePreview() {
+    prevveil.classList.remove('on');
+    if (untrapPrev) { untrapPrev(); untrapPrev = null; }
+  }
+  $('prevbtn').addEventListener('click', openPreview);
+  $('prevclose').addEventListener('click', closePreview);
+  prevveil.addEventListener('click', function (e) { if (e.target === prevveil) closePreview(); });
+
   /* ============ SMART CONTEXT ENGINE ============
      Instead of sending every checked file whole (FULL mode), SMART mode:
        1. scores each file — type weight + recency + path depth + query relevance,
@@ -1216,22 +1300,23 @@
     }
 
     /* greedy pack: whole small files, excerpts for big ones */
-    var parts = [], used = 0, count = 0;
+    var parts = [], used = 0, count = 0, included = [];
     for (var k = 0; k < scored.length && count < SMART_MAX_FILES; k++) {
       var remaining = budgetTokens - used;
       if (remaining < 400) break;
-      var e = scored[k], body, tok;
+      var e = scored[k], body, tok, whole;
       if (e.f.tokens <= WHOLE_FILE_MAX && e.f.tokens <= remaining) {
-        body = numberLines(e.f.content, 1); tok = e.f.tokens;
+        body = numberLines(e.f.content, 1); tok = e.f.tokens; whole = true;
       } else {
         var ex = excerptFile(e.f, terms, Math.min(remaining, Math.max(1500, WHOLE_FILE_MAX / 2)));
         if (ex.tokens > remaining) continue;
-        body = ex.text; tok = ex.tokens;
+        body = ex.text; tok = ex.tokens; whole = false;
       }
       parts.push('═══ FILE: ' + e.p + ' ═══\n' + body);
+      included.push({ p: e.p, tok: tok, whole: whole });
       used += tok; count++;
     }
-    return { text: parts.join('\n\n'), count: count, total: paths.length, tokens: used };
+    return { text: parts.join('\n\n'), count: count, total: paths.length, tokens: used, included: included };
   }
 
   /* PROJECT MAP — full shape of the project in few tokens; cached until context changes */
@@ -2308,6 +2393,8 @@
     { g: 'CONTEXT', n: 'Pick project folder', k: 'ctrl⇧O', f: function () { $('dirbtn').click(); } },
     { g: 'CONTEXT', n: 'Pick files', k: '', f: function () { $('filepick').click(); } },
     { g: 'CONTEXT', n: 'Toggle smart / full context', k: '', f: function () { setCtxMode(ctxMode === 'smart' ? 'full' : 'smart'); toast('Context mode: ' + ctxMode.toUpperCase() + '.'); } },
+    { g: 'CONTEXT', n: 'Preview what will be sent', k: '', f: openPreview },
+    { g: 'CONTEXT', n: 'Review skipped files', k: '', f: function () { if (skippedFiles.length) openSkipReview(); else toast('No skipped files recorded.'); } },
     { g: 'CONTEXT', n: 'Select all files', k: '', f: function () { $('selall').click(); } },
     { g: 'CONTEXT', n: 'Select no files', k: '', f: function () { $('selnone').click(); } },
     { g: 'CONTEXT', n: 'Unload project', k: '', f: function () { $('clearctx').click(); } },
@@ -2394,6 +2481,7 @@
       if (palOv.classList.contains('on')) { palClose(); return; }
       if (keymapveil.classList.contains('on')) { keymapveil.classList.remove('on'); return; }
       if (viewveil.classList.contains('on')) { closeViewer(); return; }
+      if (prevveil.classList.contains('on')) { closePreview(); return; }
       if (skipveil.classList.contains('on')) { closeSkipReview(); return; }
       if (drawer.classList.contains('open')) { openDrawer(false); return; }
       if (rail.classList.contains('open')) { rail.classList.remove('open'); railbtn.setAttribute('aria-expanded', 'false'); return; }
