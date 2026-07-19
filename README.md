@@ -38,6 +38,10 @@ Medium and large codebases no longer blow the context window. In **SMART** mode 
 
 **FULL** mode (every checked file, whole) remains one click away. `[ PREVIEW SEND ]` shows exactly what the next question will transmit — map, file list, whole-vs-excerpt, token estimates — computed by the same code path as the real request. Skipped files (binary / oversized / pattern) are summarized in the rail with a `[ REVIEW SKIPPED ]` modal that can pull individual files back in.
 
+### Grounding — the engine feeds the model
+
+With `[ GROUND: ON ]` (default), every model question first runs Meridian's deterministic investigation locally, then attaches its **verified findings** — the exact `path:line` evidence — as a context block the model reasons on top of. The model is told to prefer citing those lines, so answers are anchored to what Meridian actually found rather than the model's guess. The grounding block is per-question and placed **after** the cached map/context, so Anthropic prompt caching of the stable prefix is preserved. It appears in `[ PREVIEW SEND ]` like everything else, and the toggle turns it off for a raw context-only request.
+
 ### Also on the bench
 
 - **Project intelligence engine** *(deterministic, no API)* — on load MERIDIAN builds a structured index of the project (symbols, import/importer edges, entry points, tests, configs, docs, packages) and surfaces a **PROJECT INTELLIGENCE** overview of the terrain. This index powers the LOCAL engine and is always available regardless of provider.

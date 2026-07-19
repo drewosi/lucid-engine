@@ -412,6 +412,7 @@
       </div>
       <div id="ctxmoderow" hidden>
         <button class="btn-quiet acc" type="button" id="ctxmodebtn" aria-pressed="false" title="SMART sends a project map + the most relevant files packed into a token budget; FULL sends every checked file whole">[ CONTEXT: FULL ]</button>
+        <button class="btn-quiet acc" type="button" id="groundbtn" aria-pressed="true" title="Run Meridian's deterministic investigation before each model question and send its verified findings (path:line evidence) as grounding. No effect in LOCAL mode.">[ GROUND: ON ]</button>
         <button class="btn-quiet acc" type="button" id="prevbtn" title="See exactly what the next question will send — map, files, token estimates">[ PREVIEW SEND ]</button>
       </div>
       <p class="rail-note" id="smartnote" hidden></p>
@@ -669,7 +670,7 @@
                           note: 'deterministic keyword/symbol search over the loaded files — no AI, no network, free. answers cite exact lines.' }
   };
   var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget', ignore: 'meridian.ignore',
-             provider: 'meridian.provider', okey: 'meridian.key.openai', ckey: 'meridian.key.custom', curl: 'meridian.custom.url', cmodel: 'meridian.custom.model' };
+             provider: 'meridian.provider', okey: 'meridian.key.openai', ckey: 'meridian.key.custom', curl: 'meridian.custom.url', cmodel: 'meridian.custom.model', ground: 'meridian.ground' };
 
   var curProvider = lsGet(LS.provider);
   if (!PROVIDERS[curProvider]) curProvider = 'anthropic';
@@ -1175,6 +1176,23 @@
       });
       if (sel.count > shown) note('// … ' + (sel.count - shown) + ' more files not listed here (all are sent).');
     }
+    /* grounding block — same helper the real request uses, so the preview cannot drift */
+    if (groundMode) {
+      var invB = buildInvestigationBlock(q);
+      if (invB) {
+        sec('GROUNDING — MERIDIAN INVESTIGATION · ' + invB.count + ' EVIDENCE ≈' + fmtTok(estTokens(invB.text)) + ' TOK (per question, uncached)');
+        note(q ? '// deterministic findings for the composed question — sent after the cached context so the model reasons on verified path:line evidence.'
+               : '// type a question to preview the grounding evidence this engine will attach.');
+        var gpre = document.createElement('pre');
+        gpre.className = 'mapview';
+        gpre.textContent = invB.text.length > 8000 ? invB.text.slice(0, 8000) + '\n… truncated for display — the full block is sent' : invB.text;
+        body.appendChild(gpre);
+      } else {
+        note('// GROUND is ON, but this question produced no deterministic evidence — no grounding block will be sent.');
+      }
+    } else {
+      note('// GROUND is OFF — no investigation block is attached. Toggle [ GROUND: ON ] in the rail to send verified evidence.');
+    }
     prevveil.classList.add('on');
     untrapPrev = trap(prevveil.querySelector('.viewer'));
     body.focus();
@@ -1197,6 +1215,7 @@
           evidence citations stay verifiable in the viewer.                      */
 
   var ctxMode = lsGet(LS.ctxmode) === 'smart' ? 'smart' : 'full';
+  var groundMode = lsGet(LS.ground) !== 'off'; /* Phase 5: ground model answers in the local investigation. default ON. */
   var SMART_DEFAULT_BUDGET = 120000; /* tokens per question, before user override */
   var WHOLE_FILE_MAX = 12000;        /* files above this many tokens get excerpted */
   var SMART_MAX_FILES = 60;          /* max files packed into one request */
@@ -1589,6 +1608,19 @@
   }
   ctxmodebtn.addEventListener('click', function () { setCtxMode(ctxMode === 'smart' ? 'full' : 'smart'); });
 
+  var groundbtn = $('groundbtn');
+  function setGround(on) {
+    groundMode = on; lsSet(LS.ground, on ? 'on' : 'off');
+    groundbtn.textContent = '[ GROUND: ' + (on ? 'ON' : 'OFF') + ' ]';
+    groundbtn.setAttribute('aria-pressed', String(on));
+    groundbtn.classList.toggle('on', on);
+  }
+  setGround(groundMode);
+  groundbtn.addEventListener('click', function () {
+    setGround(!groundMode);
+    toast(groundMode ? 'Grounding on — model answers build on the local investigation.' : 'Grounding off — model receives context only.');
+  });
+
   function maybeAutoSmart() {
     if (ctxMode === 'smart') return;
     if (MODELS[model].local) return; /* local mode sends nothing — smart/full is moot */
@@ -1837,6 +1869,7 @@
     '- steps: 1 to 6 items, in reasoning order.',
     '- evidence: each item MUST cite a file path exactly as it appears after "FILE:" in the context, with 1-indexed line numbers matching the numbered lines, and a verbatim quote of at most 120 characters. Never invent files or line numbers. A pure-reasoning step may have an empty evidence array.',
     '- Context may include a PROJECT MAP block (file tree + key-file heads) and a question-relevant subset of files. Excerpted files keep their true line numbers; gaps are marked "··· lines A–B omitted ···". Cite only line ranges you can actually see.',
+    '- Context may include a MERIDIAN INVESTIGATION block: deterministic findings (verified path:line citations) produced by Meridian\'s local engine before your turn. Treat these as high-confidence grounding — prefer building your reasoning on these exact files and lines, and reuse them in your evidence where relevant.',
     '- If the map shows a file you cannot see that would answer better, name it and suggest the user ask again mentioning it.',
     '- confidence: a number from 0 to 1 — your honest estimate.',
     '- Optionally include "actions": up to 4 items of {"kind":"search"|"def"|"refs"|"dir"|"recent"|"open"|"git","command":"…","filter":"optional path glob (search only)","why":"short reason"}. All are read-only and run only after the user clicks. Kinds — search: substring/regex over loaded files, optional "filter" narrows paths (* wildcard); def: find likely definition sites of a symbol; refs: find all references to a symbol; dir: summarize a loaded directory (command = its path); recent: list recently modified files (command = a count, e.g. "10"); open: a context file path worth inspecting; git: a read-only git command (status, diff, log, show, blame) for the user\'s own terminal. Never propose anything that writes, deletes, or installs.',
@@ -1860,26 +1893,57 @@
     return contextCache;
   }
 
+  /* Phase 5: the deterministic investigation, formatted as a context block so a
+     model reasons on top of Meridian's verified findings instead of raw files alone.
+     Pure (no DOM); reuses classifyIntent + runInvestigation. Returns null when the
+     question yields no evidence, so an empty block is never sent. */
+  function buildInvestigationBlock(q) {
+    if (!files.size) return null;
+    var inv;
+    try { inv = runInvestigation(q, classifyIntent(q)); } catch (e) { return null; }
+    var lines = [], seen = {};
+    (inv.steps || []).forEach(function (st) {
+      (st.evidence || []).forEach(function (ev) {
+        if (!ev || typeof ev.file !== 'string') return;
+        var key = ev.file + ':' + ev.startLine;
+        if (seen[key]) return; seen[key] = 1;
+        lines.push(ev.file + ':' + ev.startLine + (ev.endLine > ev.startLine ? '-' + ev.endLine : '') + (ev.quote ? '  « ' + ev.quote + ' »' : ''));
+      });
+    });
+    if (!lines.length) return null;
+    var lead = (inv.verdict && !inv.verdict.local)
+      ? 'This question needs interpretation; the items below are the deterministic terrain to reason over.'
+      : 'These are deterministic, verified findings — prefer citing them.';
+    var text = 'MERIDIAN INVESTIGATION — the local engine analyzed the project index for this question before your turn. '
+      + lead + ' Every citation was verified against the loaded files (path:line):\n\n'
+      + lines.slice(0, 40).join('\n');
+    return { text: text, count: lines.length };
+  }
+
   /* Builds the system blocks for one question, honoring the context mode.
-     Returns { blocks, note } — note is a short human-readable summary for the statusline. */
+     Returns { blocks, note } — note is a short human-readable summary for the statusline.
+     A grounding block (per-question, uncached) is always placed AFTER the cached map/ctx
+     block so Anthropic prompt caching of the stable prefix is preserved. */
   function buildContextBlocks(q) {
+    var invBlock = groundMode ? buildInvestigationBlock(q) : null;
+    var gNote = invBlock ? ' · GROUNDED ' + invBlock.count + ' EV' : '';
     if (ctxMode !== 'smart') {
       var ctx = assembleContext();
-      return {
-        blocks: ctx ? [{ type: 'text', text: ctx, cache_control: { type: 'ephemeral' } }] : [],
-        note: null
-      };
+      var fblocks = ctx ? [{ type: 'text', text: ctx, cache_control: { type: 'ephemeral' } }] : [];
+      if (invBlock) fblocks.push({ type: 'text', text: invBlock.text });
+      return { blocks: fblocks, note: invBlock ? ('GROUNDED ' + invBlock.count + ' EV') : null };
     }
     var map = buildProjectMap();
     if (!map) return { blocks: [], note: null };
     var packed = packSmartContext(q, getBudget());
-    /* cache the stable map block; the packed subset varies per question */
+    /* cache the stable map block; grounding + packed subset vary per question */
     var blocks = [{ type: 'text', text: map, cache_control: { type: 'ephemeral' } }];
+    if (invBlock) blocks.push({ type: 'text', text: invBlock.text });
     if (packed.text) {
       blocks.push({ type: 'text', text: 'SELECTED FILES — the subset most relevant to this question. ' + CTX_PREAMBLE + ' Excerpted files keep true line numbers; omitted ranges are marked.\n\n' + packed.text });
     }
     var mapTok = estTokens(map);
-    return { blocks: blocks, note: 'SMART CTX ' + packed.count + '/' + packed.total + ' FILES ≈ ' + fmtTok(packed.tokens + mapTok) + ' TOK' };
+    return { blocks: blocks, note: 'SMART CTX ' + packed.count + '/' + packed.total + ' FILES ≈ ' + fmtTok(packed.tokens + mapTok) + ' TOK' + gNote };
   }
 
   /* ============ COST ============ */
