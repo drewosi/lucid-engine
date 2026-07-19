@@ -16,21 +16,38 @@
 
 ## What MERIDIAN is now
 
-A **browser-only AI workbench**. You bring your own Anthropic API key, load a project folder into your browser's memory, and ask questions. Every answer streams back with a **trace** — the reasoning steps, pinned to the exact files and lines they stand on, as clickable evidence chips that open the cited file at the cited range.
+A **browser-only AI workbench**. You bring your own API key (Anthropic, OpenAI, or any OpenAI-compatible endpoint), load a project folder into your browser's memory, and ask questions. Every answer streams back with a **trace** — the reasoning steps, pinned to the exact files and lines they stand on, as clickable evidence chips that open the cited file at the cited range.
 
 The architecture *is* the privacy story:
 
 - **No backend.** The whole product is static files on GitHub Pages. There is no server of ours to receive your data.
-- **BYO key.** Requests go directly from the browser to `api.anthropic.com` under the user's own account (via Anthropic's CORS support). The key lives in localStorage only.
-- **Zero egress to us.** Files and conversations exist in tab memory and vanish on close.
-- **Prompt caching.** The loaded context is sent as a cached system block, so multi-turn conversations over a big project cost ~10× less on input after the first turn.
+- **BYO key.** Requests go directly from the browser to the chosen provider's API under the user's own account. Keys live in localStorage only, one per provider.
+- **Zero egress to us.** File contents and conversations exist in tab memory and vanish on close. Saved projects persist **metadata only** (file tree + settings) in IndexedDB.
+- **Prompt caching.** On Anthropic, the stable context block is cached, so multi-turn conversations over a big project cost ~10× less on input after the first turn.
+
+### The smart context engine
+
+Medium and large codebases no longer blow the context window. In **SMART** mode (auto-enabled when the loaded project exceeds ~70% of the model's context) each question sends:
+
+1. a **project map** — the full file tree with token counts plus the heads of key files (README, main config, entry point), so the model always sees the whole project's shape;
+2. the **most relevant files**, scored by type weight, recency, path depth, and query keywords, greedily packed into an adjustable token budget (default ≤120K). Files too large to send whole are excerpted **with their true line numbers kept** and omitted ranges marked — so evidence citations stay verifiable in the viewer.
+
+**FULL** mode (every checked file, whole) remains one click away, and the rail reports exactly what will be sent.
+
+### Also on the bench
+
+- **Project memory** — save named projects (tree + selection + ignore patterns + context prefs, never contents). Folders opened via the File System Access API reload from disk in one click.
+- **Ignore patterns** — per-project glob-lite filters applied at ingest.
+- **Propose Action** *(experimental)* — the model may suggest read-only actions; `search` runs locally against in-memory files after a click, `open` opens the viewer, `git` commands are display + copy only. Nothing ever executes without approval.
+- **Exportable traces** — the whole session (answers, traces, and the actual cited lines) as Markdown or a self-contained zero-asset HTML page.
+- **Command palette** — `Ctrl-K` in the workbench, plus `Ctrl-E` export, `Ctrl-.` settings, `Ctrl-Shift-O` pick folder, `?` keymap.
 
 Honest-labeling rule, upgraded: everything simulated or unbuilt says so on the surface — the landing page's trace console wears a `SIM` chip, unbuilt capabilities wear `ROADMAP` chips, and future pricing wears `PLANNED` chips with a "nothing can be purchased today" note.
 
 ## What's in here
 
 - **[index.html](index.html)** — the MERIDIAN landing page. Single dependency-free file: live Canvas particle field, command palette (`Ctrl-K`), simulated trace console (labeled SIM), FAQ, waitlist form, ceremony/daylight modes, debug panel (`d`).
-- **[app.html](app.html)** — the workbench. Also a single dependency-free file: key management, folder ingestion (drag-and-drop or picker, with binary sniffing and ignore-dir filters), token budgeting, streaming Anthropic Messages API calls, trace parsing/rendering with evidence chips + file viewer, session cost estimates. Loads **zero third-party scripts**.
+- **[app.html](app.html)** — the workbench. Also a single dependency-free file: multi-provider key management, folder ingestion (drag-and-drop, picker, or File System Access API — with binary sniffing, ignore-dir filters, and user ignore patterns), the smart context engine (scoring + project map + budgeted packing), IndexedDB project memory, streaming Anthropic/OpenAI-compatible API calls, trace parsing/rendering with evidence chips + file viewer, proposed-action cards, Markdown/HTML trace export, command palette, session cost estimates. Loads **zero third-party scripts**.
 - **[privacy.html](privacy.html)** / **[terms.html](terms.html)** — the legal layer, written for this exact architecture (no servers, BYO key, localStorage-only storage).
 - **[dna.html](dna.html)** — the Lucid Engine design system as a browsable page.
 - **[DESIGN-DNA.md](DESIGN-DNA.md)** — the full system spec (v1.2), including a paste-ready instruction block for AI design tools (§10).
