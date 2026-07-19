@@ -328,7 +328,7 @@
         <input type="file" id="dirpick" webkitdirectory multiple hidden aria-label="Pick a project folder">
         <input type="file" id="filepick" multiple hidden aria-label="Pick files">
       </div>
-      <p class="rail-note">// files are read into this tab's memory only. nothing is uploaded to us — <b>we run no servers</b>. selected files are sent to Anthropic with each question, under your key.</p>
+      <p class="rail-note">// files are read into this tab's memory only. nothing is uploaded to us — <b>we run no servers</b>. selected files are sent to your chosen model provider with each question, under your key.</p>
       <div id="budget" hidden>
         <div class="budget-bar" id="budgetbar"><i></i></div>
         <div class="budget-txt"><span id="budgettxt">≈ 0 tokens selected</span><span id="budgetmax"></span></div>
@@ -354,7 +354,7 @@
             <h2>The workbench is live.</h2>
             <p>Ask a question and the answer arrives with its trace — the reasoning steps, pinned to the exact files and lines they stand on.</p>
             <ol>
-              <li>Add your Anthropic API key in <b>SETTINGS</b> — it stays in this browser.</li>
+              <li>Add your API key in <b>SETTINGS</b> — Anthropic, OpenAI, or a custom endpoint. It stays in this browser.</li>
               <li>Load a project folder into <b>CONTEXT</b> (optional, recommended).</li>
               <li>Ask. Expand any answer's evidence chips to inspect the cited lines.</li>
             </ol>
@@ -385,15 +385,35 @@
   <!-- SETTINGS DRAWER -->
   <div id="drawer" role="dialog" aria-label="Settings" aria-modal="false">
     <h2>SETTINGS</h2>
-    <h3>ANTHROPIC API KEY</h3>
+    <h3>PROVIDER</h3>
+    <label for="provsel" style="position:absolute;left:-9999px">Model provider</label>
+    <select class="modelsel" id="provsel" style="width:100%;height:36px">
+      <option value="anthropic">ANTHROPIC</option>
+      <option value="openai">OPENAI</option>
+      <option value="custom">CUSTOM (OPENAI-COMPATIBLE)</option>
+    </select>
+    <p class="note" id="provnote"></p>
+    <div id="customcfg" hidden>
+      <div class="key-row" style="margin-top:8px">
+        <label for="custurl" style="position:absolute;left:-9999px">Custom endpoint base URL</label>
+        <input type="text" id="custurl" placeholder="base url, e.g. http://localhost:11434/v1" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="key-row" style="margin-top:8px">
+        <label for="custmodel" style="position:absolute;left:-9999px">Custom model id</label>
+        <input type="text" id="custmodel" placeholder="model id, e.g. llama3.3:70b" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="btn btn-hairline" type="button" id="custsave" style="margin-top:8px">Save endpoint</button>
+    </div>
+
+    <h3 id="keyhd">ANTHROPIC API KEY</h3>
     <div class="key-row">
-      <label for="keyin" style="position:absolute;left:-9999px">Anthropic API key</label>
+      <label for="keyin" style="position:absolute;left:-9999px">API key</label>
       <input type="password" id="keyin" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
       <button class="btn btn-hairline" type="button" id="savekey">Save</button>
     </div>
     <div id="keystate" aria-live="polite"></div>
-    <p class="note">// stored in this browser's localStorage only. it is sent to exactly one place: api.anthropic.com, with your requests. we never see it — there is no server on our side to see it with.</p>
-    <p class="note">// recommended: create a key in a dedicated Anthropic workspace with a monthly spend limit. any script running on a page can read its own origin's localStorage — this page loads zero third-party scripts, and keeping the blast radius small is still good practice.</p>
+    <p class="note">// stored in this browser's localStorage only, per provider. it is sent to exactly one place: the selected provider's API endpoint, with your requests. we never see it — there is no server on our side to see it with.</p>
+    <p class="note">// recommended: create a key in a dedicated workspace with a monthly spend limit. any script running on a page can read its own origin's localStorage — this page loads zero third-party scripts, and keeping the blast radius small is still good practice.</p>
     <button class="btn-quiet" type="button" id="clearkey">[ CLEAR KEY ]</button>
 
     <h3>MODEL</h3>
@@ -432,8 +452,8 @@
       <h2 id="fr-title">A real instrument, in free beta.</h2>
       <ul>
         <li><b>It runs entirely in your browser.</b> We operate no servers. Your files, questions, and key are never sent to us.</li>
-        <li><b>Bring your own Anthropic API key.</b> Requests go directly from this browser to Anthropic under <b>your</b> account — usage is billed by Anthropic to you, at their rates.</li>
-        <li><b>Your key stays local.</b> It is stored in this browser's localStorage and sent only to api.anthropic.com. Use a spend-limited key.</li>
+        <li><b>Bring your own API key.</b> Anthropic by default; OpenAI or a custom OpenAI-compatible endpoint in settings. Requests go directly from this browser to the provider under <b>your</b> account — usage is billed by the provider to you, at their rates.</li>
+        <li><b>Your key stays local.</b> It is stored in this browser's localStorage and sent only to the selected provider's API endpoint. Use a spend-limited key.</li>
         <li><b>AI output can be wrong.</b> Answers and traces are machine-generated and may be inaccurate or incomplete. They are not professional advice. Verify before you rely on them.</li>
       </ul>
       <p>By continuing you agree to the <a class="leglink" href="terms.html">Terms of Service</a> and acknowledge the <a class="leglink" href="privacy.html">Privacy Policy</a>.</p>
@@ -493,33 +513,74 @@
     return String(n);
   }
 
-  /* ============ MODELS ============ */
-  /* rates are USD per million tokens, approximate as of JUL 2026 — verify at anthropic.com/pricing */
-  var MODELS = {
-    'claude-sonnet-5':  { label: 'SONNET 5',  ctx: 1000000, rIn: 3.00, rOut: 15.00, rCacheW: 3.75, rCacheR: 0.30,
-                          note: 'claude-sonnet-5 — 1M-token context. best reasoning per dollar for traces.' },
-    'claude-haiku-4-5': { label: 'HAIKU 4.5', ctx: 200000,  rIn: 1.00, rOut: 5.00,  rCacheW: 1.25, rCacheR: 0.10,
-                          note: 'claude-haiku-4-5 — 200K-token context. fast and cheap; traces are shallower.' }
+  /* ============ PROVIDERS + MODELS ============ */
+  /* rates are USD per million tokens, approximate as of JUL 2026 — verify at your provider's pricing page */
+  var PROVIDERS = {
+    anthropic: { label: 'ANTHROPIC', keyLS: 'meridian.key', keyHint: 'sk-ant-…',
+                 note: '// requests go straight from this browser to api.anthropic.com. supports prompt caching.' },
+    openai:    { label: 'OPENAI', keyLS: 'meridian.key.openai', keyHint: 'sk-…',
+                 note: '// requests go straight from this browser to api.openai.com via the chat-completions API, streamed.' },
+    custom:    { label: 'CUSTOM', keyLS: 'meridian.key.custom', keyHint: 'api key (optional for local servers)',
+                 note: '// any OpenAI-compatible endpoint: ollama, LM Studio, vLLM, openrouter… the server must allow browser CORS. cost estimates are unavailable.' }
   };
-  var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget', ignore: 'meridian.ignore' };
+  var MODELS = {
+    'claude-sonnet-5':  { provider: 'anthropic', label: 'SONNET 5',  ctx: 1000000, rIn: 3.00, rOut: 15.00, rCacheW: 3.75, rCacheR: 0.30,
+                          note: 'claude-sonnet-5 — 1M-token context. best reasoning per dollar for traces.' },
+    'claude-haiku-4-5': { provider: 'anthropic', label: 'HAIKU 4.5', ctx: 200000,  rIn: 1.00, rOut: 5.00,  rCacheW: 1.25, rCacheR: 0.10,
+                          note: 'claude-haiku-4-5 — 200K-token context. fast and cheap; traces are shallower.' },
+    'gpt-5.1':          { provider: 'openai', label: 'GPT-5.1', ctx: 400000, rIn: 1.25, rOut: 10.00, rCacheW: 0, rCacheR: 0.125,
+                          note: 'gpt-5.1 — 400K-token context, OpenAI flagship.' },
+    'gpt-5-mini':       { provider: 'openai', label: 'GPT-5 MINI', ctx: 400000, rIn: 0.25, rOut: 2.00, rCacheW: 0, rCacheR: 0.025,
+                          note: 'gpt-5-mini — 400K-token context. cheap; traces are shallower.' }
+  };
+  var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget', ignore: 'meridian.ignore',
+             provider: 'meridian.provider', okey: 'meridian.key.openai', ckey: 'meridian.key.custom', curl: 'meridian.custom.url', cmodel: 'meridian.custom.model' };
+
+  var curProvider = lsGet(LS.provider);
+  if (!PROVIDERS[curProvider]) curProvider = 'anthropic';
+
+  /* the custom provider is one synthetic MODELS entry, refreshed from settings */
+  function syncCustomModel() {
+    var id = lsGet(LS.cmodel) || '';
+    MODELS.__custom = { provider: 'custom', label: (id || 'CUSTOM — SET MODEL').toUpperCase().slice(0, 24), ctx: 200000,
+                        rIn: 0, rOut: 0, rCacheW: 0, rCacheR: 0, unknownRates: true,
+                        note: (id ? id : 'custom endpoint') + ' — rates unknown; context window assumed 200K. configure under PROVIDER in settings.' };
+  }
+  syncCustomModel();
+
   var model = lsGet(LS.model);
   if (!MODELS[model]) model = 'claude-sonnet-5';
+  if (MODELS[model].provider !== curProvider) {
+    model = curProvider === 'custom' ? '__custom'
+      : Object.keys(MODELS).filter(function (id) { return MODELS[id].provider === curProvider; })[0];
+  }
 
   var modelsel = $('modelsel');
-  Object.keys(MODELS).forEach(function (id) {
-    var o = document.createElement('option');
-    o.value = id; o.textContent = MODELS[id].label;
-    modelsel.appendChild(o);
-  });
-  modelsel.value = model;
+  function syncModelSel() {
+    modelsel.innerHTML = '';
+    var ids = curProvider === 'custom' ? ['__custom']
+      : Object.keys(MODELS).filter(function (id) { return MODELS[id].provider === curProvider; });
+    ids.forEach(function (id) {
+      var o = document.createElement('option');
+      o.value = id; o.textContent = MODELS[id].label;
+      modelsel.appendChild(o);
+    });
+    if (ids.indexOf(model) === -1) model = ids[0];
+    modelsel.value = model;
+    lsSet(LS.model, model);
+    syncModelNote();
+  }
   function syncModelNote() {
-    $('modelnote').textContent = '// ' + MODELS[model].note + ' rates ≈ $' + MODELS[model].rIn + ' / $' + MODELS[model].rOut + ' per MTok in/out, billed by Anthropic.';
+    var m = MODELS[model];
+    $('modelnote').textContent = m.unknownRates
+      ? '// ' + m.note
+      : '// ' + m.note + ' rates ≈ $' + m.rIn + ' / $' + m.rOut + ' per MTok in/out, billed by ' + PROVIDERS[m.provider].label.toLowerCase() + '.';
   }
   modelsel.addEventListener('change', function () {
     model = modelsel.value; lsSet(LS.model, model);
     syncModelNote(); renderBudget(); maybeAutoSmart();
   });
-  syncModelNote();
+  syncModelSel();
 
   /* ============ MODE ============ */
   var modebtn = $('modebtn'), modebtn2 = $('modebtn2');
@@ -567,13 +628,46 @@
   /* ============ SETTINGS DRAWER + KEY ============ */
   var drawer = $('drawer'), setbtn = $('setbtn');
   function keyMasked(k) { return k.length > 12 ? k.slice(0, 10) + '…' + k.slice(-4) : '…' + k.slice(-4); }
+  function curKeyLS() { return PROVIDERS[curProvider].keyLS; }
   function syncKeyState() {
-    var k = lsGet(LS.key);
+    var k = lsGet(curKeyLS());
     $('keystate').innerHTML = k
       ? 'key held: <span class="on">' + esc(keyMasked(k)) + '</span> — in this browser only'
-      : 'no key saved. requests cannot run without one.';
+      : (curProvider === 'custom' ? 'no key saved — fine for local endpoints that need none.' : 'no key saved. requests cannot run without one.');
   }
-  syncKeyState();
+
+  /* provider switching */
+  var provsel = $('provsel');
+  provsel.value = curProvider;
+  function syncProviderUI() {
+    $('provnote').textContent = PROVIDERS[curProvider].note;
+    $('keyhd').textContent = PROVIDERS[curProvider].label + ' API KEY';
+    $('keyin').placeholder = PROVIDERS[curProvider].keyHint;
+    $('customcfg').hidden = curProvider !== 'custom';
+    if (curProvider === 'custom') {
+      $('custurl').value = lsGet(LS.curl) || '';
+      $('custmodel').value = lsGet(LS.cmodel) || '';
+    }
+    syncKeyState();
+    syncModelSel();
+    renderBudget();
+  }
+  provsel.addEventListener('change', function () {
+    curProvider = provsel.value;
+    lsSet(LS.provider, curProvider);
+    syncProviderUI();
+    maybeAutoSmart();
+  });
+  $('custsave').addEventListener('click', function () {
+    var u = $('custurl').value.trim().replace(/\/+$/, '');
+    var m = $('custmodel').value.trim();
+    if (u) lsSet(LS.curl, u); else lsDel(LS.curl);
+    if (m) lsSet(LS.cmodel, m); else lsDel(LS.cmodel);
+    syncCustomModel(); syncModelSel(); renderBudget();
+    toast(u && m ? 'Custom endpoint saved.' : 'Custom endpoint needs both a base URL and a model id.');
+  });
+  /* syncProviderUI() is called in the init block at the end of the script —
+     it touches the budget UI, which needs the context engine set up first. */
   function openDrawer(open) {
     drawer.classList.toggle('open', open);
     setbtn.setAttribute('aria-expanded', String(open));
@@ -583,17 +677,17 @@
   $('savekey').addEventListener('click', function () {
     var v = $('keyin').value.trim();
     if (!v) { toast('Paste a key first.'); return; }
-    if (v.indexOf('sk-ant-') !== 0) { toast('That does not look like an Anthropic key (sk-ant-…). Saved anyway.'); }
-    lsSet(LS.key, v);
+    if (curProvider === 'anthropic' && v.indexOf('sk-ant-') !== 0) { toast('That does not look like an Anthropic key (sk-ant-…). Saved anyway.'); }
+    lsSet(curKeyLS(), v);
     $('keyin').value = '';
     syncKeyState();
-    toast('Key saved — in this browser only.');
+    toast(PROVIDERS[curProvider].label + ' key saved — in this browser only.');
   });
   $('keyin').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); $('savekey').click(); }
   });
   $('clearkey').addEventListener('click', function () {
-    lsDel(LS.key); syncKeyState(); toast('Key removed from this browser.');
+    lsDel(curKeyLS()); syncKeyState(); toast(PROVIDERS[curProvider].label + ' key removed from this browser.');
   });
   $('clearall').addEventListener('click', function () {
     Object.keys(LS).forEach(function (k) { lsDel(LS[k]); });
@@ -1317,9 +1411,11 @@
   var spent = { in: 0, out: 0, cacheW: 0, cacheR: 0 };
   function renderCost() {
     var m = MODELS[model];
-    var usd = (spent.in * m.rIn + spent.out * m.rOut + spent.cacheW * m.rCacheW + spent.cacheR * m.rCacheR) / 1e6;
     if (spent.in + spent.out + spent.cacheW + spent.cacheR === 0) { $('costline').textContent = ''; return; }
-    $('costline').textContent = 'SESSION ≈ in ' + fmtTok(spent.in + spent.cacheW + spent.cacheR) + ' · out ' + fmtTok(spent.out) + ' · $' + (usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)) + ' est';
+    var head = 'SESSION ≈ in ' + fmtTok(spent.in + spent.cacheW + spent.cacheR) + ' · out ' + fmtTok(spent.out);
+    if (m.unknownRates) { $('costline').textContent = head + ' · rates unknown'; return; }
+    var usd = (spent.in * m.rIn + spent.out * m.rOut + spent.cacheW * m.rCacheW + spent.cacheR * m.rCacheR) / 1e6;
+    $('costline').textContent = head + ' · $' + (usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)) + ' est';
   }
 
   /* ============ RENDERING ============ */
@@ -1509,11 +1605,16 @@
     if (streaming) return;
     var q = promptEl.value.trim();
     if (!q) return;
-    var key = lsGet(LS.key);
-    if (!key) {
-      setStatus('NO KEY — add your Anthropic API key in settings', true);
+    var key = lsGet(curKeyLS()) || '';
+    if (!key && curProvider !== 'custom') {
+      setStatus('NO KEY — add your ' + PROVIDERS[curProvider].label + ' API key in settings', true);
       openDrawer(true);
-      toast('Add your Anthropic API key first — it stays in this browser.');
+      toast('Add your ' + PROVIDERS[curProvider].label + ' API key first — it stays in this browser.');
+      return;
+    }
+    if (curProvider === 'custom' && (!lsGet(LS.curl) || !lsGet(LS.cmodel))) {
+      setStatus('CUSTOM ENDPOINT NOT CONFIGURED — set base URL + model in settings', true);
+      openDrawer(true);
       return;
     }
     promptEl.value = '';
@@ -1528,7 +1629,7 @@
     if (status === 401) return 'KEY REJECTED (401) — check it in settings.';
     if (status === 403) return 'FORBIDDEN (403) — this key cannot use this model. ' + detail;
     if (status === 404) return 'MODEL NOT FOUND (404) — ' + detail;
-    if (status === 429) return 'RATE LIMITED (429) — slow down or raise your Anthropic limits. ' + detail;
+    if (status === 429) return 'RATE LIMITED (429) — slow down or raise your provider limits. ' + detail;
     if (status === 400 && /token|context|length/i.test(detail)) return 'CONTEXT TOO LARGE (400) — deselect some files and retry.';
     if (status === 400) return 'BAD REQUEST (400) — ' + detail;
     if (status === 529 || status >= 500) return 'PROVIDER OVERLOADED (' + status + ') — retry in a moment.';
@@ -1547,14 +1648,38 @@
     var cb = buildContextBlocks(q);
     setStatus('CORE REASONING — ' + MODELS[model].label + (cb.note ? ' · ' + cb.note : ''));
     var system = [{ type: 'text', text: INSTRUCTIONS }].concat(cb.blocks);
+    var msgs = history.concat([{ role: 'user', content: q }]);
+    var anthro = curProvider === 'anthropic';
 
-    var body = {
-      model: model,
-      max_tokens: 8192,
-      stream: true,
-      system: system,
-      messages: history.concat([{ role: 'user', content: q }])
-    };
+    /* provider adapters share one streaming pump below; only the request
+       shape and the SSE event schema differ */
+    var url, headers, body;
+    if (anthro) {
+      url = 'https://api.anthropic.com/v1/messages';
+      headers = {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      };
+      body = { model: model, max_tokens: 8192, stream: true, system: system, messages: msgs };
+    } else {
+      /* OpenAI-compatible: system blocks flatten to one system message; cache_control is Anthropic-only */
+      var sysTxt = system.map(function (b) { return b.text; }).join('\n\n');
+      headers = { 'content-type': 'application/json' };
+      if (key) headers.authorization = 'Bearer ' + key;
+      body = { messages: [{ role: 'system', content: sysTxt }].concat(msgs), stream: true };
+      if (curProvider === 'openai') {
+        url = 'https://api.openai.com/v1/chat/completions';
+        body.model = model;
+        body.max_completion_tokens = 8192;
+        body.stream_options = { include_usage: true };
+      } else {
+        url = (lsGet(LS.curl) || '').replace(/\/+$/, '') + '/chat/completions';
+        body.model = lsGet(LS.cmodel) || '';
+        body.max_tokens = 8192;
+      }
+    }
 
     function paint(final) {
       /* hide the trace fence (and any partial fence tail) while streaming */
@@ -1579,15 +1704,10 @@
       scrollEnd();
     }
 
-    fetch('https://api.anthropic.com/v1/messages', {
+    fetch(url, {
       method: 'POST',
       signal: aborter.signal,
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: headers,
       body: JSON.stringify(body)
     }).then(function (res) {
       if (!res.ok) {
@@ -1608,23 +1728,38 @@
             evt.split('\n').forEach(function (line) {
               if (line.indexOf('data:') === 0) data = line.slice(5).trim();
             });
-            if (!data) return;
+            if (!data || data === '[DONE]') return;
             var p;
             try { p = JSON.parse(data); } catch (e) { return; }
-            if (p.type === 'message_start' && p.message && p.message.usage) {
-              var u = p.message.usage;
-              spent.in += u.input_tokens || 0;
-              spent.cacheW += u.cache_creation_input_tokens || 0;
-              spent.cacheR += u.cache_read_input_tokens || 0;
-              renderCost();
-            } else if (p.type === 'content_block_delta' && p.delta) {
-              if (p.delta.type === 'text_delta') { raw += p.delta.text; paint(false); }
-              /* thinking_delta blocks are skipped — not rendered */
-            } else if (p.type === 'message_delta') {
-              if (p.usage) { spent.out += p.usage.output_tokens || 0; renderCost(); }
-              if (p.delta && p.delta.stop_reason) stopReason = p.delta.stop_reason;
-            } else if (p.type === 'error') {
-              var se = new Error('stream error'); se.streamMsg = (p.error && p.error.message) || 'stream error'; throw se;
+            if (anthro) {
+              if (p.type === 'message_start' && p.message && p.message.usage) {
+                var u = p.message.usage;
+                spent.in += u.input_tokens || 0;
+                spent.cacheW += u.cache_creation_input_tokens || 0;
+                spent.cacheR += u.cache_read_input_tokens || 0;
+                renderCost();
+              } else if (p.type === 'content_block_delta' && p.delta) {
+                if (p.delta.type === 'text_delta') { raw += p.delta.text; paint(false); }
+                /* thinking_delta blocks are skipped — not rendered */
+              } else if (p.type === 'message_delta') {
+                if (p.usage) { spent.out += p.usage.output_tokens || 0; renderCost(); }
+                if (p.delta && p.delta.stop_reason) stopReason = p.delta.stop_reason;
+              } else if (p.type === 'error') {
+                var se = new Error('stream error'); se.streamMsg = (p.error && p.error.message) || 'stream error'; throw se;
+              }
+            } else {
+              /* OpenAI-compatible chat-completions stream */
+              if (p.error) { var se2 = new Error('stream error'); se2.streamMsg = p.error.message || 'stream error'; throw se2; }
+              if (p.usage) {
+                spent.in += p.usage.prompt_tokens || 0;
+                spent.out += p.usage.completion_tokens || 0;
+                renderCost();
+              }
+              var c = p.choices && p.choices[0];
+              if (c) {
+                if (c.delta && typeof c.delta.content === 'string' && c.delta.content) { raw += c.delta.content; paint(false); }
+                if (c.finish_reason) stopReason = c.finish_reason === 'length' ? 'max_tokens' : c.finish_reason;
+              }
             }
           });
           return pump();
@@ -1667,7 +1802,7 @@
         line = '// stream error — ' + err.streamMsg;
         setStatus('STREAM ERROR', true);
       } else {
-        line = '// network unreachable — check your connection and any ad/tracker blocker. requests go straight from this browser to api.anthropic.com.';
+        line = '// network unreachable — check your connection and any ad/tracker blocker. requests go straight from this browser to the provider endpoint' + (curProvider === 'custom' ? ' — custom endpoints must allow browser CORS.' : '.');
         setStatus('NETWORK ERROR', true);
       }
       var d = document.createElement('div');
@@ -1692,6 +1827,7 @@
     }
   });
 
+  syncProviderUI();
   setCtxMode(ctxMode); /* also renders the budget */
   console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— free beta. zero egress to us; requests go browser → api.anthropic.com under your key.');
 })();
