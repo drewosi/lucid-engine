@@ -87,14 +87,25 @@
   .btn-mode, .btn-icon { background: transparent; border: 1px solid var(--line-strong); color: var(--ink-3); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; height: 32px; padding: 0 10px; border-radius: 3px; cursor: pointer; }
   .btn-mode:hover, .btn-icon:hover { border-color: var(--accent); color: var(--ink); }
   .btn-icon[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
-  @media (max-width: 720px) { .ctx-readout { display: none; } .wordmark .tag { display: none; } }
+  /* live session-cost chip in the nav */
+  .navcost { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px 0 10px; border-radius: 3px; cursor: pointer;
+    background: transparent; border: 1px solid var(--accent); color: var(--accent);
+    font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+  .navcost:hover { filter: brightness(1.12); }
+  .navcost .navcost-rst { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 22px; border-radius: 2px; color: var(--ink-3); font-size: 12px; }
+  .navcost .navcost-rst:hover { color: var(--err); background: var(--surface); }
+  /* skipped-file count badge on the rail toggle (visible when the rail is collapsed) */
+  #railbtn { position: relative; }
+  .railbadge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 7px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 9.5px; font-weight: 700; letter-spacing: 0; }
+  @media (max-width: 720px) { .ctx-readout { display: none; } .wordmark .tag { display: none; } #keysbtn { display: none; } }
   @media (max-width: 640px) {
     .nav-in { padding: 0 12px; gap: 8px; }
     .nav-status { gap: 8px; }
     .wordmark { font-size: 14px; }
     select.modelsel { padding: 0 4px; font-size: 10px; }
     .btn-icon { padding: 0 8px; }
-    #modebtn { display: none; }
+    #modebtn, #navprov { display: none; } /* provider quick-switch stays reachable in settings */
+    .navcost { font-size: 10px; padding: 0 2px 0 8px; }
   }
   @media (max-width: 380px) {
     .nav-in { padding: 0 8px; gap: 6px; }
@@ -193,6 +204,8 @@
   .msg-a { background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
   .msg-a .term-hd { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--line); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); }
   .msg-a .term-hd .chip { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 1px 8px; font-size: 9.5px; letter-spacing: .1em; }
+  .msg-a .term-hd .hdcopy { border: 1px solid var(--line-strong); background: transparent; color: var(--ink-3); border-radius: 3px; padding: 1px 8px; font-size: 9.5px; letter-spacing: .1em; cursor: pointer; font-family: inherit; }
+  .msg-a .term-hd .hdcopy:hover { border-color: var(--accent); color: var(--accent); }
   .msg-a .term-hd .chip.dim { border-color: var(--line-strong); color: var(--ink-3); }
   .msg-a .term-hd .chip.err { border-color: var(--err); color: var(--err); }
   .msg-a .bd { padding: 16px 18px 18px; font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.7; color: var(--ink); }
@@ -221,6 +234,10 @@
   .ev .src { color: var(--ink-3); }
   .ev.dead { opacity: .5; cursor: not-allowed; }
   .ev.dead:hover { border-color: var(--line-strong); color: var(--ink-2); }
+  .ev-cell { display: inline-flex; align-items: stretch; }
+  .ev-cell .ev { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .evcopy { border: 1px solid var(--line-strong); border-left: none; border-radius: 0 3px 3px 0; background: var(--surface); color: var(--ink-3); cursor: pointer; font-size: 11px; line-height: 1; padding: 0 7px; font-family: inherit; }
+  .evcopy:hover { border-color: var(--accent); color: var(--accent); }
   .linkcanvas { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
   .trace-wait { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; color: var(--ink-3); border-top: 1px dashed var(--line-strong); margin-top: 16px; padding-top: 14px; }
   .trace-wait i { display: inline-block; width: 8px; height: 8px; background: var(--accent); animation: flare 1s var(--ease-inout-engine) infinite alternate; margin-right: 8px; }
@@ -257,6 +274,8 @@
   .comp-note { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 9.5px; color: var(--ink-3); letter-spacing: .05em; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
   .comp-note a { color: var(--ink-2); border-bottom: 1px solid var(--line-strong); }
   .comp-note a:hover { color: var(--accent); border-color: var(--accent); }
+  .kbd-link { background: transparent; border: none; padding: 0; cursor: pointer; color: var(--ink-2); font-size: inherit; letter-spacing: inherit; border-bottom: 1px solid var(--line-strong); }
+  .kbd-link:hover { color: var(--accent); border-color: var(--accent); }
 
   /* ============ MODALS / DRAWER ============ */
   .veil { position: fixed; inset: 0; z-index: 150; display: none; align-items: center; justify-content: center; background: rgba(10, 11, 13, .6); padding: 20px; }
@@ -324,12 +343,26 @@
   #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 160; display: grid; gap: 8px; }
   .toast { width: 320px; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--line-strong); border-left: 2px solid var(--accent); border-radius: 3px; padding: 12px 14px; font-size: 13px; color: var(--ink); opacity: 0; transform: translateY(8px); transition: opacity var(--t-entrance) var(--ease-out-engine), transform var(--t-entrance) var(--ease-out-engine); }
   .toast.in { opacity: 1; transform: none; }
+  .toast.has-act { display: flex; align-items: center; gap: 12px; }
+  .toast.has-act .toast-msg { flex: 1; }
+  .toast-act { flex: none; background: transparent; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 4px 10px; font-size: 10.5px; letter-spacing: .08em; cursor: pointer; white-space: nowrap; }
+  .toast-act:hover { background: var(--accent); color: var(--accent-ink); }
 
   /* footer strip */
   footer.strip { flex: none; border-top: 1px solid var(--line); padding: 8px 20px; display: flex; flex-wrap: wrap; gap: 4px 24px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 9.5px; letter-spacing: .08em; color: var(--ink-3); }
   footer.strip a { border-bottom: 1px solid transparent; }
   footer.strip a:hover { color: var(--accent); }
   @media (max-width: 720px) { footer.strip span.opt { display: none; } }
+
+  /* first-run demo banner */
+  .demobanner { border: 1px solid var(--accent); border-radius: 4px; background: var(--surface); padding: 14px 16px; margin-bottom: 18px; display: grid; gap: 10px; }
+  .demobanner .dm { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; color: var(--accent); font-size: 10px; letter-spacing: .14em; }
+  .demobanner .dt { font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+  .demobanner .dt b { color: var(--ink); font-weight: 500; }
+  .demochips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .demochip { background: var(--paper); border: 1px solid var(--line-strong); color: var(--ink-2); border-radius: 3px; padding: 6px 11px; font-size: 11.5px; letter-spacing: .02em; cursor: pointer; font-family: inherit; }
+  .demochip:hover { border-color: var(--accent); color: var(--ink); }
+  .demoacts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 
   /* ============ PROJECT INTELLIGENCE OVERVIEW ============ */
   #overview { border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); padding: 16px 18px; margin-bottom: 22px; }
@@ -389,8 +422,19 @@
       <button class="btn-icon mono" id="railbtn" type="button" aria-expanded="false" aria-controls="rail">CONTEXT</button>
       <div class="nav-status">
         <span class="ctx-readout" id="ctxreadout" aria-live="off">CTX ≈ <b>0</b> tokens · <b>0</b> files</span>
+        <button class="navcost mono" id="navcost" type="button" hidden title="Estimated cost this session — click for the token breakdown. Reset with the ↺.">
+          <span id="navcostval">$0.00</span><span class="navcost-rst" id="navcostrst" role="button" aria-label="Reset session cost" title="Reset session cost to zero">↺</span>
+        </button>
+        <label for="navprov" style="position:absolute;left:-9999px">Provider</label>
+        <select class="modelsel" id="navprov" title="Quick-switch provider — each keeps its own key, no settings trip">
+          <option value="anthropic">ANTHROPIC</option>
+          <option value="openai">OPENAI</option>
+          <option value="custom">CUSTOM</option>
+          <option value="local">LOCAL</option>
+        </select>
         <label for="modelsel" style="position:absolute;left:-9999px">Model</label>
-        <select class="modelsel" id="modelsel" title="Model for the selected provider — switch providers in settings"></select>
+        <select class="modelsel" id="modelsel" title="Model for the selected provider — switch providers in the box to the left or in settings"></select>
+        <button class="btn-icon mono" id="keysbtn" type="button" title="Keyboard shortcuts (?)">? KEYS</button>
         <button class="btn-icon mono" id="setbtn" type="button" aria-expanded="false" aria-controls="drawer">SETTINGS</button>
         <button class="btn-mode mono" id="modebtn" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
       </div>
@@ -453,6 +497,7 @@
               <li>Ask. Expand any answer's evidence chips to inspect the cited lines.</li>
             </ol>
             <p class="mono" style="margin-top:16px">// zero egress to us: your files and questions travel only from this browser to Anthropic's API.</p>
+            <button class="btn btn-hairline" type="button" id="emptydemo" style="margin-top:14px">▶ Try a demo project — LOCAL, no key</button>
           </div>
         </div>
       </div>
@@ -467,7 +512,7 @@
             <button class="btn btn-hairline" type="button" id="stopbtn" hidden>Stop</button>
           </form>
           <div class="comp-note">
-            <span class="kbd-hint">// enter to send · ctrl-k commands · ? keymap</span>
+            <span class="kbd-hint">// enter to send · ctrl-k commands · <button type="button" class="kbd-link mono" id="keymaphint">? keymap</button></span>
             <span>// AI output can be wrong or incomplete — verify before you rely on it</span>
             <span>// costs are estimates; your provider bills actuals — <a href="terms.html">terms</a> · <a href="privacy.html">privacy</a></span>
             <button class="btn-quiet acc" type="button" id="exportmd" title="Download the session — answers, traces and the actual cited lines — as Markdown (Ctrl+E)">[ EXPORT MD ]</button>
@@ -531,7 +576,10 @@
     <p class="note">// one pattern per line; <b>*</b> matches anything (e.g. <b>*.test.ts</b>, <b>docs/*</b>). applied at ingest and saved with the project. lines starting with # are comments.</p>
     <label for="ignorein" style="position:absolute;left:-9999px">Ignore patterns</label>
     <textarea id="ignorein" rows="3" spellcheck="false" placeholder="*.test.ts&#10;docs/*"></textarea>
-    <button class="btn btn-hairline" type="button" id="saveignore" style="margin-top:8px">Apply</button>
+    <div class="key-row" style="margin-top:8px">
+      <button class="btn btn-hairline" type="button" id="suggestignore" title="Propose common junk-file patterns — grounded in the files you've loaded">Suggest</button>
+      <button class="btn btn-hairline" type="button" id="saveignore">Apply</button>
+    </div>
 
     <h3>DISPLAY</h3>
     <button class="btn-mode mono" id="modebtn2" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
@@ -556,8 +604,10 @@
         <li><b>AI output can be wrong.</b> Answers and traces are machine-generated and may be inaccurate or incomplete. They are not professional advice. Verify before you rely on them.</li>
       </ul>
       <p>By continuing you agree to the <a class="leglink" href="terms.html">Terms of Service</a> and acknowledge the <a class="leglink" href="privacy.html">Privacy Policy</a>.</p>
+      <p class="mono" style="font-size:11.5px;color:var(--ink-3);letter-spacing:.04em">// new here? the demo loads a tiny sample project and answers it with the deterministic <b style="color:var(--ink-2)">LOCAL</b> engine — no key, no AI, nothing leaves this tab. See the trace and evidence chips before you commit anything.</p>
       <div class="row">
-        <button class="btn btn-signal" type="button" id="fr-accept">I understand — begin</button>
+        <button class="btn btn-signal" type="button" id="fr-demo">▶ Try the demo — LOCAL, no key</button>
+        <button class="btn btn-hairline" type="button" id="fr-accept">I understand — begin</button>
         <a class="btn btn-hairline" href="index.html">Back to the front door</a>
       </div>
     </div>
@@ -611,6 +661,7 @@
         <tr><td><kbd>?</kbd></td><td>this keymap (outside inputs)</td></tr>
         <tr><td><kbd>esc</kbd></td><td>close the topmost layer</td></tr>
       </table>
+      <p class="note mono" style="color:var(--ink-3);font-size:11px;letter-spacing:.06em;margin:10px 0 0">// also: <kbd>ctrl k</kbd> palette lists every command · copy a single answer with <b style="color:var(--ink-2)">[ COPY ]</b> in its header · reset session cost from the <b style="color:var(--ink-2)">$</b> chip</p>
       <div class="row"><button class="btn btn-hairline" type="button" id="keymapclose">Close</button></div>
     </div>
   </div>
@@ -643,12 +694,43 @@
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
-  function toast(msg) {
+  function toast(msg, action) {
     var d = document.createElement('div');
-    d.className = 'toast'; d.textContent = msg;
+    d.className = 'toast';
+    var dismiss = function () { d.classList.remove('in'); setTimeout(function () { d.remove(); }, 400); };
+    var span = document.createElement('span');
+    span.className = 'toast-msg'; span.textContent = msg;
+    d.appendChild(span);
+    var life = 3600;
+    /* optional action button — backward-compatible: single-arg calls are unchanged */
+    if (action && action.label && typeof action.fn === 'function') {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'toast-act mono'; b.textContent = action.label;
+      b.addEventListener('click', function () { action.fn(); dismiss(); });
+      d.appendChild(b);
+      d.classList.add('has-act');
+      life = 6000; /* give the operator time to reach the action */
+    }
     $('toasts').appendChild(d);
     requestAnimationFrame(function () { d.classList.add('in'); });
-    setTimeout(function () { d.classList.remove('in'); setTimeout(function () { d.remove(); }, 400); }, 3600);
+    setTimeout(dismiss, life);
+  }
+  /* one clipboard path for every copy affordance — Clipboard API with a legacy fallback */
+  function copyText(str, okMsg) {
+    var done = function () { toast(okMsg || 'Copied to clipboard.'); };
+    var fail = function () { toast('Copy failed — your browser blocked clipboard access.'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(str).then(done, fail);
+      return;
+    }
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = str; ta.setAttribute('readonly', '');
+      ta.style.position = 'absolute'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select();
+      var ok = document.execCommand('copy'); document.body.removeChild(ta);
+      ok ? done() : fail();
+    } catch (e) { fail(); }
   }
   function fmtTok(n) {
     if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
@@ -787,6 +869,8 @@
   var provsel = $('provsel');
   provsel.value = curProvider;
   function syncProviderUI() {
+    provsel.value = curProvider;
+    $('navprov').value = curProvider;
     $('provnote').textContent = PROVIDERS[curProvider].note;
     $('keysec').hidden = curProvider === 'local';
     if (curProvider !== 'local') {
@@ -802,12 +886,18 @@
     syncModelSel();
     renderBudget();
   }
-  provsel.addEventListener('change', function () {
-    curProvider = provsel.value;
+  /* setProvider is the single switch point — reused by the drawer select, the
+     nav quick-switch, and the first-run demo. syncProviderUI keeps both selects
+     and the key/model UI in agreement. */
+  function setProvider(p) {
+    if (!PROVIDERS[p]) return;
+    curProvider = p;
     lsSet(LS.provider, curProvider);
     syncProviderUI();
     maybeAutoSmart();
-  });
+  }
+  provsel.addEventListener('change', function () { setProvider(provsel.value); });
+  $('navprov').addEventListener('change', function () { setProvider($('navprov').value); });
   $('custsave').addEventListener('click', function () {
     var u = $('custurl').value.trim().replace(/\/+$/, '');
     var m = $('custmodel').value.trim();
@@ -920,6 +1010,20 @@
     });
   }
 
+  /* surface reviewable skips as a badge on the rail toggle (for when the rail is
+     collapsed on mobile) and as a count on the [ REVIEW SKIPPED ] control */
+  function updateSkipBadge() {
+    var n = skippedFiles.length;
+    var rb = $('railbtn');
+    var badge = rb.querySelector('.railbadge');
+    if (n > 0) {
+      if (!badge) { badge = document.createElement('span'); badge.className = 'railbadge'; rb.appendChild(badge); }
+      badge.textContent = n > 99 ? '99+' : String(n);
+      rb.title = n + ' skipped file' + (n === 1 ? '' : 's') + ' — open CONTEXT to review';
+    } else if (badge) { badge.remove(); rb.removeAttribute('title'); }
+    var sr = $('skiprev');
+    if (sr) sr.textContent = n ? '[ REVIEW SKIPPED · ' + n + ' ]' : '[ REVIEW SKIPPED ]';
+  }
   function afterIngest() {
     applyPendingProject();
     contextDirty = true; mapDirty = true; indexDirty = true;
@@ -936,11 +1040,213 @@
     note.hidden = !s.length;
     if (s.length) note.textContent = '// ' + totSkipped + ' skipped: ' + s.join(' · ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files.';
     $('skiprevrow').hidden = !skippedFiles.length;
-    toast(files.size + ' file' + (files.size === 1 ? '' : 's') + ' loaded into memory' + (totSkipped ? ' · ' + totSkipped + ' skipped — review in the CONTEXT rail' : '') + '.');
+    updateSkipBadge();
+    var base = files.size + ' file' + (files.size === 1 ? '' : 's') + ' loaded into memory';
+    if (totSkipped && skippedFiles.length) toast(base + ' · ' + totSkipped + ' skipped.', { label: '[ REVIEW ]', fn: openSkipReview });
+    else toast(base + (totSkipped ? ' · ' + totSkipped + ' skipped.' : '.'));
     renderOverview();
     setStatus('CORE IDLE — ' + files.size + ' files in memory');
     maybeAutoSmart();
   }
+
+  /* ---- first-run demo: a tiny bundled project answered by the LOCAL engine, so a
+     new visitor sees a real trace + evidence chips before committing an API key.
+     File contents are line arrays (no template literals / backticks) to stay robust
+     inside this single inline script. ---- */
+  var SAMPLE_PROJECT = {
+    'README.md': [
+      '# todo-api',
+      '',
+      'A tiny in-memory todo REST API — the sample project for MERIDIAN\'s demo.',
+      '',
+      '## Run',
+      '',
+      '    npm install',
+      '    npm start',
+      '',
+      'The server boots from src/index.js, listens on the PORT from src/config.js,',
+      'and mounts every route under API_BASE_URL.',
+      '',
+      '## Layout',
+      '',
+      '- src/index.js  — entry point; boots the server',
+      '- src/server.js — HTTP routes, wired to the store',
+      '- src/store.js  — in-memory todo store (addTodo, listTodos, removeTodo)',
+      '- src/config.js — API_BASE_URL and PORT',
+      '- src/util.js   — small response helpers',
+      '- test/store.test.js — store unit tests'
+    ].join('\n'),
+    'package.json': [
+      '{',
+      '  "name": "todo-api",',
+      '  "version": "1.0.0",',
+      '  "description": "A tiny in-memory todo REST API (MERIDIAN demo project).",',
+      '  "main": "src/index.js",',
+      '  "scripts": {',
+      '    "start": "node src/index.js",',
+      '    "test": "node test/store.test.js"',
+      '  }',
+      '}'
+    ].join('\n'),
+    'src/config.js': [
+      '// Central configuration for the todo API.',
+      'const PORT = process.env.PORT || 3000;',
+      '',
+      '// The base URL every route is mounted under.',
+      'const API_BASE_URL = process.env.API_BASE_URL || ("http://localhost:" + PORT + "/api/v1");',
+      '',
+      'module.exports = { PORT, API_BASE_URL };'
+    ].join('\n'),
+    'src/store.js': [
+      '// In-memory todo store. No database — state lives for the process lifetime.',
+      'let todos = [];',
+      'let nextId = 1;',
+      '',
+      'function addTodo(title) {',
+      '  const todo = { id: nextId++, title: title, done: false };',
+      '  todos.push(todo);',
+      '  return todo;',
+      '}',
+      '',
+      'function listTodos() {',
+      '  return todos.slice();',
+      '}',
+      '',
+      'function removeTodo(id) {',
+      '  const before = todos.length;',
+      '  todos = todos.filter(function (t) { return t.id !== id; });',
+      '  return todos.length < before;',
+      '}',
+      '',
+      'module.exports = { addTodo, listTodos, removeTodo };'
+    ].join('\n'),
+    'src/server.js': [
+      'const http = require("http");',
+      'const { API_BASE_URL } = require("./config");',
+      'const { addTodo, listTodos } = require("./store");',
+      'const { json } = require("./util");',
+      '',
+      '// Build the HTTP server. Routes are mounted under API_BASE_URL.',
+      'function createServer() {',
+      '  return http.createServer(function (req, res) {',
+      '    if (req.url === API_BASE_URL + "/todos" && req.method === "GET") {',
+      '      return json(res, 200, listTodos());',
+      '    }',
+      '    if (req.url === API_BASE_URL + "/todos" && req.method === "POST") {',
+      '      return json(res, 201, addTodo("new todo"));',
+      '    }',
+      '    json(res, 404, { error: "not found" });',
+      '  });',
+      '}',
+      '',
+      'module.exports = { createServer };'
+    ].join('\n'),
+    'src/util.js': [
+      '// Small response helpers shared across routes.',
+      'function json(res, status, body) {',
+      '  res.writeHead(status, { "Content-Type": "application/json" });',
+      '  res.end(JSON.stringify(body));',
+      '}',
+      '',
+      'module.exports = { json };'
+    ].join('\n'),
+    'src/index.js': [
+      '// Entry point: boot the todo API server.',
+      'const { createServer } = require("./server");',
+      'const { PORT, API_BASE_URL } = require("./config");',
+      '',
+      'const server = createServer();',
+      'server.listen(PORT, function () {',
+      '  console.log("todo-api listening — API at " + API_BASE_URL);',
+      '});'
+    ].join('\n'),
+    'test/store.test.js': [
+      'const assert = require("assert");',
+      'const { addTodo, listTodos, removeTodo } = require("../src/store");',
+      '',
+      '// addTodo appends and returns the new record',
+      'const a = addTodo("write docs");',
+      'assert.strictEqual(a.done, false);',
+      'assert.ok(listTodos().length >= 1);',
+      '',
+      '// removeTodo drops it',
+      'assert.strictEqual(removeTodo(a.id), true);',
+      'console.log("store tests passed");'
+    ].join('\n')
+  };
+  var DEMO_QUESTIONS = ['where is API_BASE_URL defined?', 'what imports store.js?', 'show the entry points'];
+  var demoMode = false;
+
+  function loadSampleProject() {
+    files.clear();
+    skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
+    skippedFiles.length = 0;
+    Object.keys(SAMPLE_PROJECT).forEach(function (path) {
+      var text = SAMPLE_PROJECT[path];
+      files.set(path, {
+        content: text,
+        lines: text.split('\n').length,
+        tokens: estTokens(text, path),
+        mtime: 0,
+        base: staticScore(path),
+        checked: true
+      });
+    });
+    afterIngest(); /* same post-ingest path as a real folder load */
+  }
+
+  function renderDemoBanner() {
+    if ($('demobanner')) return;
+    var b = document.createElement('div');
+    b.id = 'demobanner'; b.className = 'demobanner';
+    var top = document.createElement('div');
+    top.innerHTML = '<span class="dm mono">DEMO · LOCAL ENGINE</span>';
+    var dt = document.createElement('div');
+    dt.className = 'dt';
+    dt.innerHTML = 'A sample <b>todo-api</b> project is loaded and answered by the deterministic <b>LOCAL</b> engine — no key, no AI, nothing leaves this tab. Try a question, then load your own project when ready.';
+    b.appendChild(top); b.appendChild(dt);
+    var chips = document.createElement('div'); chips.className = 'demochips';
+    DEMO_QUESTIONS.forEach(function (q) {
+      var c = document.createElement('button');
+      c.type = 'button'; c.className = 'demochip mono'; c.textContent = q;
+      c.addEventListener('click', function () { promptEl.value = q; $('askform').requestSubmit(); });
+      chips.appendChild(c);
+    });
+    b.appendChild(chips);
+    var acts = document.createElement('div'); acts.className = 'demoacts';
+    var load = document.createElement('button');
+    load.type = 'button'; load.className = 'btn-quiet acc'; load.textContent = '[ LOAD YOUR OWN → ]';
+    load.addEventListener('click', exitDemo);
+    var dis = document.createElement('button');
+    dis.type = 'button'; dis.className = 'btn-quiet'; dis.textContent = '[ dismiss ]';
+    dis.addEventListener('click', function () { b.remove(); });
+    acts.appendChild(load); acts.appendChild(dis);
+    b.appendChild(acts);
+    convoIn.insertBefore(b, convoIn.firstChild);
+  }
+
+  function exitDemo() {
+    demoMode = false;
+    var b = $('demobanner'); if (b) b.remove();
+    $('clearctx').click(); /* unloads the sample project (and toasts) */
+    if (window.innerWidth <= 860 && !rail.classList.contains('open')) { rail.classList.add('open'); railbtn.setAttribute('aria-expanded', 'true'); }
+    var dz2 = $('dropzone'); if (dz2 && dz2.scrollIntoView) dz2.scrollIntoView({ block: 'nearest' });
+  }
+
+  function startDemo() {
+    /* accept the same terms record the normal path writes, then hand the demo to LOCAL */
+    lsSet(LS.accepted, JSON.stringify({ ts: Date.now(), version: 1 }));
+    firstveil.classList.remove('on');
+    if (untrapFR) untrapFR();
+    demoMode = true;
+    setProvider('local');
+    loadSampleProject();
+    renderDemoBanner();
+    promptEl.value = DEMO_QUESTIONS[0];
+    $('askform').requestSubmit(); /* LOCAL engine answers instantly — trace + evidence chips */
+  }
+  $('fr-demo').addEventListener('click', startDemo);
+  $('emptydemo').addEventListener('click', startDemo);
 
   var dz = $('dropzone');
   ['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('hot'); }); });
@@ -1062,6 +1368,7 @@
     renderOverview();
     $('skipnote').hidden = true;
     $('skiprevrow').hidden = true;
+    updateSkipBadge();
     toast('Project unloaded from memory.');
   });
 
@@ -1105,6 +1412,7 @@
                 renderTree(); renderBudget();
                 row.remove();
                 $('skiprevrow').hidden = !skippedFiles.length;
+                updateSkipBadge();
                 toast('“' + s.path + '” included in context.');
               } else {
                 inc.disabled = false;
@@ -1870,6 +2178,39 @@
     if (removed) { contextDirty = true; mapDirty = true; indexDirty = true; renderTree(); renderBudget(); }
     toast(removed ? removed + ' loaded file' + (removed === 1 ? '' : 's') + ' removed by patterns.' : 'Ignore patterns saved.');
   });
+  /* one-click junk-glob suggestions. Directory-level junk (node_modules, dist, .git…)
+     is already covered by IGNORE_DIRS, so these target file-level noise the user would
+     otherwise type by hand. When a project is loaded we only propose globs that actually
+     match something present — grounded, not a wall of boilerplate. */
+  var IGNORE_SUGGESTIONS = ['*.min.js', '*.min.css', '*.map', '*.lock', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', '*.log', '.env', '*.snap', '__snapshots__/*', '*.wasm', '*.tsbuildinfo'];
+  function globTestRe(glob) {
+    var re = glob.replace(/[.+^${}()|[\]\\?]/g, '\\$&').replace(/\*/g, '.*');
+    try { return new RegExp('(^|/)' + re + '($|/)', 'i'); } catch (e) { return null; }
+  }
+  function suggestIgnore() {
+    var existing = {};
+    getIgnoreText().split('\n').forEach(function (l) { l = l.trim(); if (l) existing[l] = 1; });
+    var haveFiles = files.size > 0 || skippedFiles.length > 0;
+    var paths = haveFiles ? Array.from(files.keys()).concat(skippedFiles.map(function (s) { return s.path; })) : null;
+    var add = [];
+    IGNORE_SUGGESTIONS.forEach(function (g) {
+      if (existing[g]) return;
+      if (paths) {
+        var re = globTestRe(g);
+        if (!re || !paths.some(function (p) { return re.test(p); })) return; /* grounded: only globs that hit a real path */
+      }
+      add.push(g);
+    });
+    if (!add.length) {
+      toast(haveFiles ? 'No common junk files found to suggest.' : 'Common patterns are already in the list.');
+      return;
+    }
+    var cur = getIgnoreText().replace(/\s*$/, '');
+    $('ignorein').value = (cur ? cur + '\n' : '') + add.join('\n');
+    $('ignorein').focus();
+    toast(add.length + ' pattern' + (add.length === 1 ? '' : 's') + ' suggested — review, then Apply.', { label: '[ APPLY ]', fn: function () { $('saveignore').click(); } });
+  }
+  $('suggestignore').addEventListener('click', suggestIgnore);
   setIgnoreText(lsGet(LS.ignore) || '');
   renderProjects();
 
@@ -2119,12 +2460,33 @@
   var spent = { in: 0, out: 0, cacheW: 0, cacheR: 0 };
   function renderCost() {
     var m = MODELS[model];
-    if (spent.in + spent.out + spent.cacheW + spent.cacheR === 0) { $('costline').textContent = ''; return; }
+    var navc = $('navcost'), navv = $('navcostval');
+    if (spent.in + spent.out + spent.cacheW + spent.cacheR === 0) {
+      $('costline').textContent = '';
+      if (navc) navc.hidden = true;
+      return;
+    }
     var head = 'SESSION ≈ in ' + fmtTok(spent.in + spent.cacheW + spent.cacheR) + ' · out ' + fmtTok(spent.out);
-    if (m.unknownRates) { $('costline').textContent = head + ' · rates unknown'; return; }
+    var breakdown = 'in ' + fmtTok(spent.in) + ' · cache-write ' + fmtTok(spent.cacheW) + ' · cache-read ' + fmtTok(spent.cacheR) + ' · out ' + fmtTok(spent.out);
+    if (navc) navc.hidden = false;
+    if (m.unknownRates) {
+      $('costline').textContent = head + ' · rates unknown';
+      if (navc) { navv.textContent = '≈ ' + fmtTok(spent.in + spent.cacheW + spent.cacheR) + ' tok'; navc.title = 'Rates unknown for ' + m.label + '. Tokens this session — ' + breakdown + '. ↺ resets.'; }
+      return;
+    }
     var usd = (spent.in * m.rIn + spent.out * m.rOut + spent.cacheW * m.rCacheW + spent.cacheR * m.rCacheR) / 1e6;
-    $('costline').textContent = head + ' · $' + (usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)) + ' est';
+    var usdStr = '$' + (usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2));
+    $('costline').textContent = head + ' · ' + usdStr + ' est';
+    if (navc) { navv.textContent = usdStr; navc.title = usdStr + ' estimated this session (' + m.label + ') — ' + breakdown + '. Your provider bills actuals. ↺ resets.'; }
   }
+  /* cost accumulates across clearConversation() by design — this is the explicit reset */
+  function resetCost() {
+    spent.in = spent.out = spent.cacheW = spent.cacheR = 0;
+    renderCost();
+    toast('Session cost reset to zero.');
+  }
+  $('navcost').addEventListener('click', function () { openDrawer(true); });
+  $('navcostrst').addEventListener('click', function (e) { e.stopPropagation(); resetCost(); });
 
   /* ============ RENDERING ============ */
   function renderRich(raw) {
@@ -2162,6 +2524,22 @@
       + '<div class="bd"><div class="txt"></div></div>';
     convoIn.appendChild(d); scrollEnd();
     return d;
+  }
+  /* per-answer copy — a [ COPY ] control in the message header that copies that one
+     exchange as Markdown (same formatter as the full export). idx is the transcript
+     index; transcript and the DOM are cleared together, so the index never goes stale. */
+  function attachCopy(msgEl, idx) {
+    var hd = msgEl.querySelector('.term-hd');
+    if (!hd) return;
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'hdcopy mono'; b.textContent = '[ COPY ]';
+    b.title = 'Copy this answer, its trace and cited lines as Markdown';
+    b.addEventListener('click', function () {
+      var x = transcript[idx];
+      if (!x) { toast('Nothing to copy yet.'); return; }
+      copyText(exchangeMarkdown(x, idx), 'Answer copied as Markdown.');
+    });
+    hd.appendChild(b);
   }
 
   /* ============ TRACE ============ */
@@ -2204,11 +2582,38 @@
     else { btn.disabled = true; btn.title = 'File is not in the loaded context — the citation cannot be verified.'; }
     return btn;
   }
+  /* copy one citation as `path:a–b` + its quote — for pasting into an issue or a doc */
+  function evCopyBtn(ev) {
+    if (!ev || typeof ev.file !== 'string') return null;
+    var a = Math.max(1, parseInt(ev.startLine, 10) || 1);
+    var b = Math.max(a, parseInt(ev.endLine, 10) || a);
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'evcopy mono'; btn.textContent = '⧉';
+    btn.title = 'Copy this citation (path:line' + (ev.quote ? ' + quote' : '') + ')';
+    btn.setAttribute('aria-label', 'Copy citation ' + ev.file + ':' + a + '–' + b);
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var txt = '`' + ev.file + ':' + a + '–' + b + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : '');
+      copyText(txt, 'Citation copied.');
+    });
+    return btn;
+  }
   function evidenceChipRow(evList, max) {
     var row = document.createElement('div');
     row.className = 'ev-row';
     var n = 0, lim = max || 8;
-    (evList || []).forEach(function (ev) { if (n >= lim) return; var c = evidenceChip(ev); if (c) { row.appendChild(c); n++; } });
+    (evList || []).forEach(function (ev) {
+      if (n >= lim) return;
+      var c = evidenceChip(ev);
+      if (!c) return;
+      var cell = document.createElement('span');
+      cell.className = 'ev-cell';
+      cell.appendChild(c);
+      var cp = evCopyBtn(ev);
+      if (cp) cell.appendChild(cp);
+      row.appendChild(cell);
+      n++;
+    });
     return row;
   }
 
@@ -2544,49 +2949,54 @@
     return out.join('\n');
   }
 
+  /* one exchange as Markdown — shared by the full-session export and the per-answer
+     [ COPY ] button so both stay identical. i is the 0-based index within the session. */
+  function exchangeMarkdown(x, i) {
+    var L = [];
+    L.push('## ' + (i + 1) + '. ' + x.q.replace(/\s+/g, ' ').slice(0, 120));
+    L.push('');
+    L.push('`' + x.model + ' · ' + x.provider + ' · ' + new Date(x.ts).toISOString() + '`');
+    L.push('');
+    L.push('> ' + x.q.replace(/\n/g, '\n> '));
+    L.push('');
+    L.push(x.answer);
+    L.push('');
+    if (x.trace && Array.isArray(x.trace.steps)) {
+      L.push('### Trace' + (typeof x.trace.confidence === 'number' ? ' — confidence ' + x.trace.confidence.toFixed(2) : ''));
+      L.push('');
+      x.trace.steps.forEach(function (st, n) {
+        L.push((n + 1) + '. **' + String(st.action || 'step') + '**' + (st.note ? ' — ' + String(st.note) : ''));
+        (Array.isArray(st.evidence) ? st.evidence : []).forEach(function (ev) {
+          if (!ev || typeof ev.file !== 'string') return;
+          L.push('   - `' + ev.file + ':' + ev.startLine + '–' + ev.endLine + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : ''));
+          var ex = evExcerpt(ev);
+          if (ex) {
+            L.push('');
+            L.push('     ```');
+            ex.split('\n').forEach(function (l) { L.push('     ' + l); });
+            L.push('     ```');
+            L.push('');
+          }
+        });
+      });
+      if (Array.isArray(x.trace.actions) && x.trace.actions.length) {
+        L.push('');
+        L.push('### Proposed actions (never executed by meridian)');
+        x.trace.actions.forEach(function (a) {
+          if (a && a.command) L.push('- `' + String(a.command) + '`' + (a.why ? ' — ' + String(a.why) : ''));
+        });
+      }
+      L.push('');
+    } else {
+      L.push('_trace unavailable for this exchange_');
+      L.push('');
+    }
+    return L.join('\n');
+  }
   function buildMarkdown() {
     var L = ['# MERIDIAN session trace', '',
       '_exported ' + new Date().toISOString() + ' — AI output can be wrong or incomplete; verify before relying on it._', ''];
-    transcript.forEach(function (x, i) {
-      L.push('## ' + (i + 1) + '. ' + x.q.replace(/\s+/g, ' ').slice(0, 120));
-      L.push('');
-      L.push('`' + x.model + ' · ' + x.provider + ' · ' + new Date(x.ts).toISOString() + '`');
-      L.push('');
-      L.push('> ' + x.q.replace(/\n/g, '\n> '));
-      L.push('');
-      L.push(x.answer);
-      L.push('');
-      if (x.trace && Array.isArray(x.trace.steps)) {
-        L.push('### Trace' + (typeof x.trace.confidence === 'number' ? ' — confidence ' + x.trace.confidence.toFixed(2) : ''));
-        L.push('');
-        x.trace.steps.forEach(function (st, n) {
-          L.push((n + 1) + '. **' + String(st.action || 'step') + '**' + (st.note ? ' — ' + String(st.note) : ''));
-          (Array.isArray(st.evidence) ? st.evidence : []).forEach(function (ev) {
-            if (!ev || typeof ev.file !== 'string') return;
-            L.push('   - `' + ev.file + ':' + ev.startLine + '–' + ev.endLine + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : ''));
-            var ex = evExcerpt(ev);
-            if (ex) {
-              L.push('');
-              L.push('     ```');
-              ex.split('\n').forEach(function (l) { L.push('     ' + l); });
-              L.push('     ```');
-              L.push('');
-            }
-          });
-        });
-        if (Array.isArray(x.trace.actions) && x.trace.actions.length) {
-          L.push('');
-          L.push('### Proposed actions (never executed by meridian)');
-          x.trace.actions.forEach(function (a) {
-            if (a && a.command) L.push('- `' + String(a.command) + '`' + (a.why ? ' — ' + String(a.why) : ''));
-          });
-        }
-        L.push('');
-      } else {
-        L.push('_trace unavailable for this exchange_');
-        L.push('');
-      }
-    });
+    transcript.forEach(function (x, i) { L.push(exchangeMarkdown(x, i)); });
     return L.join('\n');
   }
 
@@ -2857,6 +3267,7 @@
         history.push({ role: 'user', content: q });
         history.push({ role: 'assistant', content: parsed.answer || '(empty)' });
         transcript.push({ q: q, answer: parsed.answer || '(empty)', trace: parsed.trace, model: MODELS[model].label, provider: PROVIDERS[curProvider].label, ts: Date.now() });
+        attachCopy(msgEl, transcript.length - 1);
         setStatus('CORE IDLE — response complete');
         scrollEnd();
       }
@@ -2872,6 +3283,7 @@
           history.push({ role: 'user', content: q });
           history.push({ role: 'assistant', content: pa.answer || '(stopped)' });
           transcript.push({ q: q, answer: (pa.answer || '(stopped)') + '\n\n_(stopped by operator)_', trace: pa.trace, model: MODELS[model].label, provider: PROVIDERS[curProvider].label, ts: Date.now() });
+          attachCopy(msgEl, transcript.length - 1);
         }
         setStatus('STOPPED BY OPERATOR');
       } else if (err.httpStatus) {
@@ -3232,6 +3644,7 @@
     history.push({ role: 'user', content: q });
     history.push({ role: 'assistant', content: answer });
     transcript.push({ q: q, answer: answer, trace: trace, model: 'LOCAL ENGINE', provider: 'LOCAL', ts: Date.now() });
+    attachCopy(msgEl, transcript.length - 1);
     setStatus('LOCAL ENGINE IDLE — deterministic · zero network');
     scrollEnd();
   }
@@ -3332,7 +3745,10 @@
     { g: 'CONVERSE', n: 'Clear conversation', k: '', f: clearConversation },
     { g: 'EXPORT', n: 'Export session as Markdown', k: 'ctrl E', f: function () { exportTraces('md'); } },
     { g: 'EXPORT', n: 'Export session as HTML', k: '', f: function () { exportTraces('html'); } },
+    { g: 'CONTEXT', n: 'Suggest ignore patterns', k: '', f: function () { openDrawer(true); suggestIgnore(); } },
+    { g: 'CONVERSE', n: 'Reset session cost', k: '', f: resetCost },
     { g: 'SETTINGS', n: 'Open settings', k: 'ctrl .', f: function () { openDrawer(true); } },
+    { g: 'SETTINGS', n: 'Load the demo project (LOCAL)', k: '', f: function () { startDemo(); } },
     { g: 'SETTINGS', n: 'Toggle ceremony / daylight', k: '', f: flipMode },
     { g: 'SETTINGS', n: 'Show keymap', k: '?', f: function () { $('keymapveil').classList.add('on'); } }
   ];
@@ -3379,6 +3795,9 @@
   palOv.addEventListener('click', function (e) { if (e.target === palOv) palClose(); });
 
   var keymapveil = $('keymapveil');
+  function openKeymap() { keymapveil.classList.add('on'); }
+  $('keysbtn').addEventListener('click', openKeymap);
+  $('keymaphint').addEventListener('click', openKeymap);
   $('keymapclose').addEventListener('click', function () { keymapveil.classList.remove('on'); });
   keymapveil.addEventListener('click', function (e) { if (e.target === keymapveil) keymapveil.classList.remove('on'); });
 
