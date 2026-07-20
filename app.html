@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Pragmatic CSP for a single static file on GitHub Pages (no HTTP headers available).
+     'unsafe-inline' is required by the single inline <script>/<style> and inline style=
+     attributes; the real hardening is object/base/frame lockdown plus a bounded
+     connect-src that still permits BYO https providers and local model servers.
+     Tighten connect-src to your own provider hosts for a stricter deployment. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'">
 <title>MERIDIAN — Workbench</title>
 <meta name="description" content="The Meridian workbench. Load a project into your browser's memory, ask questions, and get answers with inspectable evidence traces. Runs entirely in your browser with your own API key — or the no-API local engine.">
 <link rel="canonical" href="https://drewosi.github.io/lucid-engine/app.html">
@@ -88,11 +94,12 @@
   .btn-mode:hover, .btn-icon:hover { border-color: var(--accent); color: var(--ink); }
   .btn-icon[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
   /* live session-cost chip in the nav */
-  .navcost { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px 0 10px; border-radius: 3px; cursor: pointer;
+  .navcost { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 4px 0 6px; border-radius: 3px;
     background: transparent; border: 1px solid var(--accent); color: var(--accent);
     font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .06em; font-variant-numeric: tabular-nums; }
-  .navcost:hover { filter: brightness(1.12); }
-  .navcost .navcost-rst { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 22px; border-radius: 2px; color: var(--ink-3); font-size: 12px; }
+  .navcost > button { background: transparent; border: none; color: inherit; font: inherit; cursor: pointer; padding: 0 4px; height: 100%; }
+  .navcost #navcostbtn:hover { filter: brightness(1.15); }
+  .navcost .navcost-rst { display: inline-flex; align-items: center; justify-content: center; width: 20px; border-radius: 2px; color: var(--ink-3); font-size: 12px; }
   .navcost .navcost-rst:hover { color: var(--err); background: var(--surface); }
   /* skipped-file count badge on the rail toggle (visible when the rail is collapsed) */
   #railbtn { position: relative; }
@@ -238,6 +245,14 @@
   .ev-cell .ev { border-top-right-radius: 0; border-bottom-right-radius: 0; }
   .evcopy { border: 1px solid var(--line-strong); border-left: none; border-radius: 0 3px 3px 0; background: var(--surface); color: var(--ink-3); cursor: pointer; font-size: 11px; line-height: 1; padding: 0 7px; font-family: inherit; }
   .evcopy:hover { border-color: var(--accent); color: var(--accent); }
+  .ev.unverified { border-style: dashed; border-color: var(--err); }
+  .reground-row { margin-top: 12px; }
+  #selftestveil table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  #selftestveil td { padding: 4px 6px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2); vertical-align: top; }
+  #selftestveil td:first-child { width: 22px; }
+  #selftestveil .st-pass { color: var(--ok); }
+  #selftestveil .st-fail { color: var(--err); }
+  #selftestveil .st-badge { border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 1px 7px; font-size: 9px; letter-spacing: .12em; margin-left: 8px; }
   .linkcanvas { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
   .trace-wait { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; color: var(--ink-3); border-top: 1px dashed var(--line-strong); margin-top: 16px; padding-top: 14px; }
   .trace-wait i { display: inline-block; width: 8px; height: 8px; background: var(--accent); animation: flare 1s var(--ease-inout-engine) infinite alternate; margin-right: 8px; }
@@ -374,7 +389,8 @@
   .stat-tile .sl { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .12em; color: var(--ink-3); }
   .stat-tile .sv { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 26px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1; }
   .stat-tile:hover .sv, .stat-tile:focus-visible .sv { color: var(--accent); }
-  .ov-langs { font-size: 10.5px; color: var(--ink-2); letter-spacing: .05em; margin-top: 12px; }
+  .ov-index { font-size: 10.5px; color: var(--accent); letter-spacing: .05em; margin-top: 12px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; }
+  .ov-langs { font-size: 10.5px; color: var(--ink-2); letter-spacing: .05em; margin-top: 8px; }
   .ov-cap { font-size: 10px; color: var(--ink-3); letter-spacing: .04em; margin-top: 8px; line-height: 1.8; }
 
   /* verdict badge — KNOWN LOCALLY vs REQUIRES MODEL REASONING */
@@ -422,9 +438,10 @@
       <button class="btn-icon mono" id="railbtn" type="button" aria-expanded="false" aria-controls="rail">CONTEXT</button>
       <div class="nav-status">
         <span class="ctx-readout" id="ctxreadout" aria-live="off">CTX ≈ <b>0</b> tokens · <b>0</b> files</span>
-        <button class="navcost mono" id="navcost" type="button" hidden title="Estimated cost this session — click for the token breakdown. Reset with the ↺.">
-          <span id="navcostval">$0.00</span><span class="navcost-rst" id="navcostrst" role="button" aria-label="Reset session cost" title="Reset session cost to zero">↺</span>
-        </button>
+        <span class="navcost mono" id="navcost" hidden>
+          <button type="button" id="navcostbtn" title="Estimated cost this session — click for the token breakdown"><span id="navcostval">$0.00</span></button>
+          <button type="button" class="navcost-rst" id="navcostrst" aria-label="Reset session cost" title="Reset session cost to zero">↺</button>
+        </span>
         <label for="navprov" style="position:absolute;left:-9999px">Provider</label>
         <select class="modelsel" id="navprov" title="Quick-switch provider — each keeps its own key, no settings trip">
           <option value="anthropic">ANTHROPIC</option>
@@ -544,7 +561,11 @@
         <label for="custmodel" style="position:absolute;left:-9999px">Custom model id</label>
         <input type="text" id="custmodel" placeholder="model id, e.g. llama3.3:70b" autocomplete="off" spellcheck="false">
       </div>
-      <button class="btn btn-hairline" type="button" id="custsave" style="margin-top:8px">Save endpoint</button>
+      <div class="key-row" style="margin-top:8px">
+        <button class="btn btn-hairline" type="button" id="custsave">Save endpoint</button>
+        <button class="btn btn-hairline" type="button" id="custtest" title="Send a lightweight request to check reachability and CORS (EXPERIMENTAL)">Test endpoint</button>
+      </div>
+      <p class="note" id="custstate" aria-live="polite"></p>
     </div>
 
     <div id="keysec">
@@ -562,6 +583,7 @@
 
     <h3>MODEL</h3>
     <p class="note" id="modelnote"></p>
+    <button class="btn-quiet acc" type="button" id="stricttracebtn" aria-pressed="false" style="margin-top:6px" title="Prepend a stricter trace instruction to every request — for models that don't reliably emit the meridian-trace block. Costs a few extra tokens per request.">[ FORCE STRICT TRACE: OFF ]</button>
 
     <h3>CONTEXT ENGINE</h3>
     <p class="note">// FULL sends every checked file whole. SMART sends a project map plus the files most relevant to each question, packed into a token budget — use it for medium and large projects.</p>
@@ -571,6 +593,15 @@
       <button class="btn btn-hairline" type="button" id="savebudget">Set</button>
     </div>
     <p class="note" id="budgetstate" aria-live="polite"></p>
+
+    <h3>SESSION SPEND LIMIT</h3>
+    <p class="note">// optional. when the estimated session total would cross this, Meridian asks before sending — it never hard-blocks. estimates only; your provider bills actuals. 0 or blank = off.</p>
+    <div class="key-row">
+      <label for="spendin" style="position:absolute;left:-9999px">Session spend limit (USD)</label>
+      <input type="number" id="spendin" min="0" step="0.5" placeholder="e.g. 5.00 (USD)">
+      <button class="btn btn-hairline" type="button" id="savespend">Set</button>
+    </div>
+    <p class="note" id="spendstate" aria-live="polite"></p>
 
     <h3>IGNORE PATTERNS</h3>
     <p class="note">// one pattern per line; <b>*</b> matches anything (e.g. <b>*.test.ts</b>, <b>docs/*</b>). applied at ingest and saved with the project. lines starting with # are comments.</p>
@@ -640,7 +671,7 @@
   </div>
 
   <!-- COMMAND PALETTE -->
-  <div id="palette" role="dialog" aria-label="Command palette">
+  <div id="palette" role="dialog" aria-modal="true" aria-label="Command palette">
     <div class="pal-card">
       <label for="pal-in" style="position:absolute;left:-9999px">Command</label>
       <input id="pal-in" class="mono" type="text" placeholder="type a command…" autocomplete="off" spellcheck="false">
@@ -667,6 +698,7 @@
   </div>
 
   <div id="toasts" aria-live="polite"></div>
+  <div id="sr-announce" aria-live="polite" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden"></div>
 
   <footer class="strip">
     <span><b>MERIDIAN</b> // FREE BETA</span>
@@ -683,13 +715,25 @@
 <noscript><p style="font-family:monospace;padding:20px">MERIDIAN is a browser application and requires JavaScript.</p></noscript>
 
 <script>
+/* MERIDIAN Engine v0.2-hardened — resilient trace parsing, multi-language indexing
+   (Python/Go/Rust + JS/TS depth), selection-decoupled index, pragmatic CSP, custom-
+   endpoint validation, BOM-aware encoding, streaming retries, a11y, and self-tests. */
 (function () {
   'use strict';
 
   /* ============ HELPERS ============ */
   var $ = function (id) { return document.getElementById(id); };
   var app = $('app');
-  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* reduced-motion: live so an OS toggle mid-session takes effect */
+  var reducedMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var reduced = reducedMQ.matches;
+  if (reducedMQ.addEventListener) reducedMQ.addEventListener('change', function (e) { reduced = e.matches; });
+  /* a11y: return focus to the control that opened a modal/palette when it closes */
+  var layerReturnFocus = null;
+  function rememberFocus() { layerReturnFocus = document.activeElement; }
+  function returnFocus() { try { if (layerReturnFocus && layerReturnFocus.focus) layerReturnFocus.focus(); } catch (e) {} layerReturnFocus = null; }
+  /* a11y: announce completion to screen readers (streamed text isn't in a live region) */
+  function announce(msg) { var el = $('sr-announce'); if (el) { el.textContent = ''; setTimeout(function () { el.textContent = msg; }, 30); } }
   function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
@@ -763,7 +807,8 @@
                           note: 'deterministic keyword/symbol search over the loaded files — no AI, no network, free. answers cite exact lines.' }
   };
   var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget', ignore: 'meridian.ignore',
-             provider: 'meridian.provider', okey: 'meridian.key.openai', ckey: 'meridian.key.custom', curl: 'meridian.custom.url', cmodel: 'meridian.custom.model', ground: 'meridian.ground' };
+             provider: 'meridian.provider', okey: 'meridian.key.openai', ckey: 'meridian.key.custom', curl: 'meridian.custom.url', cmodel: 'meridian.custom.model', ground: 'meridian.ground',
+             strictTrace: 'meridian.stricttrace', spendcap: 'meridian.spendcap' };
 
   var curProvider = lsGet(LS.provider);
   if (!PROVIDERS[curProvider]) curProvider = 'anthropic';
@@ -898,13 +943,54 @@
   }
   provsel.addEventListener('change', function () { setProvider(provsel.value); });
   $('navprov').addEventListener('change', function () { setProvider($('navprov').value); });
+  function setCustState(msg, kind) {
+    var el = $('custstate');
+    el.textContent = msg ? '// ' + msg : '';
+    el.style.color = kind === 'err' ? 'var(--err)' : kind === 'ok' ? 'var(--ok)' : 'var(--ink-3)';
+  }
+  /* validate + normalize a custom OpenAI-compatible base URL; warns (does not block)
+     on a missing /v1 suffix and on non-localhost http:// (mixed-content on an https page) */
+  function validateCustomUrl(u) {
+    if (!u) return { ok: false, msg: 'enter a base URL (e.g. http://localhost:11434/v1)' };
+    var parsed;
+    try { parsed = new URL(u); } catch (e) { return { ok: false, msg: 'not a valid URL' }; }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return { ok: false, msg: 'URL must be http:// or https://' };
+    var warn = '';
+    var isLocal = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(parsed.hostname);
+    if (parsed.protocol === 'http:' && !isLocal) warn += 'http:// works only for localhost on this https page (browsers block mixed content). ';
+    if (!/\/v\d+\/?$/.test(parsed.pathname)) warn += 'most OpenAI-compatible servers expect a /v1 suffix. ';
+    return { ok: true, msg: warn.trim(), warn: warn.trim() };
+  }
   $('custsave').addEventListener('click', function () {
     var u = $('custurl').value.trim().replace(/\/+$/, '');
     var m = $('custmodel').value.trim();
+    var v = validateCustomUrl(u);
+    if (u && !v.ok) { setCustState(v.msg, 'err'); toast('Endpoint URL invalid — ' + v.msg + '.'); return; }
     if (u) lsSet(LS.curl, u); else lsDel(LS.curl);
     if (m) lsSet(LS.cmodel, m); else lsDel(LS.cmodel);
     syncCustomModel(); syncModelSel(); renderBudget();
+    setCustState(u && m ? ('saved.' + (v.warn ? ' ' + v.warn : '')) : '', v.warn ? 'note' : 'ok');
     toast(u && m ? 'Custom endpoint saved.' : 'Custom endpoint needs both a base URL and a model id.');
+  });
+  /* EXPERIMENTAL: probe the endpoint's /models to report reachability, CORS, and latency */
+  $('custtest').addEventListener('click', function () {
+    var u = $('custurl').value.trim().replace(/\/+$/, '');
+    var v = validateCustomUrl(u);
+    if (!v.ok) { setCustState(v.msg, 'err'); return; }
+    setCustState('testing…', 'note');
+    var headers = {}, k = lsGet(LS.ckey) || '';
+    if (k) headers.authorization = 'Bearer ' + k;
+    var t0 = (window.performance && performance.now) ? performance.now() : 0;
+    var ctrl = new AbortController(), to = setTimeout(function () { ctrl.abort(); }, 8000);
+    fetch(u + '/models', { method: 'GET', headers: headers, signal: ctrl.signal }).then(function (res) {
+      clearTimeout(to);
+      var ms = t0 ? ' · ' + Math.round(performance.now() - t0) + ' ms' : '';
+      if (res.ok || res.status === 401 || res.status === 400) setCustState('reachable' + ms + (res.status === 401 ? ' (needs a key)' : ''), 'ok');
+      else setCustState('reached, HTTP ' + res.status + ' — check the base path' + ms, 'note');
+    }).catch(function (err) {
+      clearTimeout(to);
+      setCustState(err.name === 'AbortError' ? 'timed out (>8s) — is the server running?' : 'unreachable or CORS-blocked — the server must allow browser CORS from this origin', 'err');
+    });
   });
   /* syncProviderUI() is called in the init block at the end of the script —
      it touches the budget UI, which needs the context engine set up first. */
@@ -953,20 +1039,33 @@
   function recordSkip(path, reason, size, ref) {
     if (skippedFiles.length < SKIP_LIST_MAX) skippedFiles.push({ path: path, reason: reason, size: size || 0, ref: ref || null });
   }
-  var IGNORE_DIRS = ['.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', 'target', 'vendor', '__pycache__', '.venv', 'venv', 'coverage', '.cache', '.idea', '.vscode'];
+  var IGNORE_DIRS = ['.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', 'target', 'vendor', '__pycache__', '.venv', 'venv', 'coverage', '.cache', '.idea', '.vscode',
+                     'obj', '.gradle', 'pods', '.tox', '.mypy_cache', '.pytest_cache', '.terraform', '_build', '.dart_tool'];
   var BIN_EXT = /\.(png|jpe?g|gif|webp|avif|ico|icns|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|m4[av]|mov|avi|mkv|webm|ogg|wav|flac|zip|gz|bz2|xz|7z|rar|tar|jar|war|class|pyc|pyo|o|a|so|dylib|dll|exe|bin|dat|db|sqlite3?|pdf|doc[x]?|xls[x]?|ppt[x]?|ds_store|lockb|wasm)$/i;
-  var MAX_FILE = 512 * 1024, MAX_FILES = 4000;
+  var MAX_FILE = 512 * 1024, MAX_FILES = 8000;
 
   function ignoredPath(path) {
     return path.split('/').some(function (seg) { return IGNORE_DIRS.indexOf(seg.toLowerCase()) !== -1 || (seg !== '.' && seg.charAt(0) === '.' && seg !== '.github' && seg !== '.env.example'); });
   }
-  function looksBinary(buf) {
-    var v = new Uint8Array(buf);
-    for (var i = 0; i < v.length; i++) if (v[i] === 0) return true;
-    return false;
+  /* Encoding sniff over the head bytes. Honors UTF-16/UTF-8 BOMs (so UTF-16 text with
+     its many 0x00 bytes is not misread as binary), otherwise flags binary on any null
+     byte or a high control-character ratio. Returns a TextDecoder label or 'binary'. */
+  function sniffEncoding(v) {
+    if (v.length >= 2 && v[0] === 0xFF && v[1] === 0xFE) return 'utf-16le';
+    if (v.length >= 2 && v[0] === 0xFE && v[1] === 0xFF) return 'utf-16be';
+    if (v.length >= 3 && v[0] === 0xEF && v[1] === 0xBB && v[2] === 0xBF) return 'utf-8';
+    var nulls = 0, ctrl = 0;
+    for (var i = 0; i < v.length; i++) {
+      var b = v[i];
+      if (b === 0) nulls++;
+      else if (b < 9 || (b > 13 && b < 32)) ctrl++;
+    }
+    if (nulls > 0) return 'binary';
+    if (v.length > 0 && ctrl / v.length > 0.3) return 'binary';
+    return 'utf-8';
   }
   /* force=true (the include-back path) bypasses pattern/extension/size filters;
-     the null-byte sniff still applies — true binaries are never ingested */
+     the encoding sniff still applies — true binaries are never ingested */
   function ingestFile(file, path, force) {
     path = (path || file.name).replace(/^\.?\//, '');
     if (files.size >= MAX_FILES) { skipped.over++; return Promise.resolve(); }
@@ -974,19 +1073,23 @@
     if (!force && matchesIgnore(path)) { skipped.user++; recordSkip(path, 'ignore-pattern', file.size, file); return Promise.resolve(); }
     if (!force && BIN_EXT.test(path)) { skipped.binary++; recordSkip(path, 'binary-ext', file.size, file); return Promise.resolve(); }
     if (!force && file.size > MAX_FILE) { skipped.big++; recordSkip(path, 'oversized', file.size, file); return Promise.resolve(); }
-    return file.slice(0, 8192).arrayBuffer().then(function (buf) {
-      if (looksBinary(buf)) { skipped.binary++; recordSkip(path, 'binary-content', file.size, null); return; }
-      return file.text().then(function (text) {
-        files.set(path, {
-          content: text,
-          lines: text.split('\n').length,
-          tokens: estTokens(text, path),
-          mtime: file.lastModified || 0,
-          base: staticScore(path),
-          checked: true
-        });
-        if (files.size % 100 === 0) setStatus('INGESTING — ' + files.size + ' FILES…');
+    return file.arrayBuffer().then(function (buf) {
+      var enc = sniffEncoding(new Uint8Array(buf, 0, Math.min(buf.byteLength, 8192)));
+      if (enc === 'binary') { skipped.binary++; recordSkip(path, 'binary-content', file.size, null); return; }
+      var text;
+      try { text = new TextDecoder(enc, { fatal: false }).decode(buf); }
+      catch (e) { text = new TextDecoder('utf-8', { fatal: false }).decode(buf); }
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); /* strip a leading BOM */
+      files.set(path, {
+        content: text,
+        lines: text.split('\n').length,
+        tokens: estTokens(text, path),
+        mtime: file.lastModified || 0,
+        base: staticScore(path),
+        checked: true,
+        lang: detectLang(path, text)
       });
+      if (files.size % 100 === 0) setStatus('INGESTING — ' + files.size + ' FILES…');
     }).catch(function () { skipped.binary++; });
   }
 
@@ -1046,6 +1149,9 @@
     else toast(base + (totSkipped ? ' · ' + totSkipped + ' skipped.' : '.'));
     renderOverview();
     setStatus('CORE IDLE — ' + files.size + ' files in memory');
+    /* graceful scaling: warn as the in-memory file cap approaches or is hit */
+    if (skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + skipped.over + ' file' + (skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
+    else if (files.size >= Math.floor(MAX_FILES * 0.9)) toast('Approaching the ' + MAX_FILES + '-file cap (' + files.size + ' loaded) — large repos may hit it; ignore patterns help.');
     maybeAutoSmart();
   }
 
@@ -1314,7 +1420,7 @@
           var mine = paths.filter(function (q) { return (q.indexOf('/') === -1 ? '' : q.slice(0, q.lastIndexOf('/'))) === this.dataset.dir; }, this);
           var anyOff = mine.some(function (q) { return !files.get(q).checked; });
           mine.forEach(function (q) { files.get(q).checked = anyOff; });
-          contextDirty = true; mapDirty = true; indexDirty = true; renderTree(); renderBudget();
+          contextDirty = true; mapDirty = true; renderTree(); renderBudget(); /* selection change: symbol/import index unaffected */
         });
         tree.appendChild(d);
       }
@@ -1324,7 +1430,7 @@
       var lab = document.createElement('label');
       var cb = document.createElement('input');
       cb.type = 'checkbox'; cb.checked = f.checked;
-      cb.addEventListener('change', function () { f.checked = cb.checked; contextDirty = true; mapDirty = true; indexDirty = true; renderBudget(); });
+      cb.addEventListener('change', function () { f.checked = cb.checked; contextDirty = true; mapDirty = true; renderBudget(); });
       var nm = document.createElement('span');
       nm.className = 'nm'; nm.textContent = p.slice(dir ? dir.length + 1 : 0);
       nm.title = p;
@@ -1359,8 +1465,8 @@
       : 'CTX ≈ <b>' + fmtTok(sel.tokens) + '</b> tokens · <b>' + sel.count + '</b> files';
   }
 
-  $('selall').addEventListener('click', function () { files.forEach(function (f) { f.checked = true; }); contextDirty = true; mapDirty = true; indexDirty = true; renderTree(); renderBudget(); });
-  $('selnone').addEventListener('click', function () { files.forEach(function (f) { f.checked = false; }); contextDirty = true; mapDirty = true; indexDirty = true; renderTree(); renderBudget(); });
+  $('selall').addEventListener('click', function () { files.forEach(function (f) { f.checked = true; }); contextDirty = true; mapDirty = true; renderTree(); renderBudget(); });
+  $('selnone').addEventListener('click', function () { files.forEach(function (f) { f.checked = false; }); contextDirty = true; mapDirty = true; renderTree(); renderBudget(); });
   $('clearctx').addEventListener('click', function () {
     files.clear(); skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
     skippedFiles.length = 0;
@@ -1431,12 +1537,14 @@
         list.appendChild(more);
       }
     });
+    rememberFocus();
     skipveil.classList.add('on');
     untrapSkip = trap(skipveil.querySelector('.modal'));
   }
   function closeSkipReview() {
     skipveil.classList.remove('on');
     if (untrapSkip) { untrapSkip(); untrapSkip = null; }
+    returnFocus();
   }
   $('skiprev').addEventListener('click', openSkipReview);
   $('skipclose').addEventListener('click', closeSkipReview);
@@ -1512,6 +1620,7 @@
     } else {
       note('// GROUND is OFF — no investigation block is attached. Toggle [ GROUND: ON ] in the rail to send verified evidence.');
     }
+    rememberFocus();
     prevveil.classList.add('on');
     untrapPrev = trap(prevveil.querySelector('.viewer'));
     body.focus();
@@ -1519,6 +1628,7 @@
   function closePreview() {
     prevveil.classList.remove('on');
     if (untrapPrev) { untrapPrev(); untrapPrev = null; }
+    returnFocus();
   }
   $('prevbtn').addEventListener('click', openPreview);
   $('prevclose').addEventListener('click', closePreview);
@@ -1551,11 +1661,13 @@
   var GROUND_EXCERPT_PAD  = 6;      /* lines of context padded around a single-line hit */
 
   var SRC_EXT = { ts: 9, tsx: 9, js: 9, jsx: 9, mjs: 9, cjs: 9, py: 9, go: 9, rs: 9, java: 8, rb: 8, php: 8, c: 8, h: 8, cc: 8, cpp: 8, hpp: 8, cs: 8, swift: 8, kt: 8, scala: 8, svelte: 9, vue: 9, html: 7, css: 6, scss: 6, less: 6, sql: 7, sh: 7, bash: 7, zsh: 7, md: 8, mdx: 8, rst: 7, txt: 5, json: 5, yml: 6, yaml: 6, toml: 6, xml: 4, ini: 5, cfg: 5, env: 5, graphql: 7, proto: 7, tf: 6, lua: 7, ex: 8, exs: 8, erl: 7, ml: 7, hs: 7, zig: 8, dart: 8, r: 7, jl: 7 };
-  var CONFIG_NAMES = /^(package\.json|tsconfig[^\/]*\.json|pyproject\.toml|setup\.(py|cfg)|go\.(mod|sum)|cargo\.toml|gemfile|makefile|justfile|dockerfile|docker-compose\.ya?ml|\.env\.example|vite\.config\.[jt]s|webpack\.config\.[jt]s|next\.config\.[jt]s|rollup\.config\.[jt]s|requirements\.txt|composer\.json|build\.gradle(\.kts)?|pom\.xml)$/i;
-  var ENTRY_NAMES = /^(index|main|app|server|cli|core|__init__|mod|lib)\.[a-z]+$/i;
+  var CONFIG_NAMES = /^(package\.json|tsconfig[^\/]*\.json|jsconfig\.json|pyproject\.toml|setup\.(py|cfg)|pipfile|go\.(mod|sum)|cargo\.toml|gemfile|mix\.exs|makefile|justfile|dockerfile|docker-compose\.ya?ml|\.env\.example|vite\.config\.[jt]s|webpack\.config\.[jt]s|next\.config\.[jt]s|rollup\.config\.[jt]s|requirements\.txt|composer\.json|build\.gradle(\.kts)?|pom\.xml|[^\/]+\.csproj|[^\/]+\.sln|cmakelists\.txt)$/i;
+  var ENTRY_NAMES = /^(index|main|__main__|app|server|cli|core|__init__|mod|lib)\.[a-z]+$/i;
   var README_NAMES = /^readme(\.|$)/i;
   var LOWVALUE_PATH = /(\.min\.|\.lock$|-lock\.|\.snap$|\.map$|\.d\.ts$|\bfixtures?\b|\b__snapshots__\b|\bmigrations\b|\bgenerated\b)/i;
-  var TEST_PATH = /(\.test\.|\.spec\.|_test\.|\btests?\/|\b__tests__\b)/i;
+  /* test detection across ecosystems: JS/TS .test/.spec, Go/py _test., Ruby _spec.,
+     Python test_*.py prefix, and tests/ or spec/ directories */
+  var TEST_PATH = /(\.test\.|\.spec\.|_test\.|_spec\.|\/test_[^\/]*\.py$|\btests?\/|\bspec\/|\b__tests__\b)/i;
 
   /* language-aware token estimate — code tokenizes denser than prose, so one
      chars-per-token divisor per family beats a flat /4 */
@@ -1563,14 +1675,24 @@
                   py: 3.5, go: 3.5, rb: 3.5, php: 3.5, sh: 3.5, bash: 3.5, lua: 3.5, ex: 3.5, exs: 3.5,
                   json: 3.0, yml: 3.0, yaml: 3.0, toml: 3.0, xml: 3.0, html: 3.0, css: 3.0, scss: 3.0, less: 3.0, svg: 3.0,
                   md: 4.0, mdx: 4.0, txt: 4.0, rst: 4.0 };
-  function estTokens(text, path) {
-    var div = 3.6;
+  function tokDiv(path) {
     if (path) {
       var nm = path.slice(path.lastIndexOf('/') + 1);
       var ex = nm.indexOf('.') === -1 ? '' : nm.slice(nm.lastIndexOf('.') + 1).toLowerCase();
-      if (TOK_DIV[ex]) div = TOK_DIV[ex];
+      if (TOK_DIV[ex]) return TOK_DIV[ex];
     }
-    return Math.ceil(text.length / div);
+    return 3.6;
+  }
+  /* Token estimate. For small files a token-ish regex count tracks real BPE more
+     closely than chars/divisor; for large files chars/divisor is faster and the
+     per-language divisor is well-calibrated (see README calibration note). */
+  function estTokens(text, path) {
+    var byChar = Math.ceil(text.length / tokDiv(path));
+    if (text.length < 5000) {
+      var byTok = (text.match(/\w+|[^\s\w]/g) || []).length;
+      return Math.ceil((byChar + byTok) / 2);
+    }
+    return byChar;
   }
 
   /* query-independent importance, computed once per file at ingest */
@@ -1607,7 +1729,8 @@
 
   /* Line-number-true excerpt: file head + windows around query-term hits.
      Omitted ranges are marked so the model never cites lines it cannot see. */
-  function excerptFile(f, terms, maxTokens) {
+  function excerptFile(f, terms, maxTokens, path) {
+    var div = tokDiv(path);
     var lines = f.content.split('\n');
     var keep = {}, HEAD = 50, WIN = 20, hits = 0, i;
     for (i = 0; i < Math.min(HEAD, lines.length); i++) keep[i] = 1;
@@ -1625,7 +1748,7 @@
         }
       }
     }
-    var out = [], chars = 0, budget = maxTokens * 3.6, last = -1, truncated = false;
+    var out = [], chars = 0, budget = maxTokens * div, last = -1, truncated = false;
     for (var n = 0; n < lines.length; n++) {
       if (!keep[n]) continue;
       if (chars > budget) { truncated = true; break; }
@@ -1635,7 +1758,7 @@
       last = n;
     }
     if (truncated || last < lines.length - 1) out.push('··· lines ' + (last + 2) + '–' + lines.length + ' omitted ···');
-    return { text: out.join('\n'), tokens: Math.ceil(chars / 3.6) + 10 };
+    return { text: out.join('\n'), tokens: Math.ceil(chars / div) + 10 };
   }
 
   /* query intent — a debugging question wants tests; an onboarding question wants docs */
@@ -1699,7 +1822,7 @@
       if (e.f.tokens <= WHOLE_FILE_MAX && e.f.tokens <= remaining) {
         body = numberLines(e.f.content, 1); tok = e.f.tokens; whole = true;
       } else {
-        var ex = excerptFile(e.f, terms, Math.min(remaining, Math.max(1500, WHOLE_FILE_MAX / 2)));
+        var ex = excerptFile(e.f, terms, Math.min(remaining, Math.max(1500, WHOLE_FILE_MAX / 2)), e.p);
         if (ex.tokens > remaining) continue;
         body = ex.text; tok = ex.tokens; whole = false;
       }
@@ -1723,9 +1846,11 @@
       if (byDir[dir]) return; /* one manifest per dir is enough */
       var label = '', f = files.get(p), m;
       if (f) {
-        if (/package\.json$/i.test(name)) { m = f.content.match(/"name"\s*:\s*"([^"]+)"/); if (m) label = m[1]; }
+        if (/(package|composer)\.json$/i.test(name)) { m = f.content.match(/"name"\s*:\s*"([^"]+)"/); if (m) label = m[1]; }
         else if (/\.(toml)$/i.test(name)) { m = f.content.match(/^\s*name\s*=\s*["']([^"']+)["']/m); if (m) label = m[1]; }
         else if (/go\.mod$/i.test(name)) { m = f.content.match(/^module\s+(\S+)/m); if (m) label = m[1]; }
+        else if (/pom\.xml$/i.test(name)) { m = f.content.match(/<artifactId>([^<]+)<\/artifactId>/); if (m) label = m[1]; }
+        else if (/mix\.exs$/i.test(name)) { m = f.content.match(/app:\s*:(\w+)/); if (m) label = m[1]; }
       }
       byDir[dir] = { dir: dir, manifest: p, name: label };
     });
@@ -1822,16 +1947,46 @@
 
   /* definition-shaped lines across common languages — captures the declared name.
      Practical regex, not a parser: covers declarations and `NAME = function|class|(=>)`. */
-  var DEF_DECL_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:public\s+|private\s+|protected\s+|static\s+|abstract\s+|final\s+)*(?:async\s+)?(function\*?|class|interface|type|struct|enum|trait|impl|def|fn|func|module|const|let|var|sub|proc)\s+([A-Za-z_$][\w$]*)/;
+  /* declarations across JS/TS, Python, Go (top-level func), Rust (pub/mod), Java-ish */
+  var DEF_DECL_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:pub(?:\([^)]*\))?\s+|public\s+|private\s+|protected\s+|static\s+|abstract\s+|final\s+)*(?:async\s+)?(function\*?|class|interface|type|struct|enum|trait|impl|def|fn|func|module|mod|const|let|var|sub|proc)\s+([A-Za-z_$][\w$]*)/;
   var DEF_ASSIGN_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:const|let|var|public|private|protected|static|readonly)?\s*([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s+)?(?:function\*?\b|\([^()]*\)\s*(?::[^={]+)?=>|class\b|\([^)]*\)\s*\{)/;
+  var DEF_GO_METHOD_RE = /^\s*func\s*\([^)]*\)\s*([A-Za-z_]\w*)/;       /* Go receiver methods: func (r *R) M() */
+  var DEF_PY_ASSIGN_RE = /^([A-Za-z_]\w*)\s*(?::[^=\n]+)?=(?!=)\s*\S/;  /* Python module-level NAME = … (no indent, not ==) */
+  function assignKind(ln) {
+    if (/=>\s*/.test(ln) && /\([^()]*\)\s*(?::[^={]+)?=>/.test(ln)) return 'arrow';
+    if (/\bclass\b/.test(ln)) return 'class';
+    if (/\bfunction\b/.test(ln)) return 'function';
+    return 'const';
+  }
   var IMPORT_RES = [
-    /\bimport\s+(?:[\w${},*\s]+\s+from\s+)?['"]([^'"]+)['"]/,   /* import x from 'm' | import 'm' */
-    /\bexport\s+(?:[\w${},*\s]+)\s+from\s+['"]([^'"]+)['"]/,     /* export … from 'm' */
+    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/,                      /* dynamic import('m') — check before static */
+    /\bimport\s+(?:[\w${},*\s]+\s+from\s+)?['"]([^'"]+)['"]/,     /* import x from 'm' | import 'm' */
+    /\bexport\s+(?:[\w${},*\s]+)\s+from\s+['"]([^'"]+)['"]/,      /* export … from 'm' */
     /\brequire\(\s*['"]([^'"]+)['"]\s*\)/,                        /* require('m') */
-    /^\s*from\s+([\w.]+)\s+import\b/,                             /* py: from m import … */
+    /^\s*(?:pub\s+)?use\s+([A-Za-z_][\w:]*)/,                     /* rust: use crate::a::b */
+    /^\s*(?:pub\s+)?mod\s+([A-Za-z_]\w*)\s*;/,                    /* rust: mod foo; */
+    /^\s*from\s+([.\w]+)\s+import\b/,                             /* py: from m import … (incl. relative) */
     /^\s*import\s+([\w.]+)/                                       /* py: import m */
   ];
   var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.rb', '.php', '.java', '.vue', '.svelte'];
+  /* language id by extension (+ shebang for extensionless scripts) — powers the
+     index-size stat and lets the LOCAL engine phrase results by language */
+  var LANG_BY_EXT = { js: 'js', jsx: 'js', mjs: 'js', cjs: 'js', ts: 'ts', tsx: 'ts', py: 'python', go: 'go', rs: 'rust',
+    java: 'java', rb: 'ruby', php: 'php', c: 'c', h: 'c', cc: 'cpp', cpp: 'cpp', hpp: 'cpp', cs: 'c#', swift: 'swift',
+    kt: 'kotlin', scala: 'scala', ex: 'elixir', exs: 'elixir', lua: 'lua', sh: 'shell', bash: 'shell', zsh: 'shell',
+    svelte: 'svelte', vue: 'vue', html: 'html', css: 'css', scss: 'css', md: 'markdown', json: 'json', yml: 'yaml', yaml: 'yaml', toml: 'toml' };
+  function detectLang(path, content) {
+    var ex = fileExt(path);
+    if (LANG_BY_EXT[ex]) return LANG_BY_EXT[ex];
+    if (!ex && content) {
+      var first = content.slice(0, 80);
+      if (/^#!.*\b(python[0-9.]*)\b/.test(first)) return 'python';
+      if (/^#!.*\b(bash|sh|zsh)\b/.test(first)) return 'shell';
+      if (/^#!.*\bnode\b/.test(first)) return 'js';
+      if (/^#!.*\b(ruby)\b/.test(first)) return 'ruby';
+    }
+    return ex || 'other';
+  }
 
   function fileExt(path) {
     var nm = path.slice(path.lastIndexOf('/') + 1);
@@ -1839,24 +1994,86 @@
   }
   function dirOf(path) { return path.indexOf('/') === -1 ? '' : path.slice(0, path.lastIndexOf('/')); }
 
-  /* resolve a relative module specifier against the importer's directory to a real
-     loaded path; returns null for external/bare modules or unresolved paths. */
-  function resolveImport(fromFile, mod) {
-    if (!mod || (mod.charAt(0) !== '.' && mod.charAt(0) !== '/')) return null; /* bare/external */
-    var base = mod.charAt(0) === '/' ? mod.slice(1) : dirOf(fromFile);
-    var parts = (mod.charAt(0) === '/' ? mod.slice(1) : (base ? base + '/' : '') + mod).split('/');
-    var stack = [];
-    parts.forEach(function (seg) {
-      if (seg === '' || seg === '.') return;
-      if (seg === '..') { stack.pop(); return; }
-      stack.push(seg);
+  /* ---- import resolvers: tsconfig paths, Go module prefix, workspace packages.
+     Rebuilt each index pass from the loaded manifests. ---- */
+  var idxAlias = [], idxGoModule = '', idxWorkspace = [];
+  function joinPath(a, b) {
+    var parts = (a ? a.split('/') : []).concat(b ? b.split('/') : []), stack = [];
+    parts.forEach(function (s) { if (s === '' || s === '.') return; if (s === '..') stack.pop(); else stack.push(s); });
+    return stack.join('/');
+  }
+  function buildResolvers(paths) {
+    idxAlias = []; idxGoModule = ''; idxWorkspace = [];
+    paths.forEach(function (p) {
+      var nm = p.slice(p.lastIndexOf('/') + 1).toLowerCase();
+      if (nm === 'tsconfig.json' || nm === 'jsconfig.json') {
+        try {
+          var raw = files.get(p).content.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+          var cfg = JSON.parse(raw), co = cfg.compilerOptions || {};
+          var baseUrl = joinPath(dirOf(p), co.baseUrl || '.');
+          if (co.paths) Object.keys(co.paths).forEach(function (k) {
+            var targets = (co.paths[k] || []).map(function (t) { return joinPath(baseUrl, t.replace(/\/?\*$/, '')); });
+            var reStr = '^' + k.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/, '(.*)') + '$';
+            idxAlias.push({ re: new RegExp(reStr), targets: targets, star: k.indexOf('*') !== -1 });
+          });
+        } catch (e) {}
+      } else if (nm === 'go.mod') {
+        var mm = files.get(p).content.match(/^\s*module\s+(\S+)/m);
+        if (mm) idxGoModule = mm[1].replace(/\/+$/, '');
+      }
     });
-    var cand = stack.join('/');
-    for (var i = 0; i < RESOLVE_EXTS.length; i++) {
-      if (files.has(cand + RESOLVE_EXTS[i])) return cand + RESOLVE_EXTS[i];
+    detectPackages(paths).forEach(function (pk) { if (pk.name) idxWorkspace.push({ name: pk.name, dir: pk.dir === '.' ? '' : pk.dir }); });
+  }
+  /* try a resolved base against known extensions and index-file conventions */
+  function resolveCand(cand) {
+    if (cand === null || cand === undefined) return null;
+    for (var i = 0; i < RESOLVE_EXTS.length; i++) if (files.has(cand + RESOLVE_EXTS[i])) return cand + RESOLVE_EXTS[i];
+    var idxNames = ['/index', '/mod', '/__init__', '/lib'];
+    for (var n = 0; n < idxNames.length; n++)
+      for (var j = 1; j < RESOLVE_EXTS.length; j++) if (files.has(cand + idxNames[n] + RESOLVE_EXTS[j])) return cand + idxNames[n] + RESOLVE_EXTS[j];
+    return null;
+  }
+  /* resolve a module specifier to a real loaded path — relative paths, Python
+     dotted-relative, tsconfig aliases, Go module prefix, workspace packages.
+     Returns null for truly external modules. */
+  function resolveImport(fromFile, mod) {
+    if (!mod) return null;
+    var ext = fileExt(fromFile);
+    /* Python dotted imports: from .mod / from ..pkg.mod / import pkg.mod */
+    if (ext === 'py' && mod.indexOf('/') === -1 && /^[.\w]/.test(mod)) {
+      if (mod.charAt(0) === '.') {
+        var up = 0; while (mod.charAt(up) === '.') up++;
+        var baseDir = dirOf(fromFile);
+        for (var u = 1; u < up; u++) baseDir = dirOf(baseDir);
+        return resolveCand(joinPath(baseDir, mod.slice(up).replace(/\./g, '/')));
+      }
+      var pr = resolveCand(mod.replace(/\./g, '/')); if (pr) return pr;
     }
-    for (var j = 1; j < RESOLVE_EXTS.length; j++) {
-      if (files.has(cand + '/index' + RESOLVE_EXTS[j])) return cand + '/index' + RESOLVE_EXTS[j];
+    if (mod.charAt(0) === '.' || mod.charAt(0) === '/') {
+      var base = mod.charAt(0) === '/' ? '' : dirOf(fromFile);
+      return resolveCand(joinPath(base, mod.charAt(0) === '/' ? mod.slice(1) : mod));
+    }
+    /* Rust: mod foo; resolves beside the file */
+    if (ext === 'rs' && /^[A-Za-z_]\w*$/.test(mod)) { var rc = resolveCand(joinPath(dirOf(fromFile), mod)); if (rc) return rc; }
+    /* tsconfig/jsconfig path aliases (@/x, ~/x, etc.) */
+    for (var a = 0; a < idxAlias.length; a++) {
+      var m = idxAlias[a].re.exec(mod);
+      if (!m) continue;
+      for (var t = 0; t < idxAlias[a].targets.length; t++) {
+        var full = idxAlias[a].star && m[1] ? joinPath(idxAlias[a].targets[t], m[1]) : idxAlias[a].targets[t];
+        var rr = resolveCand(full); if (rr) return rr;
+      }
+    }
+    /* Go module-prefix: <module>/pkg/x -> pkg/x inside the repo */
+    if (idxGoModule && mod.indexOf(idxGoModule + '/') === 0) { var gr = resolveCand(mod.slice(idxGoModule.length + 1)); if (gr) return gr; }
+    /* workspace package: bare 'pkg' or '@scope/pkg[/sub]' -> its dir */
+    for (var w = 0; w < idxWorkspace.length; w++) {
+      var wp = idxWorkspace[w];
+      if (mod === wp.name || mod.indexOf(wp.name + '/') === 0) {
+        var sub = mod === wp.name ? '' : mod.slice(wp.name.length + 1);
+        var wr = resolveCand(joinPath(wp.dir, sub)) || resolveCand(joinPath(wp.dir, joinPath('src', sub)));
+        if (wr) return wr;
+      }
     }
     return null;
   }
@@ -1865,46 +2082,71 @@
     var symbols = new Map();      /* name -> [{file, line, kind}] */
     var importsByFile = new Map(); /* file -> [{raw, resolved, line}] */
     var importedBy = new Map();    /* resolvedFile -> [{file, line}] */
-    var entries = [], tests = [], configs = [], docs = [], byExt = {};
-    var paths = sortedPaths(), symbolCount = 0;
+    var entries = [], tests = [], configs = [], docs = [], byExt = {}, langs = {};
+    var paths = sortedPaths(), symbolCount = 0, importCount = 0;
+    buildResolvers(paths);
+    var big = paths.length > 1500;
 
-    paths.forEach(function (p) {
+    function recordImport(file, raw, line) {
+      var resolved = resolveImport(file, raw);
+      (importsByFile.get(file) || (importsByFile.set(file, []), importsByFile.get(file))).push({ raw: raw, resolved: resolved, line: line });
+      if (resolved) (importedBy.get(resolved) || (importedBy.set(resolved, []), importedBy.get(resolved))).push({ file: file, line: line });
+      importCount++;
+    }
+
+    paths.forEach(function (p, pi) {
+      if (big && pi % 500 === 0) setStatus('INDEXING SYMBOLS — ' + pi + '/' + paths.length + ' files…');
       var f = files.get(p);
       var name = p.slice(p.lastIndexOf('/') + 1), ext = fileExt(p);
       byExt[ext || '·'] = (byExt[ext || '·'] || 0) + 1;
+      var lang = f.lang || (f.lang = detectLang(p, f.content));
+      langs[lang] = (langs[lang] || 0) + 1;
       if (TEST_PATH.test(p)) tests.push(p);
       if (CONFIG_NAMES.test(name)) configs.push(p);
       if (README_NAMES.test(name) || DOCS_PATH.test(p) || /\.(md|mdx|rst)$/i.test(name)) docs.push(p);
       if (ENTRY_NAMES.test(name) && !TEST_PATH.test(p)) entries.push(p);
 
+      var isGo = ext === 'go', inGoImport = false;
       var lines = f.content.split('\n');
       for (var i = 0; i < lines.length; i++) {
         var ln = lines[i];
         if (ln.length > 400) continue; /* skip minified/one-liners */
+
+        /* Go import blocks: import ( "a"\n "b" ) — stateful, plus single-line form */
+        if (isGo) {
+          if (inGoImport) {
+            if (/^\s*\)/.test(ln)) inGoImport = false;
+            else { var gm = ln.match(/"([^"]+)"/); if (gm) recordImport(p, gm[1], i + 1); }
+            continue;
+          }
+          if (/^\s*import\s*\(/.test(ln)) { inGoImport = true; continue; }
+          var gs = ln.match(/^\s*import\s+"([^"]+)"/); if (gs) { recordImport(p, gs[1], i + 1); continue; }
+        }
+
         var md = DEF_DECL_RE.exec(ln), sym = null, kind = null;
         if (md) { kind = md[1]; sym = md[2]; }
-        else { var ma = DEF_ASSIGN_RE.exec(ln); if (ma) { kind = 'assign'; sym = ma[1]; } }
+        else if (isGo) { var mgo = DEF_GO_METHOD_RE.exec(ln); if (mgo) { kind = 'method'; sym = mgo[1]; } }
+        if (!sym) {
+          if (ext === 'py') { var mp = DEF_PY_ASSIGN_RE.exec(ln); if (mp) { kind = 'const'; sym = mp[1]; } }
+          else { var ma = DEF_ASSIGN_RE.exec(ln); if (ma) { kind = assignKind(ln); sym = ma[1]; } }
+        }
         if (sym && sym.length > 1) {
           var arr = symbols.get(sym) || (symbols.set(sym, []), symbols.get(sym));
           if (arr.length < 200) { arr.push({ file: p, line: i + 1, kind: kind }); symbolCount++; }
         }
+
         for (var r = 0; r < IMPORT_RES.length; r++) {
           var im = IMPORT_RES[r].exec(ln);
-          if (im) {
-            var raw = im[1], resolved = resolveImport(p, raw);
-            (importsByFile.get(p) || (importsByFile.set(p, []), importsByFile.get(p))).push({ raw: raw, resolved: resolved, line: i + 1 });
-            if (resolved) (importedBy.get(resolved) || (importedBy.set(resolved, []), importedBy.get(resolved))).push({ file: p, line: i + 1 });
-            break; /* one import specifier per line */
-          }
+          if (im) { recordImport(p, im[1], i + 1); break; }
         }
       }
     });
 
     return {
-      fileCount: paths.length, symbols: symbols, symbolCount: symbolCount,
+      fileCount: paths.length, symbols: symbols, symbolCount: symbolCount, importCount: importCount,
       importsByFile: importsByFile, importedBy: importedBy,
       entries: entries, tests: tests, configs: configs, docs: docs,
-      byExt: byExt, packages: detectPackages(paths)
+      byExt: byExt, langs: langs, packages: detectPackages(paths)
     };
   }
 
@@ -1950,6 +2192,20 @@
     toast(groundMode ? 'Grounding on — model answers build on the local investigation.' : 'Grounding off — model receives context only.');
   });
 
+  /* Force Strict Trace — prepend the stricter trace instruction to every request */
+  var stricttracebtn = $('stricttracebtn');
+  function setStrictTrace(on) {
+    lsSet(LS.strictTrace, on ? '1' : '0');
+    stricttracebtn.textContent = '[ FORCE STRICT TRACE: ' + (on ? 'ON' : 'OFF') + ' ]';
+    stricttracebtn.setAttribute('aria-pressed', String(on));
+    stricttracebtn.classList.toggle('on', on);
+  }
+  setStrictTrace(lsGet(LS.strictTrace) === '1');
+  stricttracebtn.addEventListener('click', function () {
+    setStrictTrace(lsGet(LS.strictTrace) !== '1');
+    toast(lsGet(LS.strictTrace) === '1' ? 'Force strict trace on — stricter trace instruction each request.' : 'Force strict trace off.');
+  });
+
   function maybeAutoSmart() {
     if (ctxMode === 'smart') return;
     if (MODELS[model].local) return; /* local mode sends nothing — smart/full is moot */
@@ -1971,6 +2227,19 @@
     syncBudgetState(); setCtxMode(ctxMode);
   });
   syncBudgetState();
+
+  function syncSpendState() {
+    var v = parseFloat(lsGet(LS.spendcap) || '0');
+    $('spendin').value = v > 0 ? v : '';
+    $('spendstate').textContent = v > 0 ? '// limit: $' + v.toFixed(2) + ' per session — you’ll be warned before crossing it.' : '// no spend limit set.';
+  }
+  $('savespend').addEventListener('click', function () {
+    var v = parseFloat($('spendin').value);
+    if (isNaN(v) || v <= 0) { lsDel(LS.spendcap); toast('Spend limit cleared.'); }
+    else { lsSet(LS.spendcap, String(v)); toast('Spend limit set to $' + v.toFixed(2) + ' — warns before the estimate crosses it.'); }
+    syncSpendState();
+  });
+  syncSpendState();
 
   /* ============ PROJECT MEMORY (IndexedDB) ============
      Saves named projects: file-tree summary, selection, ignore patterns and
@@ -2079,7 +2348,12 @@
         setStatus('RELOADING “' + rec.name + '”…');
         return walkHandle(rec.handle, rec.handle.name + '/').then(afterIngest);
       }).catch(function (e) {
-        toast('Reload failed: ' + ((e && e.message) || 'unknown error') + ' — drop the folder instead.');
+        /* stale handle — folder moved/deleted since it was saved */
+        var gone = e && (e.name === 'NotFoundError' || /not found|no longer exists|GONE/i.test(e.message || ''));
+        if (gone && lastDirHandle === rec.handle) lastDirHandle = null;
+        var note = $('projnote'); note.hidden = false;
+        note.textContent = '// “' + rec.name + '”: settings restored. ' + (gone ? 'the saved folder was not found — it may have moved. ' : '') + 'drop the folder to reload its files.';
+        toast(gone ? '“' + rec.name + '” folder not found — drop it again to reload.' : 'Reload failed: ' + ((e && e.message) || 'unknown error') + ' — drop the folder instead.');
       });
     } else {
       var note = $('projnote');
@@ -2138,7 +2412,9 @@
       handle: lastDirHandle || null
     };
     idbPut(rec).then(function () {
-      toast('“' + name + '” saved — tree + settings only, no file contents.');
+      toast(rec.handle
+        ? '“' + name + '” saved — one-click reload enabled (tree + settings only, never contents).'
+        : '“' + name + '” saved — settings + selection only; ' + (window.showDirectoryPicker ? 'open via [ PICK FOLDER ] to enable one-click reload.' : 'this browser can’t re-open folders — re-drop to reload.'));
       renderProjects();
     }).catch(function (e) {
       /* a handle that cannot be cloned (rare) — retry without it */
@@ -2234,10 +2510,13 @@
     '- Context may include a <MERIDIAN_PROJECT_INTELLIGENCE> block produced by Meridian\'s deterministic local engine before your turn. It has typed sections: DETERMINISTIC FINDINGS, SYMBOLS, RELATED FILES, TESTS, RECENT CHANGES (all facts read from the project index — treat as verified, not your own inference), SOURCE EVIDENCE (attributed, line-true excerpts, each tagged "[Evidence NN]" with File / Lines / Kind), and MODEL TASK. Build your reasoning on these findings and excerpts, reuse their exact path:line ranges in your evidence, and clearly separate evidence-backed conclusions from hypotheses — never assert a fact the provided evidence does not support.',
     '- If the map shows a file you cannot see that would answer better, name it and suggest the user ask again mentioning it.',
     '- confidence: a number from 0 to 1 — your honest estimate.',
-    '- Optionally include "actions": up to 4 items of {"kind":"search"|"def"|"refs"|"dir"|"recent"|"open"|"git","command":"…","filter":"optional path glob (search only)","why":"short reason"}. All are read-only and run only after the user clicks. Kinds — search: substring/regex over loaded files, optional "filter" narrows paths (* wildcard); def: find likely definition sites of a symbol; refs: find all references to a symbol; dir: summarize a loaded directory (command = its path); recent: list recently modified files (command = a count, e.g. "10"); open: a context file path worth inspecting; git: a read-only git command (status, diff, log, show, blame) for the user\'s own terminal. Never propose anything that writes, deletes, or installs.',
+    '- Optionally include "actions": up to 4 read-only items {"kind","command","filter"?,"why"} that run only after the user clicks. Kinds — search (substring/regex over loaded files; optional "filter" path glob with *), def / refs (definition sites / references of a symbol), dir (summarize a loaded dir; command = path), recent (list recent files; command = a count like "10"), open (a context file worth inspecting), git (read-only status/diff/log/show/blame for the user\'s terminal). Never propose anything that writes, deletes, or installs.',
     '- If no project files are loaded, still emit the block with reasoning steps and empty evidence arrays.',
-    '- Output nothing after the closing fence of the meridian-trace block.'
+    '- Emit exactly ONE meridian-trace block and output nothing after its closing fence. Do not tag it ```json or anything else.',
+    '- The trace MUST be valid JSON: double-quoted keys and strings, no comments, no trailing commas. If you cannot produce valid trace JSON, still give your prose answer and emit a minimal valid trace (one step, empty evidence) — never emit broken JSON.'
   ].join('\n');
+  /* appended on demand (RE-GROUND) or when the user enables Force Strict Trace */
+  var STRICT_SUFFIX = '\n\nSTRICT MODE: A prior response could not be parsed into a trace. End with exactly one ```meridian-trace fenced block of strictly valid JSON — no prose, comments, or trailing commas after it. Prefer fewer steps over invalid JSON.';
 
   var CTX_PREAMBLE = 'The user\'s loaded project files follow. Each file begins with "═══ FILE: <path> ═══" and every line is prefixed with its 1-indexed line number and "│".';
 
@@ -2485,7 +2764,7 @@
     renderCost();
     toast('Session cost reset to zero.');
   }
-  $('navcost').addEventListener('click', function () { openDrawer(true); });
+  $('navcostbtn').addEventListener('click', function () { openDrawer(true); });
   $('navcostrst').addEventListener('click', function (e) { e.stopPropagation(); resetCost(); });
 
   /* ============ RENDERING ============ */
@@ -2543,16 +2822,79 @@
   }
 
   /* ============ TRACE ============ */
-  function extractTrace(raw) {
-    var m = raw.match(/```meridian-trace\s*\n([\s\S]*?)\n?```/);
-    if (!m) return { answer: raw, trace: null };
-    var answer = (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim();
-    var trace = null;
+  /* JSON.parse, then a lenient retry that strips a BOM, // line-comments and trailing
+     commas — models routinely emit those despite instructions. */
+  function tolerantJSONParse(s) {
+    if (typeof s !== 'string') return null;
+    try { return JSON.parse(s); } catch (e) {}
     try {
-      var t = JSON.parse(m[1]);
-      if (t && Array.isArray(t.steps)) trace = t;
-    } catch (e) {}
-    return { answer: answer, trace: trace };
+      var cleaned = s.replace(/^﻿/, '').replace(/\/\/[^\n\r]*/g, '').replace(/,\s*([}\]])/g, '$1');
+      return JSON.parse(cleaned);
+    } catch (e2) {}
+    return null;
+  }
+  /* balanced {…} starting at i (string/escape aware); returns the slice, or the tail
+     if the braces never close (a truncated stream). */
+  function sliceBalanced(str, i) {
+    var depth = 0, inStr = false, esc = false;
+    for (var j = i; j < str.length; j++) {
+      var ch = str.charAt(j);
+      if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+      if (ch === '"') inStr = true;
+      else if (ch === '{') depth++;
+      else if (ch === '}') { depth--; if (depth === 0) return str.slice(i, j + 1); }
+    }
+    return str.slice(i);
+  }
+  /* validate + repair a parsed trace object: steps must be an array of objects;
+     backfill n, default evidence to [], drop junk items. */
+  function coerceTrace(t) {
+    if (!t || !Array.isArray(t.steps)) return null;
+    var steps = [];
+    t.steps.forEach(function (s, i) {
+      if (!s || typeof s !== 'object') return;
+      if (!Array.isArray(s.evidence)) s.evidence = [];
+      if (typeof s.n !== 'number') s.n = i + 1;
+      steps.push(s);
+    });
+    if (Array.isArray(t.actions)) t.actions = t.actions.filter(function (a) { return a && typeof a === 'object'; });
+    t.steps = steps;
+    return t;
+  }
+  /* Resilient trace extraction. Returns {answer, trace, degraded} where degraded is
+     null (clean) | 'salvaged' (non-standard format recovered) | 'truncated'
+     (cut off mid-JSON) | 'unparseable' (fence present, JSON broken) | 'no-trace'. */
+  function extractTrace(raw) {
+    raw = raw || '';
+    /* (a) primary meridian-trace fence — tolerant of ~~~ fences, missing trailing
+       newline, and a missing closing fence at EOF (truncated stream). */
+    var m = raw.match(/(?:```|~~~)meridian-trace[ \t]*\r?\n([\s\S]*?)(?:\r?\n?(?:```|~~~)|$)/);
+    if (m) {
+      var hadClose = /(?:```|~~~)\s*$/.test(m[0]);
+      var t = coerceTrace(tolerantJSONParse(m[1]));
+      var answer = (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim();
+      if (t) return { answer: answer, trace: t, degraded: null };
+      return { answer: answer, trace: null, degraded: hadClose ? 'unparseable' : 'truncated' };
+    }
+    /* (b) fallback: any fenced block (```json / bare ```) whose JSON has "steps". */
+    var fences = raw.match(/(?:```|~~~)[a-z0-9_-]*[ \t]*\r?\n[\s\S]*?(?:```|~~~)/gi) || [];
+    for (var i = 0; i < fences.length; i++) {
+      if (fences[i].indexOf('"steps"') === -1) continue;
+      var inner = fences[i].replace(/^(?:```|~~~)[a-z0-9_-]*[ \t]*\r?\n/i, '').replace(/(?:```|~~~)\s*$/, '');
+      var t2 = coerceTrace(tolerantJSONParse(inner));
+      if (t2) return { answer: raw.replace(fences[i], '').trim(), trace: t2, degraded: 'salvaged' };
+    }
+    /* (c) fallback: a bare top-level {…"steps"…} with no fence at all. */
+    var si = raw.indexOf('"steps"');
+    if (si !== -1) {
+      var open = raw.lastIndexOf('{', si);
+      if (open !== -1) {
+        var t3 = coerceTrace(tolerantJSONParse(sliceBalanced(raw, open)));
+        if (t3) return { answer: raw.slice(0, open).trim() || '(trace only)', trace: t3, degraded: 'salvaged' };
+        return { answer: raw.slice(0, open).trim() || raw, trace: null, degraded: 'truncated' };
+      }
+    }
+    return { answer: raw, trace: null, degraded: 'no-trace' };
   }
 
   /* One navigable evidence chip — shared by the model trace and the MERIDIAN FOUND
@@ -2578,8 +2920,15 @@
     srcSpan.className = 'src'; srcSpan.textContent = 'ctx://';
     btn.appendChild(srcSpan);
     btn.appendChild(document.createTextNode(ev.file + ':' + a + '–' + b));
-    if (known) { btn.addEventListener('click', function () { openViewer(ev.file, a, b, ev.quote); }); }
-    else { btn.disabled = true; btn.title = 'File is not in the loaded context — the citation cannot be verified.'; }
+    if (known) {
+      var title = 'Open ' + ev.file + ' at ' + a + '–' + b;
+      if (ev.quote) {
+        var q60 = String(ev.quote).trim().slice(0, 60);
+        if (q60 && files.get(ev.file).content.indexOf(q60) === -1) { title = 'Quote not found in this file — the model may have paraphrased or mis-cited these lines'; btn.classList.add('unverified'); }
+      }
+      btn.title = title;
+      btn.addEventListener('click', function () { openViewer(ev.file, a, b, ev.quote); });
+    } else { btn.disabled = true; btn.title = 'File is not in the loaded context — the citation cannot be verified.'; }
     return btn;
   }
   /* copy one citation as `path:a–b` + its quote — for pasting into an issue or a doc */
@@ -2660,16 +3009,48 @@
     bd.insertBefore(lbl, txt);
   }
 
-  function renderTrace(msgEl, trace) {
+  /* a recoverable-failure affordance: re-run the LOCAL investigation and re-ask with
+     a stricter trace instruction (opts.retry supplies the closure) */
+  function appendRegroundBtn(bd, retry) {
+    var row = document.createElement('div');
+    row.className = 'reground-row';
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn-quiet acc'; b.textContent = '[ RE-GROUND & RETRY ]';
+    b.title = 'Re-run Meridian\'s deterministic investigation and ask again with a stricter trace instruction';
+    b.addEventListener('click', function () { b.disabled = true; retry(); });
+    row.appendChild(b);
+    bd.appendChild(row);
+  }
+  function renderTrace(msgEl, trace, opts) {
+    opts = opts || {};
+    var deg = opts.degraded;
     var bd = msgEl.querySelector('.bd');
     var wait = bd.querySelector('.trace-wait');
     if (wait) wait.remove();
     var chip = msgEl.querySelector('.term-hd .chip');
     if (!trace) {
-      chip.className = 'chip dim'; chip.textContent = 'TRACE UNAVAILABLE';
+      /* honest degradation states — the "showing raw response" surface */
+      if (deg === 'truncated' || deg === 'unparseable' || deg === 'no-trace') {
+        chip.className = 'chip dim';
+        chip.textContent = deg === 'truncated' ? 'TRACE TRUNCATED' : deg === 'unparseable' ? 'TRACE UNREADABLE' : 'RAW RESPONSE';
+        var note = document.createElement('div');
+        note.className = 'errline';
+        note.textContent = deg === 'truncated'
+          ? '// trace truncated mid-output — showing the partial response'
+          : deg === 'unparseable'
+            ? '// trace present but unreadable — showing the model\'s raw response'
+            : '// trace unavailable — showing the model\'s raw response';
+        bd.appendChild(note);
+        if (typeof opts.retry === 'function') appendRegroundBtn(bd, opts.retry);
+      } else {
+        /* neutral (aborted stream / no-op) */
+        chip.className = 'chip dim'; chip.textContent = 'TRACE UNAVAILABLE';
+      }
       return;
     }
-    chip.className = 'chip'; chip.textContent = 'TRACED';
+    chip.className = 'chip';
+    if (deg === 'salvaged') { chip.textContent = 'TRACED ~'; chip.title = 'Trace recovered from a non-standard format'; }
+    else { chip.textContent = 'TRACED'; chip.title = ''; }
     var tree = document.createElement('div');
     tree.className = 'trace-tree';
     var conf = (typeof trace.confidence === 'number') ? Math.max(0, Math.min(1, trace.confidence)).toFixed(2) : null;
@@ -2688,6 +3069,20 @@
     });
     bd.appendChild(tree);
     renderActions(bd, trace.actions);
+
+    /* aggregate honesty: how many citations point at files not in context */
+    var dead = 0, totalCites = 0;
+    trace.steps.forEach(function (st) {
+      (Array.isArray(st.evidence) ? st.evidence : []).forEach(function (ev) {
+        if (ev && typeof ev.file === 'string') { totalCites++; if (!files.has(ev.file)) dead++; }
+      });
+    });
+    if (dead) {
+      var dn = document.createElement('div');
+      dn.className = 'errline';
+      dn.textContent = '// ' + dead + ' of ' + totalCites + ' citation' + (totalCites === 1 ? '' : 's') + ' reference files not in the loaded context — those chips are not verifiable';
+      bd.appendChild(dn);
+    }
 
     /* Constellation Link — lines from the trace header to hovered evidence */
     var svg = tree.querySelector('.linkcanvas');
@@ -2894,6 +3289,7 @@
   function openViewer(path, a, b) {
     var f = files.get(path);
     if (!f) return;
+    rememberFocus();
     $('vtitle').textContent = path;
     $('vrange').textContent = 'L' + a + '–' + b;
     var vb = $('vbody');
@@ -2920,6 +3316,7 @@
   function closeViewer() {
     viewveil.classList.remove('on');
     if (untrapView) { untrapView(); untrapView = null; }
+    returnFocus();
   }
   $('vclose').addEventListener('click', closeViewer);
   viewveil.addEventListener('click', function (e) { if (e.target === viewveil) closeViewer(); });
@@ -3080,6 +3477,28 @@
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('askform').requestSubmit(); }
   });
 
+  /* rough per-request cost estimate (input context + a small output allowance) */
+  function estRequestUSD() {
+    var m = MODELS[model];
+    if (!m || m.unknownRates) return 0;
+    var inTok = (ctxMode === 'smart' ? getBudget() : selectedTokens().tokens) + 800;
+    return (inTok * m.rIn + 800 * m.rOut) / 1e6;
+  }
+  /* pre-send guards — one-time confirms, nothing is hard-blocked */
+  function preSendOK() {
+    var m = MODELS[model];
+    if (ctxMode === 'full' && !m.local) {
+      var sel = selectedTokens().tokens;
+      if (sel > m.ctx && !confirm('Selected context ≈ ' + fmtTok(sel) + ' tokens exceeds ' + m.label + '’s ' + fmtTok(m.ctx) + '-token window — the provider will likely reject it. Deselect files or switch to SMART.\n\nSend anyway?')) return false;
+    }
+    var cap = parseFloat(lsGet(LS.spendcap) || '0');
+    if (cap > 0 && !m.unknownRates) {
+      var spentUSD = (spent.in * m.rIn + spent.out * m.rOut + spent.cacheW * m.rCacheW + spent.cacheR * m.rCacheR) / 1e6;
+      var projected = spentUSD + estRequestUSD();
+      if (projected > cap && !confirm('Estimated session total (~$' + projected.toFixed(2) + ') would exceed your $' + cap.toFixed(2) + ' limit by ~$' + (projected - cap).toFixed(2) + '. Costs are estimates; your provider bills actuals.\n\nSend anyway?')) return false;
+    }
+    return true;
+  }
   $('askform').addEventListener('submit', function (e) {
     e.preventDefault();
     if (streaming) return;
@@ -3098,26 +3517,28 @@
       openDrawer(true);
       return;
     }
+    if (!preSendOK()) return;
     promptEl.value = '';
     ask(q, key);
   });
 
   stopbtn.addEventListener('click', function () { if (aborter) aborter.abort(); });
 
-  function httpErrorText(status, body) {
+  function httpErrorText(status, body, retryAfter) {
     var detail = '';
     try { detail = JSON.parse(body).error.message || ''; } catch (e) {}
     if (status === 401) return 'KEY REJECTED (401) — check it in settings.';
     if (status === 403) return 'FORBIDDEN (403) — this key cannot use this model. ' + detail;
     if (status === 404) return 'MODEL NOT FOUND (404) — ' + detail;
-    if (status === 429) return 'RATE LIMITED (429) — slow down or raise your provider limits. ' + detail;
+    if (status === 429) return 'RATE LIMITED (429) — ' + (retryAfter ? 'retry in ' + retryAfter + 's. ' : 'slow down or raise your provider limits. ') + detail;
     if (status === 400 && /token|context|length/i.test(detail)) return 'CONTEXT TOO LARGE (400) — deselect some files and retry.';
     if (status === 400) return 'BAD REQUEST (400) — ' + detail;
     if (status === 529 || status >= 500) return 'PROVIDER OVERLOADED (' + status + ') — retry in a moment.';
     return 'HTTP ' + status + ' — ' + detail;
   }
 
-  function ask(q, key) {
+  function ask(q, key, opts) {
+    opts = opts || {};
     addUserMsg(q);
     var msgEl = addAiMsg();
     var txtEl = msgEl.querySelector('.txt');
@@ -3131,9 +3552,14 @@
        — separate layer, navigable evidence. Never allowed to break the streaming path. */
     try { if (groundMode && cb.ground) renderFound(msgEl, cb.ground); } catch (e) {}
     setStatus('CORE REASONING — ' + MODELS[model].label + (cb.note ? ' · ' + cb.note : ''));
-    var system = [{ type: 'text', text: INSTRUCTIONS }].concat(cb.blocks);
-    var msgs = history.concat([{ role: 'user', content: q }]);
     var anthro = curProvider === 'anthropic';
+    /* strict trace: on demand (RE-GROUND) or when the user enables Force Strict Trace */
+    var strict = opts.strict || lsGet(LS.strictTrace) === '1';
+    var instrBlock = { type: 'text', text: INSTRUCTIONS + (strict ? STRICT_SUFFIX : '') };
+    /* the instruction block is stable across turns — cache it (Anthropic ≤4 breakpoints) */
+    if (anthro) instrBlock.cache_control = { type: 'ephemeral' };
+    var system = [instrBlock].concat(cb.blocks);
+    var msgs = history.concat([{ role: 'user', content: q }]);
 
     /* provider adapters share one streaming pump below; only the request
        shape and the SSE event schema differ */
@@ -3169,6 +3595,8 @@
       /* hide the trace fence (and any partial fence tail) while streaming */
       var shown = raw;
       fenceIdx = raw.indexOf(FENCE);
+      if (fenceIdx === -1) { var altF = raw.indexOf('~~~meridian-trace'); if (altF !== -1) fenceIdx = altF; }
+      if (fenceIdx === -1) { var bare = raw.search(/\n\s*\{\s*"steps"\s*:/); if (bare !== -1) fenceIdx = bare; } /* leaked/fenceless trace JSON */
       if (fenceIdx !== -1) {
         shown = raw.slice(0, fenceIdx);
         if (!waitShown && !final) {
@@ -3195,12 +3623,14 @@
       body: JSON.stringify(body)
     }).then(function (res) {
       if (!res.ok) {
+        var ra = res.headers.get('retry-after');
         return res.text().then(function (t) {
-          var he = new Error('http error'); he.httpStatus = res.status; he.httpBody = t; throw he;
+          var he = new Error('http error'); he.httpStatus = res.status; he.httpBody = t; he.retryAfter = ra; throw he;
         });
       }
+      if (!res.body) { var nb = new Error('no stream'); nb.streamMsg = 'the response had no readable body stream'; throw nb; }
       var reader = res.body.getReader(), dec = new TextDecoder(), buf = '';
-      var stopReason = null;
+      var stopReason = null, badEvents = 0;
       function pump() {
         return reader.read().then(function (r) {
           if (r.done) return finish();
@@ -3214,7 +3644,10 @@
             });
             if (!data || data === '[DONE]') return;
             var p;
-            try { p = JSON.parse(data); } catch (e) { return; }
+            try { p = JSON.parse(data); } catch (e) {
+              if (++badEvents === 3) { var mw = document.createElement('div'); mw.className = 'errline'; mw.textContent = '// some stream data could not be parsed — the answer may be incomplete'; msgEl.querySelector('.bd').appendChild(mw); }
+              return;
+            }
             if (anthro) {
               if (p.type === 'message_start' && p.message && p.message.usage) {
                 var u = p.message.usage;
@@ -3253,7 +3686,12 @@
         var parsed = extractTrace(raw);
         raw = parsed.answer;
         paint(true);
-        renderTrace(msgEl, parsed.trace);
+        /* offer RE-GROUND when the model produced text but no usable trace */
+        var canRetry = !parsed.trace && parsed.answer && parsed.answer !== '(empty)';
+        renderTrace(msgEl, parsed.trace, {
+          degraded: parsed.degraded,
+          retry: canRetry ? function () { ask(q, key, { strict: true }); } : null
+        });
         if (stopReason === 'max_tokens') {
           var n = document.createElement('div');
           n.className = 'errline'; n.textContent = '// output truncated at max_tokens';
@@ -3264,11 +3702,15 @@
           n2.className = 'errline'; n2.textContent = '// the model declined this request';
           msgEl.querySelector('.bd').appendChild(n2);
         }
+        if (!parsed.answer && !parsed.trace && stopReason !== 'max_tokens') {
+          var ne = document.createElement('div'); ne.className = 'errline'; ne.textContent = '// the model returned no content — try again or rephrase'; msgEl.querySelector('.bd').appendChild(ne);
+        }
         history.push({ role: 'user', content: q });
         history.push({ role: 'assistant', content: parsed.answer || '(empty)' });
         transcript.push({ q: q, answer: parsed.answer || '(empty)', trace: parsed.trace, model: MODELS[model].label, provider: PROVIDERS[curProvider].label, ts: Date.now() });
         attachCopy(msgEl, transcript.length - 1);
         setStatus('CORE IDLE — response complete');
+        announce('Response complete.' + (parsed.trace ? ' Trace available.' : ''));
         scrollEnd();
       }
       return pump();
@@ -3287,7 +3729,7 @@
         }
         setStatus('STOPPED BY OPERATOR');
       } else if (err.httpStatus) {
-        line = '// ' + httpErrorText(err.httpStatus, err.httpBody || '');
+        line = '// ' + httpErrorText(err.httpStatus, err.httpBody || '', err.retryAfter);
         if (err.httpStatus === 401) openDrawer(true);
         setStatus('REQUEST FAILED', true);
       } else if (err.streamMsg) {
@@ -3302,6 +3744,14 @@
       msgEl.querySelector('.bd').appendChild(d);
       var chip = msgEl.querySelector('.term-hd .chip');
       if (!raw.trim()) { chip.className = 'chip err'; chip.textContent = 'FAILED'; }
+      /* one-click retry for anything but auth/not-found/bad-request and operator stops */
+      if (err.name !== 'AbortError' && err.httpStatus !== 401 && err.httpStatus !== 403 && err.httpStatus !== 404 && err.httpStatus !== 400) {
+        var rrow = document.createElement('div'); rrow.className = 'reground-row';
+        var rb = document.createElement('button'); rb.type = 'button'; rb.className = 'btn-quiet acc'; rb.textContent = '[ RETRY ]';
+        rb.title = 'Re-send this question';
+        rb.addEventListener('click', function () { rb.disabled = true; ask(q, key, opts); });
+        rrow.appendChild(rb); msgEl.querySelector('.bd').appendChild(rrow);
+      }
       scrollEnd();
     }).finally(function () {
       streaming = false; aborter = null;
@@ -3646,6 +4096,7 @@
     transcript.push({ q: q, answer: answer, trace: trace, model: 'LOCAL ENGINE', provider: 'LOCAL', ts: Date.now() });
     attachCopy(msgEl, transcript.length - 1);
     setStatus('LOCAL ENGINE IDLE — deterministic · zero network');
+    announce('Local answer ready.');
     scrollEnd();
   }
 
@@ -3668,7 +4119,7 @@
     ];
     ov.hidden = false;
     ov.innerHTML = '<div class="ov-hd mono">PROJECT INTELLIGENCE // <b>deterministic</b> — Meridian understands the terrain before a model enters the room</div>'
-      + '<div class="stat-grid"></div><div class="ov-langs mono"></div><div class="ov-cap mono"></div>';
+      + '<div class="stat-grid"></div><div class="ov-index mono"></div><div class="ov-langs mono"></div><div class="ov-cap mono"></div>';
     var grid = ov.querySelector('.stat-grid');
     tiles.forEach(function (t) {
       var b = document.createElement('button');
@@ -3680,6 +4131,8 @@
       b.addEventListener('click', function () { askLocal(t.q); });
       grid.appendChild(b);
     });
+    var langCount = idx.langs ? Object.keys(idx.langs).length : langs.length;
+    ov.querySelector('.ov-index').textContent = '// indexed ' + idx.symbolCount + ' symbol' + (idx.symbolCount === 1 ? '' : 's') + ' · ' + (idx.importCount || 0) + ' import' + ((idx.importCount || 0) === 1 ? '' : 's') + ' · ' + langCount + ' language' + (langCount === 1 ? '' : 's');
     ov.querySelector('.ov-langs').textContent = '// languages: ' + (langs.slice(0, 6).map(function (e) { return e + ' ·' + idx.byExt[e]; }).join('  ') || 'none');
     ov.querySelector('.ov-cap').textContent = '// ✓ known locally: ' + CAP_LOCAL.join(' · ') + '   ○ requires a model: ' + CAP_MODEL.join(' · ');
   }
@@ -3750,7 +4203,8 @@
     { g: 'SETTINGS', n: 'Open settings', k: 'ctrl .', f: function () { openDrawer(true); } },
     { g: 'SETTINGS', n: 'Load the demo project (LOCAL)', k: '', f: function () { startDemo(); } },
     { g: 'SETTINGS', n: 'Toggle ceremony / daylight', k: '', f: flipMode },
-    { g: 'SETTINGS', n: 'Show keymap', k: '?', f: function () { $('keymapveil').classList.add('on'); } }
+    { g: 'SETTINGS', n: 'Show keymap', k: '?', f: openKeymap },
+    { g: 'SETTINGS', n: 'Run self-tests (dev)', k: '', f: runAndShowSelfTests }
   ];
   var palSel = 0, palMatches = [];
   function fuzzy(q, s) {
@@ -3782,8 +4236,8 @@
       palList.appendChild(d);
     });
   }
-  function palOpen() { palOv.classList.add('on'); palIn.value = ''; palSel = 0; palRender(); palIn.focus(); }
-  function palClose() { palOv.classList.remove('on'); palIn.blur(); }
+  function palOpen() { rememberFocus(); palOv.classList.add('on'); palIn.value = ''; palSel = 0; palRender(); palIn.focus(); }
+  function palClose() { palOv.classList.remove('on'); palIn.blur(); returnFocus(); }
   function palExec(i) { var a = palMatches[i]; if (!a) return; palClose(); a.f(); }
   palIn.addEventListener('input', function () { palSel = 0; palRender(); });
   palIn.addEventListener('keydown', function (e) {
@@ -3795,11 +4249,105 @@
   palOv.addEventListener('click', function (e) { if (e.target === palOv) palClose(); });
 
   var keymapveil = $('keymapveil');
-  function openKeymap() { keymapveil.classList.add('on'); }
+  function openKeymap() { rememberFocus(); keymapveil.classList.add('on'); $('keymapclose').focus(); }
+  function closeKeymap() { keymapveil.classList.remove('on'); returnFocus(); }
   $('keysbtn').addEventListener('click', openKeymap);
   $('keymaphint').addEventListener('click', openKeymap);
-  $('keymapclose').addEventListener('click', function () { keymapveil.classList.remove('on'); });
-  keymapveil.addEventListener('click', function (e) { if (e.target === keymapveil) keymapveil.classList.remove('on'); });
+  $('keymapclose').addEventListener('click', closeKeymap);
+  keymapveil.addEventListener('click', function (e) { if (e.target === keymapveil) closeKeymap(); });
+
+  /* ============ SELF-TESTS (DEV · EXPERIMENTAL) ============
+     Loads a scratch multi-language fixture into a swapped-in files map, runs the
+     real index/packer/trace code, asserts, then restores state. No live API calls.
+     Reach it via the palette ("Run self-tests") or ?selftest in the URL. */
+  function stEntry(p, t) { return { content: t, lines: t.split('\n').length, tokens: estTokens(t, p), mtime: 0, base: staticScore(p), checked: true, lang: detectLang(p, t) }; }
+  function selfTestFixture() {
+    return {
+      'tsconfig.json': '{ "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["src/*"] } } }',
+      'src/aliased.ts': "import { addTodo } from '@/store';\nexport const ALIASED = 1;",
+      'pkg/app.py': "from .util import helper\nAPP_NAME = 'demo'\ndef run():\n    return helper()",
+      'pkg/util.py': "def helper():\n    return 1",
+      'gopkg/server.go': 'package main\nimport (\n  "fmt"\n)\nfunc NewServer() {}\nfunc (s *Server) Start() error { fmt.Println("x"); return nil }',
+      'rustcrate/lib.rs': 'pub fn compute(x: i32) -> i32 { x }\npub struct Engine {}\nmod parser;',
+      'rustcrate/parser.rs': 'pub fn parse() {}'
+    };
+  }
+  function runSelfTests() {
+    var results = [];
+    function ok(name, cond, extra) { results.push({ name: name, pass: !!cond, extra: extra || '' }); }
+    var savedFiles = files, savedIndex = projectIndex, savedDirty = indexDirty;
+    try {
+      files = new Map();
+      Object.keys(SAMPLE_PROJECT).forEach(function (p) { files.set(p, stEntry(p, SAMPLE_PROJECT[p])); });
+      var FIX = selfTestFixture();
+      Object.keys(FIX).forEach(function (p) { files.set(p, stEntry(p, FIX[p])); });
+      indexDirty = true; projectIndex = null;
+      var idx = buildIndex();
+      ok('symbols · JS addTodo', idx.symbols.has('addTodo'));
+      ok('symbols · JS API_BASE_URL const', idx.symbols.has('API_BASE_URL'));
+      ok('symbols · Rust pub fn compute', idx.symbols.has('compute'));
+      ok('symbols · Rust struct Engine', idx.symbols.has('Engine'));
+      ok('symbols · Go func NewServer', idx.symbols.has('NewServer'));
+      ok('symbols · Go receiver method Start', idx.symbols.has('Start'), 'receiver methods');
+      ok('symbols · Python def run', idx.symbols.has('run'));
+      ok('symbols · Python const APP_NAME', idx.symbols.has('APP_NAME'));
+      ok('imports · store.js importedBy server.js', (idx.importedBy.get('src/store.js') || []).some(function (e) { return e.file === 'src/server.js'; }));
+      ok('imports · tsconfig @/ alias resolves', (idx.importsByFile.get('src/aliased.ts') || []).some(function (e) { return e.resolved === 'src/store.js'; }), '@/store → src/store.js');
+      ok('imports · Python relative from .util', (idx.importsByFile.get('pkg/app.py') || []).some(function (e) { return e.resolved === 'pkg/util.py'; }));
+      ok('imports · Go block import recorded', (idx.importsByFile.get('gopkg/server.go') || []).some(function (e) { return e.raw === 'fmt'; }));
+      ok('imports · Rust mod parser resolves', (idx.importsByFile.get('rustcrate/lib.rs') || []).some(function (e) { return e.resolved === 'rustcrate/parser.rs'; }));
+      ok('index · languages counted', idx.langs && Object.keys(idx.langs).length >= 4, Object.keys(idx.langs || {}).join(','));
+      ok('index · importCount > 0', (idx.importCount || 0) > 0, String(idx.importCount));
+      /* packer respects budget and never emits a line number past a file's length */
+      var packed = packSmartContext('where is API_BASE_URL defined', 4000);
+      ok('packer · within budget', packed.tokens <= 4000, packed.tokens + ' / 4000');
+      ok('packer · emits FILE markers', /═══ FILE:/.test(packed.text));
+      ok('packer · line-numbered content present', /\d+│/.test(packed.text) || packed.included.every(function (x) { return x.whole; }));
+      /* intent routing returns a decision */
+      ok('intent · classifyIntent returns a kind', !!(classifyIntent('where is addTodo defined') || {}).kind);
+      /* trace parser fallbacks */
+      ok('trace · clean fence', extractTrace('a\n```meridian-trace\n{"steps":[{"action":"x"}]}\n```').degraded === null);
+      ok('trace · ```json salvaged', extractTrace('a\n```json\n{"steps":[{"action":"x"}]}\n```').degraded === 'salvaged');
+      ok('trace · fenceless salvaged', extractTrace('a\n{"steps":[{"action":"x"}]}').degraded === 'salvaged');
+      ok('trace · truncated detected', extractTrace('a\n```meridian-trace\n{"steps":[{"action":"x"').degraded === 'truncated');
+      ok('trace · no-trace', extractTrace('just prose').degraded === 'no-trace');
+      /* grounding roundtrip: a canned grounded answer yields a live (known) chip */
+      var canned = 'API_BASE_URL is in config.\n```meridian-trace\n{"steps":[{"action":"locate","evidence":[{"file":"src/config.js","startLine":5,"endLine":5,"quote":"API_BASE_URL"}]}],"confidence":0.9}\n```';
+      var pr = extractTrace(canned);
+      var ev0 = pr.trace && pr.trace.steps[0] && pr.trace.steps[0].evidence[0];
+      ok('grounding · cited file resolves to loaded context', !!(ev0 && files.has(ev0.file)), ev0 ? ev0.file : 'no evidence');
+    } catch (e) {
+      ok('harness executed without throwing', false, String(e && e.message || e));
+    } finally {
+      files = savedFiles; projectIndex = savedIndex; indexDirty = savedDirty;
+    }
+    return results;
+  }
+  function showSelfTestResults(results) {
+    var pass = results.filter(function (r) { return r.pass; }).length;
+    var veil = document.createElement('div'); veil.className = 'veil on'; veil.id = 'selftestveil';
+    var modal = document.createElement('div'); modal.className = 'modal'; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-label', 'Self-test results');
+    var rows = results.map(function (r) {
+      return '<tr><td class="' + (r.pass ? 'st-pass' : 'st-fail') + '">' + (r.pass ? '✓' : '✗') + '</td><td>' + esc(r.name) + '</td><td class="mono" style="color:var(--ink-3)">' + esc(r.extra || '') + '</td></tr>';
+    }).join('');
+    modal.innerHTML = '<div class="k mono">MERIDIAN // SELF-TESTS<span class="st-badge mono">DEV</span></div>'
+      + '<h2>' + pass + ' / ' + results.length + ' passed</h2>'
+      + '<p class="note mono" style="color:var(--ink-3)">// deterministic checks of the index, packer and trace parser on a scratch fixture — no network, no API.</p>'
+      + '<table>' + rows + '</table>'
+      + '<div class="row"><button class="btn btn-hairline" type="button" id="selftestclose">Close</button></div>';
+    veil.appendChild(modal);
+    app.appendChild(veil); /* inside #app so the CSS variables resolve */
+    rememberFocus();
+    var untrap = trap(modal);
+    function close() { veil.remove(); if (untrap) untrap(); returnFocus(); }
+    modal.querySelector('#selftestclose').addEventListener('click', close);
+    veil.addEventListener('click', function (e) { if (e.target === veil) close(); });
+    modal.querySelector('#selftestclose').focus();
+    try { console.table(results.map(function (r) { return { test: r.name, pass: r.pass, detail: r.extra }; })); } catch (e) {}
+    var fails = results.length - pass;
+    toast(fails ? 'Self-tests: ' + pass + '/' + results.length + ' passed · ' + fails + ' FAILED.' : 'Self-tests: all ' + pass + ' passed.');
+  }
+  function runAndShowSelfTests() { showSelfTestResults(runSelfTests()); }
 
   /* ============ GLOBAL KEYS ============ */
   document.addEventListener('keydown', function (e) {
@@ -3821,12 +4369,12 @@
     var tag = (document.activeElement && document.activeElement.tagName) || '';
     var inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
     if (e.key === '?' && !inField && !mod) {
-      keymapveil.classList.toggle('on');
+      keymapveil.classList.contains('on') ? closeKeymap() : openKeymap();
       return;
     }
     if (e.key === 'Escape') {
       if (palOv.classList.contains('on')) { palClose(); return; }
-      if (keymapveil.classList.contains('on')) { keymapveil.classList.remove('on'); return; }
+      if (keymapveil.classList.contains('on')) { closeKeymap(); return; }
       if (viewveil.classList.contains('on')) { closeViewer(); return; }
       if (prevveil.classList.contains('on')) { closePreview(); return; }
       if (skipveil.classList.contains('on')) { closeSkipReview(); return; }
@@ -3837,7 +4385,9 @@
 
   syncProviderUI();
   setCtxMode(ctxMode); /* also renders the budget */
-  console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— free beta. zero egress to us; requests go browser → api.anthropic.com under your key.');
+  window.__meridianSelfTest = runSelfTests; /* L3: run from the console */
+  if (/[?&]selftest\b/.test(location.search)) setTimeout(runAndShowSelfTests, 300);
+  console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— Engine v0.2-hardened · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');
 })();
 </script>
 </body>
