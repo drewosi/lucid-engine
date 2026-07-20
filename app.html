@@ -360,6 +360,7 @@
   .found-hd .ft { color: var(--ink-3); font-size: 10px; letter-spacing: .04em; }
   .found-list { margin: 9px 0 2px; padding-left: 16px; }
   .found-list li { font-size: 11.5px; color: var(--ink-2); line-height: 1.65; }
+  .found-terrain { margin-top: 8px; font-size: 10px; letter-spacing: .06em; color: var(--ink-3); }
   .found .ev-row { margin-top: 9px; }
   .found-model { margin: 16px 0 9px; font-size: 10px; letter-spacing: .14em; color: var(--accent); border-top: 1px dashed var(--line-strong); padding-top: 12px; }
 
@@ -1889,7 +1890,7 @@
     '- steps: 1 to 6 items, in reasoning order.',
     '- evidence: each item MUST cite a file path exactly as it appears after "FILE:" in the context, with 1-indexed line numbers matching the numbered lines, and a verbatim quote of at most 120 characters. Never invent files or line numbers. A pure-reasoning step may have an empty evidence array.',
     '- Context may include a PROJECT MAP block (file tree + key-file heads) and a question-relevant subset of files. Excerpted files keep their true line numbers; gaps are marked "··· lines A–B omitted ···". Cite only line ranges you can actually see.',
-    '- Context may include a MERIDIAN INVESTIGATION block produced by Meridian\'s deterministic local engine before your turn, in three parts: MERIDIAN DETERMINISTIC FINDINGS (facts read from the project index — treat as verified, not your own inference), MERIDIAN SOURCE EVIDENCE (attributed, line-true excerpts, each tagged "[MERIDIAN EVIDENCE NN]" with File / Lines / Kind), and MODEL TASK. Build your reasoning on these findings and excerpts, reuse their exact path:line ranges in your evidence, and clearly separate evidence-backed conclusions from hypotheses — never assert a fact the provided evidence does not support.',
+    '- Context may include a <MERIDIAN_PROJECT_INTELLIGENCE> block produced by Meridian\'s deterministic local engine before your turn. It has typed sections: DETERMINISTIC FINDINGS, SYMBOLS, RELATED FILES, TESTS, RECENT CHANGES (all facts read from the project index — treat as verified, not your own inference), SOURCE EVIDENCE (attributed, line-true excerpts, each tagged "[Evidence NN]" with File / Lines / Kind), and MODEL TASK. Build your reasoning on these findings and excerpts, reuse their exact path:line ranges in your evidence, and clearly separate evidence-backed conclusions from hypotheses — never assert a fact the provided evidence does not support.',
     '- If the map shows a file you cannot see that would answer better, name it and suggest the user ask again mentioning it.',
     '- confidence: a number from 0 to 1 — your honest estimate.',
     '- Optionally include "actions": up to 4 items of {"kind":"search"|"def"|"refs"|"dir"|"recent"|"open"|"git","command":"…","filter":"optional path glob (search only)","why":"short reason"}. All are read-only and run only after the user clicks. Kinds — search: substring/regex over loaded files, optional "filter" narrows paths (* wildcard); def: find likely definition sites of a symbol; refs: find all references to a symbol; dir: summarize a loaded directory (command = its path); recent: list recently modified files (command = a count, e.g. "10"); open: a context file path worth inspecting; git: a read-only git command (status, diff, log, show, blame) for the user\'s own terminal. Never propose anything that writes, deletes, or installs.',
@@ -1935,18 +1936,16 @@
     return { text: numberLines(slice.join('\n'), a), startLine: a, endLine: b };
   }
 
-  /* Phase 2 — serialize a completed investigation into a budget-aware, three-layer
-     model context: DETERMINISTIC FINDINGS · SOURCE EVIDENCE (attributed, line-true
-     excerpts) · MODEL TASK. Pure (no DOM). The returned object is the single source of
-     truth for both the request text and the MERIDIAN FOUND panel. Returns null when the
-     question yields no evidence, so an empty block is never sent. */
-  function serializeInvestigationContext(q, intent, inv, budgetTok) {
+  /* Phase 2 (loop completion) — the ONE structured representation of a completed
+     investigation: findings + typed terrain (symbols · related files · tests · recent)
+     + evidence, all read from the ALREADY-built index. No second index, no second
+     evidence system. Pure (no DOM). Returns null when the question yields no evidence. */
+  function buildInvestigationContext(q, intent, inv) {
     if (!inv) return null;
     var idx = null; try { idx = getIndex(); } catch (e) { idx = null; }
-    var cap = Math.min(budgetTok || GROUND_MAX_TOK, GROUND_MAX_TOK);
 
-    /* 1. flatten evidence in step order, dedup by file:startLine, label by step kind */
-    var items = [], seen = {};
+    /* evidence — flatten inv.steps[].evidence, dedup by file:startLine, label by step */
+    var evidence = [], seen = {};
     (inv.steps || []).forEach(function (st) {
       var kind = GROUND_KIND[intent.kind] || 'evidence';
       var act = (st.action || '').toLowerCase();
@@ -1959,57 +1958,95 @@
         if (!ev || typeof ev.file !== 'string') return;
         var key = ev.file + ':' + ev.startLine;
         if (seen[key]) return; seen[key] = 1;
-        items.push({ file: ev.file, startLine: (ev.startLine | 0) || 1, endLine: (ev.endLine | 0) || (ev.startLine | 0) || 1,
-                     quote: ev.quote || '', kind: kind, known: files.has(ev.file) });
+        evidence.push({ file: ev.file, startLine: (ev.startLine | 0) || 1, endLine: (ev.endLine | 0) || (ev.startLine | 0) || 1,
+                        quote: ev.quote || '', kind: kind, known: files.has(ev.file) });
       });
     });
-    if (!items.length) return null;
+    if (!evidence.length) return null;
 
-    /* 2. DETERMINISTIC FINDINGS — the investigation's own answer + project shape.
-       Facts read from the index, never model inference. */
+    /* findings — the investigation's own answer (cleaned) + one project-shape line */
     var findings = [];
     String(inv.answer || '').split('\n')
       .map(function (l) { return l.replace(/\*\*/g, '').replace(/^[-\d.]+\s+/, '').trim(); })
       .filter(function (l) { return l.length > 2 && !/^(Evidence chips|Chips open|Connect a model|Ask `)/.test(l); })
       .slice(0, 6).forEach(function (l) { findings.push(l); });
+    if (idx) findings.push('project shape: ' + idx.fileCount + ' files · ' + idx.symbolCount + ' symbols · '
+      + idx.packages.length + ' package' + (idx.packages.length === 1 ? '' : 's') + ' · '
+      + idx.entries.length + ' entry point' + (idx.entries.length === 1 ? '' : 's') + ' · '
+      + idx.tests.length + ' test file' + (idx.tests.length === 1 ? '' : 's'));
+
+    /* symbols — the key symbol's definitions, straight from the index */
+    var symbols = [];
     if (idx) {
-      findings.push('project shape: ' + idx.fileCount + ' files · ' + idx.symbolCount + ' symbols · '
-        + idx.packages.length + ' package' + (idx.packages.length === 1 ? '' : 's') + ' · '
-        + idx.entries.length + ' entry point' + (idx.entries.length === 1 ? '' : 's') + ' · '
-        + idx.tests.length + ' test file' + (idx.tests.length === 1 ? '' : 's'));
-      /* bounded terrain enrichment for reasoning questions: the top evidence file's edges */
-      if ((intent.kind === 'reason' || intent.kind === 'plain') && items[0] && items[0].known) {
-        var tf = items[0].file;
-        var imps = (idx.importsByFile.get(tf) || []).filter(function (x) { return x.resolved; }).map(function (x) { return x.resolved; });
-        var impBy = (idx.importedBy.get(tf) || []).map(function (x) { return x.file; });
-        if (imps.length) findings.push(tf + ' imports: ' + imps.slice(0, 8).join(', '));
-        if (impBy.length) findings.push(tf + ' imported by: ' + impBy.slice(0, 8).join(', '));
-      }
+      var sym = pickSymbol(q, idx);
+      if (sym) symLookup(sym, idx).slice(0, 8).forEach(function (d) { symbols.push({ name: sym, file: d.file, line: d.line, kind: d.kind }); });
     }
 
-    /* 3. SOURCE EVIDENCE — attributed, line-true excerpts within the token budget;
-       highest-value first, overflow degrades to citation-only lines. */
-    var verdict = inv.verdict || { local: true, text: 'KNOWN LOCALLY' };
-    var header = 'MERIDIAN INVESTIGATION — Meridian analyzed the project index for this question before your turn.\n'
-      + 'QUESTION: ' + q + '\n'
-      + 'INTENT: ' + intent.kind + '   VERDICT: ' + verdict.text + '\n\n'
-      + '── MERIDIAN DETERMINISTIC FINDINGS ──\n'
-      + 'Facts read directly from the project index — verified, not inferred:\n'
-      + findings.map(function (f) { return '- ' + f; }).join('\n') + '\n\n'
-      + '── MERIDIAN SOURCE EVIDENCE ──\n'
+    /* relatedFiles — edges of the top evidence file (imports · importers · dir · name),
+       reusing the same relation logic the `related` investigation uses */
+    var relatedFiles = [];
+    if (idx && evidence[0]) {
+      var rf = evidence[0].file, rel = {};
+      (idx.importsByFile.get(rf) || []).forEach(function (x) { if (x.resolved) rel[x.resolved] = 'imports'; });
+      (idx.importedBy.get(rf) || []).forEach(function (x) { rel[x.file] = 'imported by'; });
+      var d = dirOf(rf), bn = rf.slice(rf.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '').toLowerCase();
+      files.forEach(function (f, p) {
+        if (p === rf || rel[p]) return;
+        if (dirOf(p) === d) rel[p] = 'same directory';
+        else if (bn.length > 2 && p.toLowerCase().indexOf(bn) !== -1) rel[p] = 'name match';
+      });
+      Object.keys(rel).slice(0, 12).forEach(function (p) { relatedFiles.push({ file: p, relation: rel[p] }); });
+    }
+
+    /* tests + recent — from the index and file mtimes, capped */
+    var tests = idx ? idx.tests.slice(0, 12) : [];
+    var recent = [];
+    files.forEach(function (f, p) { recent.push({ file: p, mtime: f.mtime || 0 }); });
+    recent.sort(function (a, b) { return b.mtime - a.mtime; });
+    recent = recent.slice(0, 8);
+
+    return { question: q, intent: intent.kind, verdict: inv.verdict || { local: true, text: 'KNOWN LOCALLY' },
+             findings: findings, evidence: evidence, symbols: symbols, relatedFiles: relatedFiles,
+             tests: tests, recent: recent, context: [] };
+  }
+
+  /* Phase 2 (loop completion) — serialize the structured investigation context into a
+     budget-aware <MERIDIAN_PROJECT_INTELLIGENCE> envelope with explicit typed sections
+     (FINDINGS · SYMBOLS · RELATED FILES · TESTS · RECENT · SOURCE EVIDENCE · MODEL TASK).
+     Pure (no DOM). The returned object is the single source of truth for both the request
+     text and the MERIDIAN FOUND panel. Returns null when there is no evidence. */
+  function serializeInvestigationContext(ctx, budgetTok) {
+    if (!ctx || !ctx.evidence || !ctx.evidence.length) return null;
+    var cap = Math.min(budgetTok || GROUND_MAX_TOK, GROUND_MAX_TOK);
+    var verdict = ctx.verdict || { local: true, text: 'KNOWN LOCALLY' };
+    function section(title, lines) { return '── ' + title + ' ──\n' + (lines.length ? lines.join('\n') : 'none detected') + '\n\n'; }
+
+    var head = '<MERIDIAN_PROJECT_INTELLIGENCE>\n'
+      + 'Meridian analyzed the project index for this question before your turn. Everything below is deterministic — read from the project, not inferred.\n\n'
+      + 'USER QUESTION: ' + ctx.question + '\n'
+      + 'INTENT: ' + ctx.intent + '    VERDICT: ' + verdict.text + '\n\n'
+      + section('DETERMINISTIC FINDINGS', ctx.findings.map(function (f) { return '- ' + f; }))
+      + section('SYMBOLS', ctx.symbols.map(function (s) { return '- ' + s.name + ' (' + s.kind + ') — ' + s.file + ':' + s.line; }))
+      + section('RELATED FILES', ctx.relatedFiles.map(function (r) { return '- ' + r.file + ' — ' + r.relation; }))
+      + section('TESTS', ctx.tests.map(function (t) { return '- ' + t; }))
+      + section('RECENT CHANGES', ctx.recent.map(function (r) { return '- ' + r.file; }))
+      + '── SOURCE EVIDENCE ──\n'
       + 'Files and exact line ranges supporting the findings. Line numbers are authoritative and unchanged.\n\n';
-    var evBlocks = [], cites = [], evOut = [], used = estTokens(header);
-    for (var i = 0; i < items.length; i++) {
-      var it = items[i];
+
+    /* attributed, line-true excerpts within the token budget; overflow → citation lines */
+    var evBlocks = [], cites = [], evOut = [], contextOut = [], used = estTokens(head);
+    for (var i = 0; i < ctx.evidence.length; i++) {
+      var it = ctx.evidence[i];
       if (evOut.length < GROUND_MAX_EVIDENCE && it.known) {
         var ex = groundExcerpt(it.file, it.startLine, it.endLine);
         if (ex) {
           var num = String(evOut.length + 1).padStart(2, '0');
-          var block = '[MERIDIAN EVIDENCE ' + num + ']\nFile: ' + it.file + '\nLines: ' + ex.startLine + '–' + ex.endLine + '\nKind: ' + it.kind + '\n' + ex.text + '\n';
+          var block = '[Evidence ' + num + ']\nFile: ' + it.file + '\nLines: ' + ex.startLine + '–' + ex.endLine + '\nKind: ' + it.kind + '\n' + ex.text + '\n';
           var t = estTokens(block, it.file);
           if (used + t <= cap) {
             evBlocks.push(block);
             evOut.push({ file: it.file, startLine: ex.startLine, endLine: ex.endLine, kind: it.kind, quote: it.quote });
+            contextOut.push({ file: it.file, startLine: ex.startLine, endLine: ex.endLine, text: ex.text });
             used += t;
             continue;
           }
@@ -2022,16 +2059,17 @@
       }
     }
 
-    /* 4. MODEL TASK — the interpretation the model is being asked to perform */
     var task = '\n── MODEL TASK ──\n'
-      + 'Using the deterministic findings and source evidence above, answer the user\'s question.\n'
+      + 'Using Meridian\'s findings and source evidence above, reason about the user\'s question.\n'
       + '- Distinguish evidence-backed conclusions from your own hypotheses; label inference as inference.\n'
       + '- Do not claim a fact is true unless the provided evidence supports it.\n'
-      + '- Prefer citing these exact files and line ranges (path:line) in your trace evidence.\n';
+      + '- Prefer citing these exact files and line ranges (path:line) in your trace evidence.\n'
+      + '</MERIDIAN_PROJECT_INTELLIGENCE>\n';
 
     var citeText = cites.length ? '\nAdditional verified citations (no excerpt shown):\n' + cites.join('\n') + '\n' : '';
-    var text = header + (evBlocks.join('\n') || '(no excerpts fit the budget; verified citations follow)\n') + citeText + task;
-    return { text: text, count: evOut.length, evidence: evOut, findings: findings, verdict: verdict, intent: intent.kind };
+    var text = head + (evBlocks.join('\n') || '(no excerpts fit the budget; verified citations follow)\n') + citeText + task;
+    return { text: text, count: evOut.length, evidence: evOut, findings: ctx.findings, verdict: verdict, intent: ctx.intent,
+             symbols: ctx.symbols, relatedFiles: ctx.relatedFiles, tests: ctx.tests, recent: ctx.recent, context: contextOut };
   }
 
   /* Phase 5/2 bridge: run the deterministic investigation for q, then serialize it.
@@ -2043,7 +2081,8 @@
     try {
       var intent = classifyIntent(q);
       var inv = runInvestigation(q, intent);
-      return serializeInvestigationContext(q, intent, inv, budgetTok);
+      var ctx = buildInvestigationContext(q, intent, inv);
+      return serializeInvestigationContext(ctx, budgetTok);
     } catch (e) { return null; }
   }
 
@@ -2195,6 +2234,18 @@
       ul.className = 'found-list';
       ground.findings.slice(0, 6).forEach(function (f) { var li = document.createElement('li'); li.textContent = f; ul.appendChild(li); });
       panel.appendChild(ul);
+    }
+    /* compact typed-terrain line — the same structured intelligence sent to the model */
+    var terrain = [];
+    if (ground.symbols && ground.symbols.length) terrain.push(ground.symbols.length + ' symbol' + (ground.symbols.length === 1 ? '' : 's'));
+    if (ground.relatedFiles && ground.relatedFiles.length) terrain.push(ground.relatedFiles.length + ' related');
+    if (ground.tests && ground.tests.length) terrain.push(ground.tests.length + ' test' + (ground.tests.length === 1 ? '' : 's'));
+    if (ground.recent && ground.recent.length) terrain.push(ground.recent.length + ' recent');
+    if (terrain.length) {
+      var tl = document.createElement('div');
+      tl.className = 'found-terrain mono';
+      tl.textContent = 'terrain · ' + terrain.join(' · ');
+      panel.appendChild(tl);
     }
     if (ground.evidence && ground.evidence.length) panel.appendChild(evidenceChipRow(ground.evidence, 12));
     var lbl = document.createElement('div');
