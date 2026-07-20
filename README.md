@@ -57,6 +57,52 @@ With `[ GROUND: ON ]` (default), every model question first runs Meridian's dete
 
 Honest-labeling rule, upgraded: everything simulated or unbuilt says so on the surface — the landing page's trace console wears a `SIM` chip, unbuilt capabilities wear `ROADMAP` chips, and future pricing wears `PLANNED` chips with a "nothing can be purchased today" note.
 
+## Engine internals — languages, limits, security, self-tests
+
+*(MERIDIAN Engine v0.2-hardened)*
+
+### Recent improvements
+
+- **Resilient trace parsing** — the `meridian-trace` block is recovered even when the model uses ` ```json `, drops the fence, adds trailing commas, or gets cut off mid-JSON. When no trace can be recovered the answer degrades honestly to a `RAW RESPONSE` / `TRACE TRUNCATED` state with a one-click **`[ RE-GROUND & RETRY ]`** (re-runs the local investigation and re-asks with a stricter instruction). A **Force Strict Trace** setting opts noncompliant models into stricter prompting.
+- **Multi-language indexing** — symbol and import extraction now covers **Python, Go, Rust** alongside deepened JS/TS (dynamic `import()`, tsconfig `paths` aliases, monorepo workspace resolution). See the matrix below.
+- **Faster on large repos** — the symbol/import index no longer rebuilds when you toggle file selection (it depends on content, not selection), the file cap is raised to **8,000**, and token estimates blend a token-regex count for small files with the per-language char divisor for large ones.
+- **Hardening** — a pragmatic `<meta>` CSP, custom-endpoint URL validation + a `[ TEST ENDPOINT ]` probe (reachability, CORS, latency), BOM/UTF-16-aware encoding detection, `Retry-After`-aware rate-limit messages with a one-click `[ RETRY ]`, focus-return on every modal, a live-region for screen readers, and dynamic reduced-motion.
+
+### Supported languages & intents
+
+Indexing is regex-based and lightweight (no parser, no dependencies), so depth varies by language:
+
+| Language | Symbols | Imports | Entry points | Notes |
+|---|---|---|---|---|
+| JS/TS | Strong | Strong + aliases | Yes | dynamic `import()`, tsconfig `paths`, workspace resolution |
+| Python | Good | relative + top-level | `app.py` / `__main__` | `test_*` + `_test.` recognized |
+| Go | Good | block imports | `main.go` | receiver methods (`func (r *R) M()`) |
+| Rust | Good | `use` / `mod` | `main.rs` / `lib.rs` | `pub fn` / `pub struct` / `mod` |
+| Others (Java/Ruby/C#…) | Basic | — | partial | extension weighting + `class`/`def` only *(ROADMAP)* |
+
+LOCAL-engine intents: `def`, `refs`, `imports`, `importers`, `related`, `symbols`, `structure`, `tests`, `entries`, `recent <n>`, `dir <path>`, `search <text|regex>`, plus plain-language routing. Interpretation questions ("why…", "how should I…") return a `REQUIRES MODEL REASONING` verdict rather than guessing.
+
+### Known limitations
+
+- **Token counts are estimates** (heuristic char/divisor + a token-regex blend, ~±15–20% vs a real BPE tokenizer). Your provider bills the actual counts. The session `$` and spend-limit warnings are estimate-based.
+- **Alias / `exports` resolution is best-effort** — tsconfig `paths` and workspace package names resolve; full `package.json` `exports`/`imports` maps and non-relative cross-crate Rust `use` are not.
+- **File System Access reload is Chromium-only** — Firefox/Safari lack `showDirectoryPicker`, so saved projects there restore settings/selection only and ask you to re-drop the folder (never file contents, in any browser).
+- **Indexing is synchronous** — a multi-thousand-file scan briefly blocks the tab; a progress status is shown first. Tuned for medium repos (~5–8k files).
+
+### Security / CSP
+
+`app.html` ships a Content-Security-Policy `<meta>` tag (GitHub Pages can't set HTTP headers). Because the whole app is one inline `<script>` + inline styles, `'unsafe-inline'` is unavoidable for `script-src`/`style-src`; the real hardening is `object-src 'none'`, `base-uri 'none'`, and a bounded `connect-src` that still permits BYO **https** providers and local model servers:
+
+```
+default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'
+```
+
+Tighten `connect-src` to your own provider hosts for a stricter deployment. Note `frame-ancestors` is intentionally omitted — it is ignored in a `<meta>` CSP and needs an HTTP header (or a JS frame-buster) to take effect. `app.html` still loads **zero third-party scripts**; `index.html` (the landing page) uses the optional goatcounter analytics, so if you add a CSP there it must allow `https://gc.zgo.at`.
+
+### Self-tests
+
+A deterministic self-test suite exercises the index, smart packer, and trace parser against a bundled multi-language fixture — no network, no API. Run it from the command palette (**"Run self-tests (dev)"**), by appending **`?selftest`** to the URL, or with `__meridianSelfTest()` in the browser console (returns the results array). It's honestly labeled `DEV`.
+
 ## What's in here
 
 - **[index.html](index.html)** — the MERIDIAN landing page. Single dependency-free file: live Canvas particle field, command palette (`Ctrl-K`), simulated trace console (labeled SIM), FAQ, waitlist form, ceremony/daylight modes, debug panel (`d`).
