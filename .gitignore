@@ -1,0 +1,8 @@
+# Demo-recording toolchain (throwaway — not part of the product)
+node_modules/
+package.json
+package-lock.json
+
+# Intermediate capture (only the mp4/gif under media/ are committed)
+*.webm
+scripts/.rec/
