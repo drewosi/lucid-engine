@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MERIDIAN — One-pager</title>
+<meta name="description" content="MERIDIAN one-pager: a browser-only AI workbench. Zero backend, bring-your-own key, a no-network LOCAL engine, single-file, multi-language indexing, and exportable evidence traces. Free beta — honest about what's live vs roadmap.">
+<meta name="robots" content="index,follow">
+<style>
+  /* ============ LUCID ENGINE TOKENS · v1.2 ============ */
+  :root {
+    --paper: #0A0B0D;
+    --surface: #101216;
+    --surface-2: #14171C;
+    --ink: #EDECE7;
+    --ink-2: #A9A8A1;
+    --ink-3: #6C6B66;
+    --line: #22242A;
+    --line-strong: #34363E;
+    --accent: #FF5C0A;
+    --accent-ink: #0A0B0D;
+    --ease-out-engine: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-snap: cubic-bezier(0.3, 0, 0, 1);
+    --t-feedback: 120ms;
+    --t-state: 200ms;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "Helvetica Neue", "Segoe UI", -apple-system, Arial, sans-serif;
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+    padding: 40px 20px 64px;
+  }
+  .mono { font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  a { color: inherit; text-decoration: none; }
+  a.link { color: var(--ink-2); border-bottom: 1px solid var(--line-strong); transition: color var(--t-feedback) var(--ease-snap), border-color var(--t-feedback) var(--ease-snap); }
+  a.link:hover { color: var(--ink); border-color: var(--accent); }
+
+  .sheet { max-width: 1060px; margin: 0 auto; }
+
+  /* ---- header ---- */
+  header.hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-bottom: 22px; border-bottom: 1px solid var(--line-strong); }
+  .wordmark { font-weight: 700; letter-spacing: .02em; font-size: 22px; display: flex; align-items: baseline; gap: 12px; }
+  .wordmark .tag { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .16em; font-weight: 400; }
+  .eyebrow { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .16em; color: var(--ink-3); display: inline-flex; align-items: center; gap: 9px; border: 1px solid var(--line-strong); border-radius: 3px; padding: 6px 11px; white-space: nowrap; }
+  .eyebrow .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 1px; animation: flare 1.6s var(--ease-out-engine) infinite alternate; }
+  @keyframes flare { from { opacity: .4; } to { opacity: 1; } }
+
+  .lede { margin: 26px 0 6px; }
+  .lede h1 { font-size: clamp(30px, 5.2vw, 46px); line-height: 1.02; letter-spacing: -.03em; font-weight: 700; margin: 0 0 14px; text-wrap: balance; }
+  .lede h1 .thin { color: var(--ink-3); }
+  .lede p { font-size: 16.5px; color: var(--ink-2); max-width: 74ch; margin: 0; }
+  .lede p b { color: var(--ink); font-weight: 500; }
+
+  /* ---- section head ---- */
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin: 40px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .sec-head .idx { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; color: var(--accent); }
+  .sec-head h2 { font-size: 15px; margin: 0; letter-spacing: .14em; text-transform: uppercase; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; color: var(--ink); font-weight: 500; }
+  .sec-head .anno { margin-left: auto; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-3); letter-spacing: .08em; }
+
+  /* ---- pillars grid (hairline dividers via 1px gap over --line bg) ---- */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  @media (max-width: 820px) { .pillars { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .pillars { grid-template-columns: 1fr; } }
+  .pillar { background: var(--paper); padding: 20px 20px 22px; position: relative; }
+  .pillar .pk { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); }
+  .pillar h3 { margin: 9px 0 8px; font-size: 16.5px; letter-spacing: -.01em; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .pillar p { margin: 0; font-size: 13px; color: var(--ink-2); max-width: 42ch; }
+  .pillar .note { display: block; margin-top: 9px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .02em; }
+  .flag { display: inline-flex; align-items: center; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 9px; letter-spacing: .14em; border: 1px solid var(--line-strong); color: var(--ink-3); border-radius: 3px; padding: 2px 7px; }
+  .flag.live { border-color: var(--accent); color: var(--accent); }
+  .flag.road { border-color: var(--line-strong); color: var(--ink-3); }
+
+  /* ---- how it works ---- */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; gap: 14px; } }
+  .step { border-left: 1px solid var(--line-strong); padding: 2px 0 4px 20px; position: relative; }
+  .step::before { content: ""; position: absolute; left: -5px; top: 5px; width: 9px; height: 9px; background: var(--accent); }
+  .step .k { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .14em; color: var(--ink-3); }
+  .step h3 { margin: 7px 0 6px; font-size: 17px; letter-spacing: -.01em; }
+  .step p { margin: 0; font-size: 13px; color: var(--ink-2); max-width: 40ch; }
+
+  /* ---- live vs roadmap strip ---- */
+  .ledger { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  @media (max-width: 640px) { .ledger { grid-template-columns: 1fr; } }
+  .col { background: var(--paper); padding: 20px 22px 22px; }
+  .col.roadmap { background: var(--surface); }
+  .col .ch { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .14em; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .col.live .ch { color: var(--accent); }
+  .col.roadmap .ch { color: var(--ink-3); }
+  .col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .col li { padding-left: 18px; position: relative; font-size: 13px; color: var(--ink-2); }
+  .col.live li::before { content: "—"; position: absolute; left: 0; color: var(--accent); }
+  .col.roadmap li::before { content: "·"; position: absolute; left: 4px; color: var(--ink-3); }
+  .col li b { color: var(--ink); font-weight: 500; }
+  .col .foot { margin-top: 14px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-3); letter-spacing: .02em; line-height: 1.5; }
+
+  /* ---- footer ---- */
+  footer.ft { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line-strong); display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .ft .links { display: flex; gap: 22px; flex-wrap: wrap; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; letter-spacing: .04em; }
+  .ft .links a { color: var(--ink-2); }
+  .ft .links a:hover { color: var(--accent); }
+  .ft .close { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-3); letter-spacing: .06em; }
+  .ft .close b { color: var(--ink-2); font-weight: 400; }
+
+  /* ============ PRINT — light, one page ============ */
+  @page { size: Letter; margin: 13mm; }
+  @media print {
+    :root {
+      --paper: #FFFFFF; --surface: #F4F3EE; --surface-2: #ECEBE4;
+      --ink: #111110; --ink-2: #45443F; --ink-3: #7C7A72;
+      --line: #DDDBD3; --line-strong: #C3C1B8; --accent: #E24E00; --accent-ink: #FFFFFF;
+    }
+    body { padding: 0; font-size: 9.5px; line-height: 1.32; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sheet { max-width: none; }
+    .eyebrow .dot, .pillar, .col, .step::before { animation: none !important; }
+    header.hd { padding-bottom: 8px; }
+    .wordmark { font-size: 16px; }
+    header.hd .mono { font-size: 9px !important; margin-top: 4px !important; }
+    .eyebrow { padding: 4px 8px; font-size: 9.5px; }
+    .lede { margin: 8px 0 2px; }
+    .lede h1 { font-size: 21px; margin-bottom: 5px; }
+    .lede p { font-size: 9.5px; max-width: none; }
+    .sec-head { margin: 8px 0 6px; padding-bottom: 4px; }
+    .sec-head h2 { font-size: 11.5px; }
+    .sec-head .idx { font-size: 10px; }
+    .sec-head .anno { font-size: 9px; }
+    .pillar { padding: 8px 10px 9px; }
+    .pillar .pk { font-size: 8px; }
+    .pillar h3 { font-size: 11.5px; margin: 4px 0 4px; }
+    .pillar p { font-size: 9px; max-width: none; }
+    .pillar .note { font-size: 8px; margin-top: 5px; }
+    .flag { font-size: 7.5px; padding: 1px 5px; }
+    .steps { gap: 12px; }
+    .step { padding-left: 14px; }
+    .step .k { font-size: 9px; }
+    .step h3 { font-size: 11.5px; margin: 4px 0 4px; }
+    .step p, .col li { font-size: 9px; max-width: none; }
+    .ledger .col { padding: 9px 11px 10px; }
+    .col .ch { font-size: 9.5px; margin-bottom: 8px; }
+    .col ul { gap: 5px; }
+    .col .foot { font-size: 8px; margin-top: 8px; }
+    footer.ft { margin-top: 10px; padding-top: 7px; }
+    .ft .links { font-size: 9.5px; }
+    .ft .close { font-size: 9px; }
+    a.link { border: none; color: var(--ink-2); }
+    .flag.live { border-color: var(--accent); color: var(--accent); }
+    .pillars, .ledger { page-break-inside: avoid; }
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="hd">
+    <div>
+      <div class="wordmark">MERIDIAN <span class="tag mono">INSTRUMENT 01</span></div>
+      <div class="mono" style="font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-top:6px">// an AI instrument for people who build</div>
+    </div>
+    <div class="eyebrow mono"><span class="dot"></span>FREE BETA · LIVE</div>
+  </header>
+
+  <section class="lede">
+    <h1>Answers you can <span class="thin">audit.</span></h1>
+    <p>A <b>browser-only AI workbench</b>. Load your project into your tab's memory, ask questions, and every answer arrives with a <b>trace</b> — the reasoning pinned to the exact files and lines it stands on, as clickable evidence chips that open the cited file at the cited range. Underneath the chat is a deterministic project-intelligence engine that understands the terrain <i>before</i> a model enters the room.</p>
+  </section>
+
+  <div class="sec-head">
+    <span class="idx mono">01</span><h2>What makes it different</h2>
+    <span class="anno mono">// every chip below is LIVE today</span>
+  </div>
+
+  <div class="pillars">
+    <div class="pillar">
+      <div class="pk mono">A1</div>
+      <h3>Zero backend <span class="flag live mono">LIVE</span></h3>
+      <p>The whole product is static files on GitHub Pages. There is no server of ours to receive your data — file contents live in tab memory and vanish on close.</p>
+      <span class="note mono">// zero egress to us · metadata-only persistence</span>
+    </div>
+    <div class="pillar">
+      <div class="pk mono">A2</div>
+      <h3>BYO keys <span class="flag live mono">LIVE</span></h3>
+      <p>Requests go straight from your browser to your provider — Anthropic, OpenAI, or any OpenAI-compatible endpoint — under your own account. Keys live in localStorage, one per provider.</p>
+      <span class="note mono">// anthropic · openai · custom endpoint</span>
+    </div>
+    <div class="pillar">
+      <div class="pk mono">A3</div>
+      <h3>Local engine <span class="flag live mono">LIVE</span></h3>
+      <p>The LOCAL provider answers with <b>no key, no AI, and zero network</b>. It runs a real investigation over the project index and returns findings through the same trace UI, verdict-labeled <span class="mono" style="color:var(--ink)">KNOWN LOCALLY</span>.</p>
+      <span class="note mono">// def · refs · imports · structure · tests</span>
+    </div>
+    <div class="pillar">
+      <div class="pk mono">A4</div>
+      <h3>Single-file <span class="flag live mono">LIVE</span></h3>
+      <p>Each page is one dependency-free HTML file — inline script, inline styles. The workbench loads <b>zero third-party scripts</b>. No build step, no framework, no npm.</p>
+      <span class="note mono">// app.html · index.html · dna.html</span>
+    </div>
+    <div class="pillar">
+      <div class="pk mono">A5</div>
+      <h3>Multi-language indexing <span class="flag live mono">LIVE</span></h3>
+      <p>Symbol &amp; import extraction across <b>JS/TS, Python, Go, Rust</b> — dynamic <span class="mono">import()</span>, tsconfig <span class="mono">paths</span>, workspaces, receiver methods, <span class="mono">use</span>/<span class="mono">mod</span>. Regex-based, no parser, no dependencies.</p>
+      <span class="note mono">// JS·TS·Python·Go·Rust today — other langs basic, ROADMAP</span>
+    </div>
+    <div class="pillar">
+      <div class="pk mono">A6</div>
+      <h3>Exportable traces <span class="flag live mono">LIVE</span></h3>
+      <p>Export the whole session — answers, traces, and the actual cited lines — as Markdown or a self-contained zero-asset HTML page. Or copy one answer, or one evidence chip's <span class="mono">path:line</span> + quote.</p>
+      <span class="note mono">// markdown · self-contained html · per-chip copy</span>
+    </div>
+  </div>
+
+  <div class="sec-head">
+    <span class="idx mono">02</span><h2>How it works</h2>
+    <span class="anno mono">// load → ask → trace</span>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="k mono">01 · LOAD</div>
+      <h3>Your project, in memory</h3>
+      <p>Drag a folder in (or use the File System Access API). MERIDIAN indexes symbols, import edges, entry points, tests and packages, then shows a PROJECT INTELLIGENCE overview. Saved projects persist metadata only — never contents.</p>
+    </div>
+    <div class="step">
+      <div class="k mono">02 · ASK</div>
+      <h3>LOCAL engine or your model</h3>
+      <p>Ask in plain language. The LOCAL engine answers structure, definitions and references with no network. Connect a key and the smart context engine sends only the relevant, grounded evidence — never the whole repo.</p>
+    </div>
+    <div class="step">
+      <div class="k mono">03 · TRACE</div>
+      <h3>Follow the evidence</h3>
+      <p>Every answer carries a verdict and a trace. Click an evidence chip to open the cited file at the cited line. When you're done, export the session as Markdown or a self-contained HTML page.</p>
+    </div>
+  </div>
+
+  <div class="sec-head">
+    <span class="idx mono">03</span><h2>Honest ledger — live vs roadmap</h2>
+    <span class="anno mono">// where the site simulates or promises, it says so</span>
+  </div>
+
+  <div class="ledger">
+    <div class="col live">
+      <div class="ch mono"><span>●</span> LIVE TODAY</div>
+      <ul>
+        <li>The <b>six above</b> — zero backend, BYO keys, LOCAL engine, single-file, multi-language indexing, exportable traces</li>
+        <li><b>Smart context engine</b> — project map + relevance-scored, budget-packed files with true line numbers preserved</li>
+        <li><b>Grounding</b> — the deterministic investigation feeds verified <span class="mono">path:line</span> findings to the model</li>
+        <li><b>Project memory</b> · ignore patterns with one-click Suggest · first-run LOCAL demo</li>
+        <li><b>Self-tests</b>, CSP hardening, prompt-cache-aware session cost, command palette</li>
+      </ul>
+    </div>
+    <div class="col roadmap">
+      <div class="ch mono"><span>○</span> ROADMAP / PLANNED</div>
+      <ul>
+        <li><b>Signal Extraction</b> and <b>Drift Watch</b> — not built yet <span class="flag road mono">ROADMAP</span></li>
+        <li>Deeper instruments &amp; wider language depth (Java/Ruby/C#…) <span class="flag road mono">ROADMAP</span></li>
+        <li>Paid tiers — Operator, Laboratory <span class="flag road mono">PLANNED</span> · nothing can be purchased today</li>
+        <li><b>Propose Action</b> is experimental &amp; read-only; nothing executes without a click</li>
+      </ul>
+      <div class="foot mono">// the landing page's trace console is a scripted simulation (SIM chip). the workbench trace is real — it runs against your project.</div>
+    </div>
+  </div>
+
+  <footer class="ft">
+    <div class="links mono">
+      <a href="https://drewosi.github.io/lucid-engine/">→ LANDING</a>
+      <a href="https://drewosi.github.io/lucid-engine/app.html">→ WORKBENCH</a>
+      <a href="https://drewosi.github.io/lucid-engine/dna.html">→ DESIGN DNA</a>
+    </div>
+    <div class="close mono">Your key · your machine · <b>zero egress to us.</b></div>
+  </footer>
+
+</main>
+</body>
+</html>

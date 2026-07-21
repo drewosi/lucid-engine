@@ -11,8 +11,31 @@
 |------|-----|
 | **MERIDIAN** — landing page | https://drewosi.github.io/lucid-engine/ |
 | **MERIDIAN Workbench** — the app (free beta) | https://drewosi.github.io/lucid-engine/app.html |
+| **One-pager** — the pitch on one page | https://drewosi.github.io/lucid-engine/one-pager.html |
 | **Design DNA** — the system itself | https://drewosi.github.io/lucid-engine/dna.html |
 | Terms · Privacy | [terms.html](https://drewosi.github.io/lucid-engine/terms.html) · [privacy.html](https://drewosi.github.io/lucid-engine/privacy.html) |
+
+## One-pager & demo
+
+A clean [**one-pager**](one-pager.html) (`one-pager.html`) states the whole pitch on a single
+screen and prints to one PDF page — six pillars, each labeled `LIVE`, over an honest ledger of
+what's live vs `ROADMAP`/`PLANNED`. Like everything here it's one dependency-free file.
+
+![MERIDIAN — LOCAL engine demo](media/meridian-demo.gif)
+
+> The clip above is a **real screen capture** of the workbench running its built-in demo — a tiny
+> `todo-api` answered entirely by the deterministic **LOCAL** engine (no key, no AI, no network).
+> The UI labels itself as it goes: `DEMO · LOCAL ENGINE`, `LOCAL · NO AI`, `KNOWN LOCALLY`.
+> An evidence chip opens the cited file at the cited line; the session exports as HTML + Markdown.
+> Higher-quality [`MP4`](media/meridian-demo.mp4).
+
+The recording is fully reproducible — no faked frames:
+
+```
+npm i playwright @ffmpeg-installer/ffmpeg   # throwaway toolchain (gitignored)
+node scripts/record-demo.mjs                # drives app.html's LOCAL demo → scripts/.rec/*.webm
+bash scripts/encode-demo.sh                 # → media/meridian-demo.mp4 + .gif
+```
 
 ## What MERIDIAN is now
 
