@@ -11,7 +11,8 @@ function rememberFocus() { layerReturnFocus = document.activeElement; }
 function returnFocus() { try { if (layerReturnFocus && layerReturnFocus.focus) layerReturnFocus.focus(); } catch (e) {} layerReturnFocus = null; }
 /* a11y: announce completion to screen readers (streamed text isn't in a live region) */
 function announce(msg) { var el = $('sr-announce'); if (el) { el.textContent = ''; setTimeout(function () { el.textContent = msg; }, 30); } }
-function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+/* escapes quotes too, so the result is safe in attribute contexts as well as text */
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
@@ -23,15 +24,18 @@ function toast(msg, action) {
   span.className = 'toast-msg'; span.textContent = msg;
   d.appendChild(span);
   var life = 3600;
-  /* optional action button — backward-compatible: single-arg calls are unchanged */
-  if (action && action.label && typeof action.fn === 'function') {
+  /* optional action button(s) — backward-compatible: single-arg calls are
+     unchanged; a single {label, fn} or an array of them both work */
+  var acts = Array.isArray(action) ? action : (action ? [action] : []);
+  acts.forEach(function (act) {
+    if (!act || !act.label || typeof act.fn !== 'function') return;
     var b = document.createElement('button');
-    b.type = 'button'; b.className = 'toast-act mono'; b.textContent = action.label;
-    b.addEventListener('click', function () { action.fn(); dismiss(); });
+    b.type = 'button'; b.className = 'toast-act mono'; b.textContent = act.label;
+    b.addEventListener('click', function () { act.fn(); dismiss(); });
     d.appendChild(b);
     d.classList.add('has-act');
     life = 6000; /* give the operator time to reach the action */
-  }
+  });
   $('toasts').appendChild(d);
   requestAnimationFrame(function () { d.classList.add('in'); });
   setTimeout(dismiss, life);

@@ -2,10 +2,10 @@ import { st } from './state.js';
 import { LS, MODELS, PROVIDERS } from './config.js';
 import { $, announce, fmtTok, lsGet, setStatus, toast } from './helpers.js';
 import { curKeyLS, openDrawer } from './shell.js';
-import { getBudget } from './smart-context.js';
+import { estTokens, getBudget } from './smart-context.js';
 import { selectedTokens } from './ingest.js';
 import { askLocal } from './local.js';
-import { addAiMsg, addUserMsg, attachCopy, extractTrace, renderFound, renderRich, renderTrace, scrollEnd } from './trace.js';
+import { addAiMsg, addUserMsg, atBottom, attachCopy, extractTrace, renderFound, renderRich, renderTrace, scrollEnd } from './trace.js';
 import { FENCE, INSTRUCTIONS, STRICT_SUFFIX, buildContextBlocks } from './prompt.js';
 /* ============ COST ============ */
 function renderCost() {
@@ -39,19 +39,27 @@ function resetCost() {
 /* ============ CHAT ============ */
 var promptEl = $('prompt'), sendbtn = $('sendbtn'), stopbtn = $('stopbtn'), statusEl = $('status');
 
-/* rough per-request cost estimate (input context + a small output allowance) */
+/* tokens the request carries beyond the selected context — the instruction
+   block plus every prior turn. Both guards below count them, so a long session
+   can't sail past a window check that measured context alone. */
+function overheadTokens() {
+  var t = estTokens(INSTRUCTIONS);
+  for (var i = 0; i < st.history.length; i++) t += estTokens(String(st.history[i].content || ''));
+  return t;
+}
+/* rough per-request cost estimate (input context + history/instructions + a small output allowance) */
 function estRequestUSD() {
   var m = MODELS[st.model];
   if (!m || m.unknownRates) return 0;
-  var inTok = (st.ctxMode === 'smart' ? getBudget() : selectedTokens().tokens) + 800;
+  var inTok = (st.ctxMode === 'smart' ? getBudget() : selectedTokens().tokens) + overheadTokens();
   return (inTok * m.rIn + 800 * m.rOut) / 1e6;
 }
 /* pre-send guards — one-time confirms, nothing is hard-blocked */
 function preSendOK() {
   var m = MODELS[st.model];
   if (st.ctxMode === 'full' && !m.local) {
-    var sel = selectedTokens().tokens;
-    if (sel > m.ctx && !confirm('Selected context ≈ ' + fmtTok(sel) + ' tokens exceeds ' + m.label + '’s ' + fmtTok(m.ctx) + '-token window — the provider will likely reject it. Deselect files or switch to SMART.\n\nSend anyway?')) return false;
+    var sel = selectedTokens().tokens + overheadTokens();
+    if (sel > m.ctx && !confirm('Selected context + conversation ≈ ' + fmtTok(sel) + ' tokens exceeds ' + m.label + '’s ' + fmtTok(m.ctx) + '-token window — the provider will likely reject it. Deselect files, clear the conversation, or switch to SMART.\n\nSend anyway?')) return false;
   }
   var cap = parseFloat(lsGet(LS.spendcap) || '0');
   if (cap > 0 && !m.unknownRates) {
@@ -77,6 +85,9 @@ function httpErrorText(status, body, retryAfter) {
 
 function ask(q, key, opts) {
   opts = opts || {};
+  /* concurrency guard — a stale [ RETRY ] / [ RE-GROUND & RETRY ] click while an
+     answer is streaming would race two streams over one aborter and one flag */
+  if (st.streaming) { toast('One answer at a time — stop the current stream first.'); return; }
   addUserMsg(q);
   var msgEl = addAiMsg();
   var txtEl = msgEl.querySelector('.txt');
@@ -129,12 +140,14 @@ function ask(q, key, opts) {
     }
   }
 
-  function paint(final) {
+  function paintNow(final) {
     /* hide the trace fence (and any partial fence tail) while streaming */
     var shown = raw;
     fenceIdx = raw.indexOf(FENCE);
     if (fenceIdx === -1) { var altF = raw.indexOf('~~~meridian-trace'); if (altF !== -1) fenceIdx = altF; }
-    if (fenceIdx === -1) { var bare = raw.search(/\n\s*\{\s*"steps"\s*:/); if (bare !== -1) fenceIdx = bare; } /* leaked/fenceless trace JSON */
+    /* leaked/fenceless trace JSON — only near the tail, where a real trace lives;
+       an answer QUOTING {"steps": mid-text (e.g. auditing meridian itself) stays visible */
+    if (fenceIdx === -1) { var bare = raw.search(/\n\s*\{\s*"steps"\s*:/); if (bare !== -1 && bare >= raw.length - 600) fenceIdx = bare; }
     if (fenceIdx !== -1) {
       shown = raw.slice(0, fenceIdx);
       if (!waitShown && !final) {
@@ -150,8 +163,23 @@ function ask(q, key, opts) {
       var tail = shown.slice(nl + 1);
       if (tail && FENCE.indexOf(tail) === 0) shown = shown.slice(0, nl + 1);
     }
+    var pinned = atBottom();
     txtEl.innerHTML = renderRich(shown.replace(/\s+$/, '')) + (final ? '' : '<span class="cursor"></span>');
-    scrollEnd();
+    /* only follow the stream if the operator was already at the bottom */
+    if (pinned || final) scrollEnd();
+  }
+  /* streaming repaints coalesce to one per animation frame — repainting the whole
+     answer per SSE delta is quadratic and janks long answers */
+  var paintQueued = false;
+  function paint(final) {
+    if (final) { paintQueued = false; paintNow(true); return; }
+    if (paintQueued) return;
+    paintQueued = true;
+    requestAnimationFrame(function () {
+      if (!paintQueued) return; /* a final paint already landed */
+      paintQueued = false;
+      paintNow(false);
+    });
   }
 
   fetch(url, {
@@ -274,7 +302,7 @@ function ask(q, key, opts) {
       line = '// stream error — ' + err.streamMsg;
       setStatus('STREAM ERROR', true);
     } else {
-      line = '// network unreachable — check your connection and any ad/tracker blocker. requests go straight from this browser to the provider endpoint' + (st.curProvider === 'custom' ? ' — custom endpoints must allow browser CORS.' : '.');
+      line = '// network unreachable — check your connection and any ad/tracker blocker. requests go straight from this browser to the provider endpoint' + (st.curProvider === 'custom' ? ' — custom endpoints must allow browser CORS, and remote (non-localhost) endpoints are blocked by this page\'s CSP unless you self-host with a widened connect-src.' : '.');
       setStatus('NETWORK ERROR', true);
     }
     var d = document.createElement('div');
@@ -305,7 +333,6 @@ export function initChat() {
   $('navcostrst').addEventListener('click', function (e) { e.stopPropagation(); resetCost(); });
   st.history = [];   /* {role, content} for the API */
   st.transcript = []; /* {q, answer, trace, model, provider, ts} for export */
-  st.streaming = false; st.aborter = null;
   st.streaming = false; st.aborter = null;
   promptEl.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('askform').requestSubmit(); }

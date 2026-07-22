@@ -1095,7 +1095,7 @@
       : '// stored in this browser only — localStorage. nothing was transmitted.';
     formzone.innerHTML =
       '<div class="field-ok" role="status">' + line + '<br>' +
-      'address held: ' + email.replace(/</g, '&lt;') +
+      'address held: ' + email.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') +
       (tier && TIER_LABEL[tier] ? '<br>tier interest: ' + TIER_LABEL[tier] : '') + '<br>' +
       '<span style="opacity:.6">' + note + '</span></div>' +
       '<button class="clear-btn" type="button" id="clearwl">[ CLEAR LOCAL ENTRY ]</button>';

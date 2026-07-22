@@ -110,10 +110,10 @@ function validateCustomUrl(u) {
   var warn = '';
   var isLocal = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(parsed.hostname);
   if (parsed.protocol === 'http:' && !isLocal) warn += 'http:// works only for localhost on this https page (browsers block mixed content). ';
+  if (parsed.protocol === 'https:' && !isLocal) warn += 'remote endpoints are blocked by this page’s CSP — self-host with your origin added to connect-src, or use localhost. ';
   if (!/\/v\d+\/?$/.test(parsed.pathname)) warn += 'most OpenAI-compatible servers expect a /v1 suffix. ';
   return { ok: true, msg: warn.trim(), warn: warn.trim() };
 }
-/* EXPERIMENTAL: probe the endpoint's /models to report reachability, CORS, and latency */
 /* syncProviderUI() is called in the init block at the end of the script —
    it touches the budget UI, which needs the context engine set up first. */
 function openDrawer(open) {
@@ -221,6 +221,7 @@ export function initShell() {
     setCustState(u && m ? ('saved.' + (v.warn ? ' ' + v.warn : '')) : '', v.warn ? 'note' : 'ok');
     toast(u && m ? 'Custom endpoint saved.' : 'Custom endpoint needs both a base URL and a model id.');
   });
+  /* EXPERIMENTAL: probe the endpoint's /models to report reachability, CORS, and latency */
   $('custtest').addEventListener('click', function () {
     var u = $('custurl').value.trim().replace(/\/+$/, '');
     var v = validateCustomUrl(u);
@@ -237,7 +238,7 @@ export function initShell() {
       else setCustState('reached, HTTP ' + res.status + ' — check the base path' + ms, 'note');
     }).catch(function (err) {
       clearTimeout(to);
-      setCustState(err.name === 'AbortError' ? 'timed out (>8s) — is the server running?' : 'unreachable or CORS-blocked — the server must allow browser CORS from this origin', 'err');
+      setCustState(err.name === 'AbortError' ? 'timed out (>8s) — is the server running?' : 'unreachable — CORS-blocked (the server must allow this origin), or a remote endpoint blocked by this page’s CSP (localhost only unless self-hosted)', 'err');
     });
   });
   setbtn.addEventListener('click', function () { openDrawer(!drawer.classList.contains('open')); });

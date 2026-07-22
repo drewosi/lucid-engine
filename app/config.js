@@ -6,7 +6,7 @@ var PROVIDERS = {
   openai:    { label: 'OPENAI', keyLS: 'meridian.key.openai', keyHint: 'sk-…',
                note: '// requests go straight from this browser to api.openai.com via the chat-completions API, streamed.' },
   custom:    { label: 'CUSTOM', keyLS: 'meridian.key.custom', keyHint: 'api key (optional for local servers)',
-               note: '// any OpenAI-compatible endpoint: ollama, LM Studio, vLLM, openrouter… the server must allow browser CORS. cost estimates are unavailable.' },
+               note: '// any OpenAI-compatible endpoint on localhost: ollama, LM Studio, vLLM… the server must allow browser CORS. remote endpoints are blocked by this page’s CSP unless you self-host (see the note below). cost estimates are unavailable.' },
   local:     { label: 'LOCAL', keyLS: 'meridian.key.local', keyHint: '', /* keyLS is never read — local needs no key */
                note: '// no API, no key, no AI. questions run as deterministic keyword/symbol search over the loaded files — nothing ever leaves this tab.' }
 };
@@ -22,8 +22,10 @@ var MODELS = {
   '__local':          { provider: 'local', label: 'LOCAL ENGINE', ctx: 200000, rIn: 0, rOut: 0, rCacheW: 0, rCacheR: 0, unknownRates: true, local: true,
                         note: 'deterministic keyword/symbol search over the loaded files — no AI, no network, free. answers cite exact lines.' }
 };
-var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget', ignore: 'meridian.ignore',
-           provider: 'meridian.provider', okey: 'meridian.key.openai', ckey: 'meridian.key.custom', curl: 'meridian.custom.url', cmodel: 'meridian.custom.model', ground: 'meridian.ground',
+/* key/okey/ckey derive from PROVIDERS.*.keyLS — the single source of truth —
+   so clearall (which iterates LS) can never miss a renamed provider key */
+var LS = { key: PROVIDERS.anthropic.keyLS, model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget', ignore: 'meridian.ignore',
+           provider: 'meridian.provider', okey: PROVIDERS.openai.keyLS, ckey: PROVIDERS.custom.keyLS, curl: 'meridian.custom.url', cmodel: 'meridian.custom.model', ground: 'meridian.ground',
            strictTrace: 'meridian.stricttrace', spendcap: 'meridian.spendcap', railw: 'meridian.rail.width', railopen: 'meridian.rail.open' };
 
 export { PROVIDERS, MODELS, LS };

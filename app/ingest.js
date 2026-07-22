@@ -11,6 +11,23 @@ var SKIP_LIST_MAX = 500;
 function recordSkip(path, reason, size, ref) {
   if (st.skippedFiles.length < SKIP_LIST_MAX) st.skippedFiles.push({ path: path, reason: reason, size: size || 0, ref: ref || null });
 }
+/* snapshot the skip counters at the start of an ingest batch, so the post-ingest
+   toast reports THIS load's numbers. The skip note + review modal stay cumulative
+   — they describe everything currently in memory, not one batch. */
+var batchBase = null;
+function beginBatch() {
+  batchBase = { dirs: st.skipped.dirs, binary: st.skipped.binary, big: st.skipped.big, over: st.skipped.over, user: st.skipped.user, readerr: st.skipped.readerr };
+}
+function skipSummary(c) {
+  var s = [];
+  if (c.binary) s.push(c.binary + ' binary');
+  if (c.big) s.push(c.big + ' oversized');
+  if (c.dirs) s.push(c.dirs + ' ignored-dir');
+  if (c.user) s.push(c.user + ' ignore-pattern');
+  if (c.readerr) s.push(c.readerr + ' read-error');
+  if (c.over) s.push(c.over + ' over the ' + MAX_FILES + '-file cap');
+  return s;
+}
 var IGNORE_DIRS = ['.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', 'target', 'vendor', '__pycache__', '.venv', 'venv', 'coverage', '.cache', '.idea', '.vscode',
                    'obj', '.gradle', 'pods', '.tox', '.mypy_cache', '.pytest_cache', '.terraform', '_build', '.dart_tool'];
 var BIN_EXT = /\.(png|jpe?g|gif|webp|avif|ico|icns|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|m4[av]|mov|avi|mkv|webm|ogg|wav|flac|zip|gz|bz2|xz|7z|rar|tar|jar|war|class|pyc|pyo|o|a|so|dylib|dll|exe|bin|dat|db|sqlite3?|pdf|doc[x]?|xls[x]?|ppt[x]?|ds_store|lockb|wasm)$/i;
@@ -62,7 +79,12 @@ function ingestFile(file, path, force) {
       lang: detectLang(path, text)
     });
     if (st.files.size % 100 === 0) setStatus('INGESTING — ' + st.files.size + ' FILES…');
-  }).catch(function () { st.skipped.binary++; });
+  }).catch(function (e) {
+    /* read/decode failure is NOT binary — record it so the review modal shows it */
+    console.warn('meridian: could not read', path, e);
+    st.skipped.readerr++;
+    recordSkip(path, 'read-error', file.size, null);
+  });
 }
 
 function walkEntry(entry, prefix) {
@@ -104,21 +126,23 @@ function afterIngest() {
   invalidateAll();
   renderTree(); renderBudget();
   renderProjects();
-  var s = [];
-  if (st.skipped.binary) s.push(st.skipped.binary + ' binary');
-  if (st.skipped.big) s.push(st.skipped.big + ' oversized');
-  if (st.skipped.dirs) s.push(st.skipped.dirs + ' ignored-dir');
-  if (st.skipped.user) s.push(st.skipped.user + ' ignore-pattern');
-  if (st.skipped.over) s.push(st.skipped.over + ' over the ' + MAX_FILES + '-file cap');
-  var totSkipped = st.skipped.binary + st.skipped.big + st.skipped.dirs + st.skipped.user + st.skipped.over;
+  /* this batch's skips = counters minus the batch-start snapshot; callers that
+     reset the counters themselves (project reload, demo) have no snapshot, so
+     the delta is simply the totals */
+  var b0 = batchBase || { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0 };
+  batchBase = null;
+  var batchSkipped = (st.skipped.binary - b0.binary) + (st.skipped.big - b0.big) + (st.skipped.dirs - b0.dirs)
+    + (st.skipped.user - b0.user) + (st.skipped.over - b0.over) + (st.skipped.readerr - b0.readerr);
+  var s = skipSummary(st.skipped);
+  var totSkipped = st.skipped.binary + st.skipped.big + st.skipped.dirs + st.skipped.user + st.skipped.over + st.skipped.readerr;
   var note = $('skipnote');
   note.hidden = !s.length;
   if (s.length) note.textContent = '// ' + totSkipped + ' skipped: ' + s.join(' · ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files.';
   $('skiprevrow').hidden = !st.skippedFiles.length;
   updateSkipBadge();
   var base = st.files.size + ' file' + (st.files.size === 1 ? '' : 's') + ' loaded into memory';
-  if (totSkipped && st.skippedFiles.length) toast(base + ' · ' + totSkipped + ' skipped.', { label: '[ REVIEW ]', fn: openSkipReview });
-  else toast(base + (totSkipped ? ' · ' + totSkipped + ' skipped.' : '.'));
+  if (batchSkipped && st.skippedFiles.length) toast(base + ' · ' + batchSkipped + ' skipped in this load.', { label: '[ REVIEW ]', fn: openSkipReview });
+  else toast(base + (batchSkipped ? ' · ' + batchSkipped + ' skipped in this load.' : '.'));
   renderOverview();
   setStatus('CORE IDLE — ' + st.files.size + ' files in memory');
   /* graceful scaling: warn as the in-memory file cap approaches or is hit */
@@ -132,9 +156,22 @@ var dz = $('dropzone');
    persisted to IndexedDB, enabling one-click project reload later. */
 function pickHandler(input) {
   st.lastDirHandle = null;
+  beginBatch();
   var list = Array.prototype.slice.call(input.files || []);
   Promise.all(list.map(function (f) { return ingestFile(f, f.webkitRelativePath || f.name); })).then(afterIngest);
   input.value = '';
+}
+/* full unload — shared by the [ CLEAR ] control and the REPLACE ingest path */
+function clearContext() {
+  st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0 };
+  st.skippedFiles.length = 0;
+  collapsedDirs = {}; treeQuery = '';
+  var ts = $('treesearch'); if (ts) ts.value = '';
+  invalidateAll(); renderTree(); renderBudget();
+  renderOverview();
+  $('skipnote').hidden = true;
+  $('skiprevrow').hidden = true;
+  updateSkipBadge();
 }
 
 /* ---- project tree ----
@@ -246,11 +283,11 @@ function renderBudget() {
 
 /* ---- skipped-file review + include-back ---- */
 var skipveil = $('skipveil'), untrapSkip = null;
-var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE' };
+var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE', 'read-error': 'READ ERROR — COULD NOT LOAD' };
 function openSkipReview() {
   var list = $('skiplist');
   list.innerHTML = '';
-  var order = ['oversized', 'ignore-pattern', 'binary-ext', 'binary-content'];
+  var order = ['oversized', 'ignore-pattern', 'binary-ext', 'binary-content', 'read-error'];
   var groups = {};
   st.skippedFiles.forEach(function (s) { (groups[s.reason] = groups[s.reason] || []).push(s); });
   $('skipsum').textContent = '// ' + st.skippedFiles.length + ' file' + (st.skippedFiles.length === 1 ? '' : 's') + ' recorded'
@@ -495,33 +532,63 @@ function suggestIgnore() {
   $('ignorein').focus();
   toast(add.length + ' pattern' + (add.length === 1 ? '' : 's') + ' suggested — review, then Apply.', { label: '[ APPLY ]', fn: function () { $('saveignore').click(); } });
 }
-export { IGNORE_DIRS, afterIngest, closePreview, closeSkipReview, getIgnoreText, ingestFile, maybeAutoSmart, openPreview, openSkipReview, prevveil, renderBudget, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
+export { IGNORE_DIRS, afterIngest, closePreview, closeSkipReview, getIgnoreText, ingestFile, maybeAutoSmart, openPreview, openSkipReview, prevveil, recordSkip, renderBudget, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
 
 export function initIngest() {
   st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
-  st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
+  st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0 };
   st.skippedFiles = [];       /* {path, reason, size, ref} — File refs kept so users can include-back */
   ['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('hot'); }); });
   ['dragleave', 'drop'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('hot'); }); });
   dz.addEventListener('drop', function (e) {
     st.lastDirHandle = null; /* dropped folders have no persistent handle */
     var items = e.dataTransfer.items;
-    var jobs = [];
+    /* entries must be collected synchronously inside the drop event; the walk
+       itself can run later (after the REPLACE/ADD choice below) */
+    var entries = [], files = [], hasDir = false;
     if (items && items.length && items[0].webkitGetAsEntry) {
       for (var i = 0; i < items.length; i++) {
         var entry = items[i].webkitGetAsEntry && items[i].webkitGetAsEntry();
-        if (entry) jobs.push(walkEntry(entry, ''));
+        if (entry) { entries.push(entry); if (entry.isDirectory) hasDir = true; }
       }
     } else if (e.dataTransfer.files) {
-      for (var j = 0; j < e.dataTransfer.files.length; j++) jobs.push(ingestFile(e.dataTransfer.files[j], null));
+      for (var j = 0; j < e.dataTransfer.files.length; j++) files.push(e.dataTransfer.files[j]);
     }
-    Promise.all(jobs).then(afterIngest);
+    function run(replace) {
+      if (replace) clearContext();
+      beginBatch();
+      var jobs = entries.map(function (en) { return walkEntry(en, ''); })
+        .concat(files.map(function (f) { return ingestFile(f, null); }));
+      Promise.all(jobs).then(afterIngest);
+    }
+    /* a whole folder dropped onto an already-loaded project is ambiguous — ask
+       instead of silently merging (dismissing the toast = no-op; loose-file
+       drops stay silently additive) */
+    if (hasDir && st.files.size) {
+      toast('Folder dropped onto a loaded project — replace it, or add to it?', [
+        { label: '[ REPLACE ]', fn: function () { run(true); } },
+        { label: '[ ADD ]', fn: function () { run(false); } }
+      ]);
+    } else run(false);
   });
   $('dirbtn').addEventListener('click', function () {
     if (window.showDirectoryPicker) {
       window.showDirectoryPicker({ mode: 'read' }).then(function (h) {
-        st.lastDirHandle = h;
-        return walkHandle(h, h.name + '/').then(afterIngest);
+        function run(replace) {
+          if (replace) clearContext();
+          st.lastDirHandle = h;
+          beginBatch();
+          return walkHandle(h, h.name + '/').then(afterIngest);
+        }
+        /* same replace-or-add choice as the dropzone when a project is loaded */
+        if (st.files.size) {
+          toast('Folder picked with a project already loaded — replace it, or add to it?', [
+            { label: '[ REPLACE ]', fn: function () { run(true); } },
+            { label: '[ ADD ]', fn: function () { run(false); } }
+          ]);
+          return;
+        }
+        return run(false);
       }).catch(function (e) {
         if (e && e.name === 'AbortError') return;
         toast('Folder pick failed — using the fallback picker.');
@@ -548,14 +615,7 @@ export function initIngest() {
   $('selall').addEventListener('click', function () { st.files.forEach(function (f) { f.checked = true; }); invalidateSelection(); renderTree(); renderBudget(); });
   $('selnone').addEventListener('click', function () { st.files.forEach(function (f) { f.checked = false; }); invalidateSelection(); renderTree(); renderBudget(); });
   $('clearctx').addEventListener('click', function () {
-    st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
-    st.skippedFiles.length = 0;
-    collapsedDirs = {}; treeQuery = ''; treesearch.value = '';
-    invalidateAll(); renderTree(); renderBudget();
-    renderOverview();
-    $('skipnote').hidden = true;
-    $('skiprevrow').hidden = true;
-    updateSkipBadge();
+    clearContext();
     toast('Project unloaded from memory.');
   });
   $('skiprev').addEventListener('click', openSkipReview);

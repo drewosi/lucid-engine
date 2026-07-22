@@ -1,5 +1,5 @@
 import { st } from './state.js';
-import { IGNORE_DIRS, afterIngest, getIgnoreText, ingestFile, setCtxMode, setIgnoreText, syncBudgetState } from './ingest.js';
+import { IGNORE_DIRS, afterIngest, getIgnoreText, ingestFile, recordSkip, setCtxMode, setIgnoreText, syncBudgetState } from './ingest.js';
 import { $, fmtTok, lsDel, lsGet, lsSet, setStatus, toast } from './helpers.js';
 import { LS } from './config.js';
 /* ============ PROJECT MEMORY (IndexedDB) ============
@@ -61,7 +61,15 @@ function walkHandle(dir, prefix) {
     var jobs = [];
     for await (const entry of dir.values()) {
       if (entry.kind === 'file') {
-        jobs.push(entry.getFile().then(function (f) { return ingestFile(f, prefix + entry.name); }).catch(function () { st.skipped.binary++; }));
+        jobs.push((function (path) {
+          return entry.getFile().then(function (f) { return ingestFile(f, path); }).catch(function (e) {
+            /* getFile() failure (permissions, file vanished) is NOT binary —
+               record it so the review modal shows it */
+            console.warn('meridian: could not read', path, e);
+            st.skipped.readerr++;
+            recordSkip(path, 'read-error', 0, null);
+          });
+        })(prefix + entry.name));
       } else if (entry.kind === 'directory') {
         if (IGNORE_DIRS.indexOf(entry.name.toLowerCase()) !== -1 || (entry.name.charAt(0) === '.' && entry.name !== '.github')) { st.skipped.dirs++; continue; }
         jobs.push(walkHandle(entry, prefix + entry.name + '/'));
@@ -103,7 +111,7 @@ function loadProject(rec) {
       return perm === 'granted' ? perm : rec.handle.requestPermission({ mode: 'read' });
     }).then(function (perm) {
       if (perm !== 'granted') { toast('Read permission declined — drop the folder instead.'); return; }
-      st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
+      st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0 };
       st.skippedFiles.length = 0;
       st.lastDirHandle = rec.handle;
       setStatus('RELOADING “' + rec.name + '”…');

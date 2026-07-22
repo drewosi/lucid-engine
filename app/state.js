@@ -8,7 +8,7 @@
 export var st = {
   /* context engine */
   files: new Map(),        /* path -> {content, lines, tokens, mtime, base, checked} */
-  skipped: { dirs: 0, binary: 0, big: 0, over: 0, user: 0 },
+  skipped: { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0 },
   skippedFiles: [],        /* {path, reason, size, ref} */
   demoMode: false,
   /* provider + model */

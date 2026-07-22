@@ -18,6 +18,15 @@ import { initExport, exportTraces } from './export.js';
 import { initPalette, palOpen, palClose, palOv, openKeymap, closeKeymap, keymapveil } from './palette.js';
 import { runSelfTests, runAndShowSelfTests } from './selftest.js';
 
+/* frame-buster — a <meta> CSP cannot carry frame-ancestors, so refuse to run
+   framed: hide the document and bounce the top window to this URL (setting a
+   cross-origin top location is permitted; reading it is not, hence the catch) */
+if (window.top !== window.self) {
+  document.documentElement.hidden = true;
+  try { window.top.location = window.location.href; } catch (e) {}
+  throw new Error('meridian: refusing to run inside a frame');
+}
+
 initShell();    /* provider + model from localStorage, theme, first-run veil, settings drawer, rail */
 initIngest();   /* pickers/dropzone/tree wiring, ground + strict-trace + budget/spend state, ignore patterns */
 initDemo();     /* first-run demo buttons */

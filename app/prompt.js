@@ -216,7 +216,12 @@ function buildInvestigationBlock(q, budgetTok) {
     var inv = runInvestigation(q, intent);
     var ctx = buildInvestigationContext(q, intent, inv);
     return serializeInvestigationContext(ctx, budgetTok);
-  } catch (e) { return null; }
+  } catch (e) {
+    /* grounding must never break the send path, but a swallowed throw would make
+       "no deterministic evidence" a false statement — leave a diagnosable trail */
+    console.warn('meridian: investigation failed — falling back to ungrounded send', e);
+    return null;
+  }
 }
 
 /* Builds the system blocks for one question, honoring the context mode.

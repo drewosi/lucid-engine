@@ -25,6 +25,9 @@ function renderRich(raw) {
 
 var convo = $('convo'), convoIn = convo.querySelector('.convo-in');
 function scrollEnd() { convo.scrollTop = convo.scrollHeight; }
+/* stick-to-bottom check — streaming repaints only auto-scroll while the operator
+   is already pinned to the end, so scrolling up to read is never hijacked */
+function atBottom() { return convo.scrollTop + convo.clientHeight >= convo.scrollHeight - 40; }
 
 function addUserMsg(text) {
   $('empty') && $('empty').remove();
@@ -35,7 +38,7 @@ function addUserMsg(text) {
 function addAiMsg() {
   var d = document.createElement('div');
   d.className = 'msg msg-a';
-  d.innerHTML = '<div class="term-hd mono">MERIDIAN CORE — ' + MODELS[st.model].label + ' <span class="chip"><span></span>LIVE</span></div>'
+  d.innerHTML = '<div class="term-hd mono">MERIDIAN CORE — ' + esc(MODELS[st.model].label) + ' <span class="chip"><span></span>LIVE</span></div>'
     + '<div class="bd"><div class="txt"></div></div>';
   convoIn.appendChild(d); scrollEnd();
   return d;
@@ -72,10 +75,10 @@ function tolerantJSONParse(s) {
 /* balanced {…} starting at i (string/escape aware); returns the slice, or the tail
    if the braces never close (a truncated stream). */
 function sliceBalanced(str, i) {
-  var depth = 0, inStr = false, esc = false;
+  var depth = 0, inStr = false, inEsc = false;
   for (var j = i; j < str.length; j++) {
     var ch = str.charAt(j);
-    if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+    if (inStr) { if (inEsc) inEsc = false; else if (ch === '\\') inEsc = true; else if (ch === '"') inStr = false; continue; }
     if (ch === '"') inStr = true;
     else if (ch === '{') depth++;
     else if (ch === '}') { depth--; if (depth === 0) return str.slice(i, j + 1); }
@@ -97,6 +100,23 @@ function coerceTrace(t) {
   t.steps = steps;
   return t;
 }
+/* Authenticity check for the salvage fallbacks: a "steps" JSON that only QUOTES
+   the trace format (docs, examples, meridian auditing itself) usually cites files
+   that are not in the loaded context. With files loaded, a candidate that carries
+   evidence must have at least one citation resolve locally before we treat it as
+   a real trace and strip it from the answer. Evidence-free candidates stay
+   salvageable — weak models emit those, and there is nothing to verify. */
+function traceAuthentic(t) {
+  if (!t) return false;
+  if (!st.files.size) return true; /* nothing to verify against — keep old behavior */
+  var total = 0, known = 0;
+  t.steps.forEach(function (s) {
+    (Array.isArray(s.evidence) ? s.evidence : []).forEach(function (ev) {
+      if (ev && typeof ev.file === 'string') { total++; if (st.files.has(ev.file)) known++; }
+    });
+  });
+  return !total || known >= 1;
+}
 /* Resilient trace extraction. Returns {answer, trace, degraded} where degraded is
    null (clean) | 'salvaged' (non-standard format recovered) | 'truncated'
    (cut off mid-JSON) | 'unparseable' (fence present, JSON broken) | 'no-trace'. */
@@ -112,22 +132,25 @@ function extractTrace(raw) {
     if (t) return { answer: answer, trace: t, degraded: null };
     return { answer: answer, trace: null, degraded: hadClose ? 'unparseable' : 'truncated' };
   }
-  /* (b) fallback: any fenced block (```json / bare ```) whose JSON has "steps". */
+  /* (b) fallback: any fenced block (```json / bare ```) whose JSON has "steps" —
+     salvaged only if it passes the authenticity check above, so an answer that
+     merely shows an example trace keeps its code block intact. */
   var fences = raw.match(/(?:```|~~~)[a-z0-9_-]*[ \t]*\r?\n[\s\S]*?(?:```|~~~)/gi) || [];
   for (var i = 0; i < fences.length; i++) {
     if (fences[i].indexOf('"steps"') === -1) continue;
     var inner = fences[i].replace(/^(?:```|~~~)[a-z0-9_-]*[ \t]*\r?\n/i, '').replace(/(?:```|~~~)\s*$/, '');
     var t2 = coerceTrace(tolerantJSONParse(inner));
-    if (t2) return { answer: raw.replace(fences[i], '').trim(), trace: t2, degraded: 'salvaged' };
+    if (t2 && traceAuthentic(t2)) return { answer: raw.replace(fences[i], '').trim(), trace: t2, degraded: 'salvaged' };
   }
-  /* (c) fallback: a bare top-level {…"steps"…} with no fence at all. */
-  var si = raw.indexOf('"steps"');
-  if (si !== -1) {
+  /* (c) fallback: a bare top-level {…"steps"…} with no fence at all — but only
+     near the tail, where a real trace lives; a mid-answer occurrence is prose. */
+  var si = raw.lastIndexOf('"steps"');
+  if (si !== -1 && si >= raw.length - 600) {
     var open = raw.lastIndexOf('{', si);
     if (open !== -1) {
       var t3 = coerceTrace(tolerantJSONParse(sliceBalanced(raw, open)));
-      if (t3) return { answer: raw.slice(0, open).trim() || '(trace only)', trace: t3, degraded: 'salvaged' };
-      return { answer: raw.slice(0, open).trim() || raw, trace: null, degraded: 'truncated' };
+      if (t3 && traceAuthentic(t3)) return { answer: raw.slice(0, open).trim() || '(trace only)', trace: t3, degraded: 'salvaged' };
+      if (!t3) return { answer: raw.slice(0, open).trim() || raw, trace: null, degraded: 'truncated' };
     }
   }
   return { answer: raw, trace: null, degraded: 'no-trace' };
@@ -163,7 +186,7 @@ function evidenceChip(ev) {
       if (q60 && st.files.get(ev.file).content.indexOf(q60) === -1) { title = 'Quote not found in this file — the model may have paraphrased or mis-cited these lines'; btn.classList.add('unverified'); }
     }
     btn.title = title;
-    btn.addEventListener('click', function () { openViewer(ev.file, a, b, ev.quote); });
+    btn.addEventListener('click', function () { openViewer(ev.file, a, b); });
   } else { btn.disabled = true; btn.title = 'File is not in the loaded context — the citation cannot be verified.'; }
   return btn;
 }
@@ -403,4 +426,4 @@ function exchangeMarkdown(x, i) {
   }
   return L.join('\n');
 }
-export { addAiMsg, addUserMsg, attachCopy, convoIn, evExcerpt, exchangeMarkdown, extractTrace, renderFound, renderRich, renderTrace, scrollEnd };
+export { addAiMsg, addUserMsg, atBottom, attachCopy, convoIn, evExcerpt, exchangeMarkdown, extractTrace, renderFound, renderRich, renderTrace, scrollEnd };

@@ -60,6 +60,12 @@ function runSelfTests() {
     ok('trace · fenceless salvaged', extractTrace('a\n{"steps":[{"action":"x"}]}').degraded === 'salvaged');
     ok('trace · truncated detected', extractTrace('a\n```meridian-trace\n{"steps":[{"action":"x"').degraded === 'truncated');
     ok('trace · no-trace', extractTrace('just prose').degraded === 'no-trace');
+    /* answers ABOUT the trace format must survive intact — a quoted example whose
+       citations don't resolve in the loaded context is prose, not a trace */
+    var quoted = extractTrace('the format looks like:\n```json\n{"steps":[{"action":"x","evidence":[{"file":"not/loaded.js","startLine":1,"endLine":2}]}]}\n```\nthat is the shape.');
+    ok('trace · quoted example not stripped', quoted.degraded === 'no-trace' && quoted.answer.indexOf('"steps"') !== -1);
+    var pad = new Array(40).join('long explanatory prose follows here\n');
+    ok('trace · mid-answer "steps" mention untouched', extractTrace('code uses {"steps": internally\n' + pad).degraded === 'no-trace');
     /* grounding roundtrip: a canned grounded answer yields a live (known) chip */
     var canned = 'API_BASE_URL is in config.\n```meridian-trace\n{"steps":[{"action":"locate","evidence":[{"file":"src/config.js","startLine":5,"endLine":5,"quote":"API_BASE_URL"}]}],"confidence":0.9}\n```';
     var pr = extractTrace(canned);
