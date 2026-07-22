@@ -114,10 +114,10 @@ LOCAL-engine intents: `def`, `refs`, `imports`, `importers`, `related`, `symbols
 
 ### Security / CSP
 
-`app.html` ships a Content-Security-Policy `<meta>` tag (GitHub Pages can't set HTTP headers). Because the whole app is one inline `<script>` + inline styles, `'unsafe-inline'` is unavoidable for `script-src`/`style-src`; the real hardening is `object-src 'none'`, `base-uri 'none'`, and a bounded `connect-src` that still permits BYO **https** providers and local model servers:
+`app.html` ships a Content-Security-Policy `<meta>` tag (GitHub Pages can't set HTTP headers). The workbench's code lives in same-origin ES modules under `app/`, so `script-src` is a strict `'self'` — inline script injection is blocked outright. `style-src` keeps `'unsafe-inline'` only for the markup's inline `style=` attributes; the rest of the hardening is `object-src 'none'`, `base-uri 'none'`, and a bounded `connect-src` that still permits BYO **https** providers and local model servers:
 
 ```
-default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'
 ```
 
 Tighten `connect-src` to your own provider hosts for a stricter deployment. Note `frame-ancestors` is intentionally omitted — it is ignored in a `<meta>` CSP and needs an HTTP header (or a JS frame-buster) to take effect. `app.html` still loads **zero third-party scripts**; `index.html` (the landing page) uses the optional goatcounter analytics, so if you add a CSP there it must allow `https://gc.zgo.at`.
@@ -129,7 +129,8 @@ A deterministic self-test suite exercises the index, smart packer, and trace par
 ## What's in here
 
 - **[index.html](index.html)** — the MERIDIAN landing page. Single dependency-free file: live Canvas particle field, command palette (`Ctrl-K`), simulated trace console (labeled SIM), FAQ, waitlist form, ceremony/daylight modes, debug panel (`d`).
-- **[app.html](app.html)** — the workbench. Also a single dependency-free file: multi-provider key management, folder ingestion (drag-and-drop, picker, or File System Access API — with binary sniffing, ignore-dir filters, and user ignore patterns), the smart context engine (scoring + project map + budgeted packing), IndexedDB project memory, streaming Anthropic/OpenAI-compatible API calls, trace parsing/rendering with evidence chips + file viewer, proposed-action cards, Markdown/HTML trace export, command palette, session cost estimates. Loads **zero third-party scripts**.
+- **[app.html](app.html)** + **`app/`** — the workbench: markup in `app.html`, styles in `app/app.css`, and the engine as dependency-free ES modules under `app/` (no framework, no npm, no build step — the files ship as authored). Multi-provider key management, folder ingestion (drag-and-drop, picker, or File System Access API — with binary sniffing, ignore-dir filters, and user ignore patterns), the smart context engine (scoring + project map + budgeted packing), IndexedDB project memory, streaming Anthropic/OpenAI-compatible API calls, trace parsing/rendering with evidence chips + file viewer, proposed-action cards, Markdown/HTML trace export, command palette, session cost estimates. Loads **zero third-party scripts**.
+  - Module map: `main.js` (entry + init order + global keys) · `state.js` (the shared store + cache invalidation) · `config.js` (providers/models/localStorage keys) · `helpers.js` · `shell.js` (provider/model/theme/first-run/settings) · `ingest.js` (folder loading, tree, budget, preview, ignore patterns) · `demo.js` (bundled sample project) · `memory.js` (IndexedDB projects) · `smart-context.js` (scoring + packing + project map) · `indexer.js` (symbols/imports index) · `prompt.js` (context assembly + grounding) · `chat.js` (provider request loop + cost) · `local.js` (the no-API LOCAL engine) · `trace.js` (rendering + trace parsing) · `actions.js` · `viewer.js` · `export.js` · `palette.js` · `selftest.js`.
 - **[privacy.html](privacy.html)** / **[terms.html](terms.html)** — the legal layer, written for this exact architecture (no servers, BYO key, localStorage-only storage).
 - **[dna.html](dna.html)** — the Lucid Engine design system as a browsable page.
 - **[DESIGN-DNA.md](DESIGN-DNA.md)** — the full system spec (v1.2), including a paste-ready instruction block for AI design tools (§10).
@@ -160,6 +161,8 @@ No build step. Serve locally and click around:
 ```
 python3 -m http.server 8000
 ```
+
+The workbench is ES modules, so it needs to be served over HTTP — opening `app.html` straight from disk (`file://`) won't load the engine. Any static server works; GitHub Pages needs no configuration.
 
 Key flows to check: first-run modal on the workbench (once per browser), folder load with skipped-file report, Send without a key (should prompt, not request), a real question with a spend-limited key (streaming → trace console → evidence chip → file viewer), Stop mid-stream, wrong key (401 state), `[ CLEAR KEY ]` and the clear-all-data button.
 

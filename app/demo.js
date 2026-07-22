@@ -6,8 +6,8 @@ import { convoIn } from './trace.js';
 import { dismissFirstRun, setProvider } from './shell.js';
 /* ---- first-run demo: a tiny bundled project answered by the LOCAL engine, so a
    new visitor sees a real trace + evidence chips before committing an API key.
-   File contents are line arrays (no template literals / backticks) to stay robust
-   inside this single inline script. ---- */
+   File contents are line arrays (no template literals / backticks) — a habit from
+   the app's single-inline-script era, kept because it stays copy-paste safe. ---- */
 var SAMPLE_PROJECT = {
   'README.md': [
     '# todo-api',
