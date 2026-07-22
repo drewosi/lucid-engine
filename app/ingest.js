@@ -137,49 +137,88 @@ function pickHandler(input) {
   input.value = '';
 }
 
+/* ---- project tree ----
+   Rows are cloned from the <template> components in app.html (tpl-dir-row /
+   tpl-file-row). Collapse state survives re-renders; the search filter matches
+   path substrings and always shows matches expanded. */
+var collapsedDirs = {}, treeQuery = '';
+function parentDir(p) { return p.indexOf('/') === -1 ? '' : p.slice(0, p.lastIndexOf('/')); }
+function syncDirCheck(check, mine) {
+  var on = 0;
+  mine.forEach(function (x) { if (st.files.get(x).checked) on++; });
+  check.checked = mine.length > 0 && on === mine.length;
+  check.indeterminate = on > 0 && on < mine.length;
+}
 function renderTree() {
   var tree = $('tree');
   tree.innerHTML = '';
-  var paths = sortedPaths();
-  $('filecount').textContent = paths.length ? paths.length + ' FILES' : '';
-  $('ctxactions').hidden = !paths.length;
-  $('budget').hidden = !paths.length;
-  $('ctxmoderow').hidden = !paths.length;
-  $('smartnote').hidden = !paths.length || st.ctxMode !== 'smart';
-  var lastDir = null;
+  var allPaths = sortedPaths();
+  $('filecount').textContent = allPaths.length ? allPaths.length + ' FILES' : '';
+  $('ctxactions').hidden = !allPaths.length;
+  $('budget').hidden = !allPaths.length;
+  $('ctxmoderow').hidden = !allPaths.length;
+  $('treesearchrow').hidden = !allPaths.length;
+  $('smartnote').hidden = !allPaths.length || st.ctxMode !== 'smart';
+  var q = treeQuery.trim().toLowerCase();
+  var paths = q ? allPaths.filter(function (p) { return p.toLowerCase().indexOf(q) !== -1; }) : allPaths;
+  if (q && !paths.length) {
+    var none = document.createElement('div');
+    none.className = 'tree-empty';
+    none.textContent = '// no loaded path matches “' + treeQuery.trim() + '”';
+    tree.appendChild(none);
+    return;
+  }
+  var dirTpl = $('tpl-dir-row'), fileTpl = $('tpl-file-row');
+  var frag = document.createDocumentFragment();
+  var lastDir = null, dirClosed = false, curCheck = null, curMine = null;
   paths.forEach(function (p) {
-    var dir = p.indexOf('/') === -1 ? '' : p.slice(0, p.lastIndexOf('/'));
+    var dir = parentDir(p);
     if (dir !== lastDir) {
       lastDir = dir;
-      var d = document.createElement('button');
-      d.type = 'button'; d.className = 'dir-row mono';
-      d.textContent = (dir || './') + ' — toggle';
-      d.setAttribute('aria-label', 'Toggle all files in ' + (dir || 'project root'));
-      d.dataset.dir = dir;
-      d.addEventListener('click', function () {
-        var mine = paths.filter(function (q) { return (q.indexOf('/') === -1 ? '' : q.slice(0, q.lastIndexOf('/'))) === this.dataset.dir; }, this);
-        var anyOff = mine.some(function (q) { return !st.files.get(q).checked; });
-        mine.forEach(function (q) { st.files.get(q).checked = anyOff; });
+      dirClosed = !q && !!collapsedDirs[dir]; /* filtering always shows matches expanded */
+      var mine = allPaths.filter(function (x) { return parentDir(x) === dir; });
+      var row = dirTpl.content.firstElementChild.cloneNode(true);
+      row.classList.toggle('closed', dirClosed);
+      var tgl = row.querySelector('.dir-tgl');
+      tgl.querySelector('.dn').textContent = dir || './';
+      tgl.querySelector('.dc').textContent = '· ' + mine.length;
+      tgl.setAttribute('aria-expanded', String(!dirClosed));
+      tgl.setAttribute('aria-label', (dirClosed ? 'Expand ' : 'Collapse ') + (dir || 'project root') + ' — ' + mine.length + ' file' + (mine.length === 1 ? '' : 's'));
+      tgl.addEventListener('click', function () {
+        if (treeQuery.trim()) return; /* collapse is moot while filtering */
+        collapsedDirs[dir] = !collapsedDirs[dir];
+        renderTree();
+      });
+      var check = row.querySelector('.dir-check');
+      syncDirCheck(check, mine);
+      check.setAttribute('aria-label', 'Select or deselect all files in ' + (dir || 'project root'));
+      check.addEventListener('change', function () {
+        var anyOff = mine.some(function (x) { return !st.files.get(x).checked; });
+        mine.forEach(function (x) { st.files.get(x).checked = anyOff; });
         invalidateSelection(); renderTree(); renderBudget(); /* selection change: symbol/import index unaffected */
       });
-      tree.appendChild(d);
+      curCheck = check; curMine = mine;
+      frag.appendChild(row);
     }
+    if (dirClosed) return;
     var f = st.files.get(p);
-    var row = document.createElement('div');
-    row.className = 'file-row';
-    var lab = document.createElement('label');
-    var cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.checked = f.checked;
-    cb.addEventListener('change', function () { f.checked = cb.checked; invalidateSelection(); renderBudget(); });
-    var nm = document.createElement('span');
-    nm.className = 'nm'; nm.textContent = p.slice(dir ? dir.length + 1 : 0);
+    var frow = fileTpl.content.firstElementChild.cloneNode(true);
+    var cb = frow.querySelector('input');
+    cb.checked = f.checked;
+    (function (dirCheck, mine) {
+      cb.addEventListener('change', function () {
+        f.checked = cb.checked;
+        syncDirCheck(dirCheck, mine); /* keep the tri-state dir box honest without a re-render */
+        invalidateSelection(); renderBudget();
+      });
+    })(curCheck, curMine);
+    var nm = frow.querySelector('.nm');
+    nm.textContent = p.slice(dir ? dir.length + 1 : 0);
     nm.title = p;
-    lab.appendChild(cb); lab.appendChild(nm);
-    var tk = document.createElement('span');
-    tk.className = 'tk'; tk.textContent = '≈' + fmtTok(f.tokens);
-    row.appendChild(lab); row.appendChild(tk);
-    tree.appendChild(row);
+    frow.querySelector('.tk').textContent = '≈' + fmtTok(f.tokens);
+    frag.appendChild(frow);
   });
+  tree.appendChild(frag);
 }
 
 function selectedTokens() {
@@ -493,11 +532,25 @@ export function initIngest() {
   $('filebtn').addEventListener('click', function () { $('filepick').click(); });
   $('dirpick').addEventListener('change', function () { pickHandler(this); });
   $('filepick').addEventListener('change', function () { pickHandler(this); });
+  /* tree search — debounced filter over loaded paths; Escape clears the filter
+     without bubbling to the global layer-closing handler */
+  var treesearch = $('treesearch'), tsTimer = null;
+  treesearch.addEventListener('input', function () {
+    clearTimeout(tsTimer);
+    tsTimer = setTimeout(function () { treeQuery = treesearch.value; renderTree(); }, 120);
+  });
+  treesearch.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && treesearch.value) {
+      e.stopPropagation();
+      treesearch.value = ''; treeQuery = ''; renderTree();
+    }
+  });
   $('selall').addEventListener('click', function () { st.files.forEach(function (f) { f.checked = true; }); invalidateSelection(); renderTree(); renderBudget(); });
   $('selnone').addEventListener('click', function () { st.files.forEach(function (f) { f.checked = false; }); invalidateSelection(); renderTree(); renderBudget(); });
   $('clearctx').addEventListener('click', function () {
     st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
     st.skippedFiles.length = 0;
+    collapsedDirs = {}; treeQuery = ''; treesearch.value = '';
     invalidateAll(); renderTree(); renderBudget();
     renderOverview();
     $('skipnote').hidden = true;

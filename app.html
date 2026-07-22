@@ -4,12 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Pragmatic CSP for a static app on GitHub Pages (no HTTP headers available).
-     Scripts are same-origin files only — no 'unsafe-inline' in script-src. style-src
-     keeps 'unsafe-inline' solely for the inline style= attributes in the markup; the
-     real hardening is object/base/frame lockdown plus a bounded connect-src that still
-     permits BYO https providers and local model servers. Tighten connect-src to your
-     own provider hosts for a stricter deployment. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'">
+     Scripts are same-origin files plus exactly one third-party origin: Tailwind's
+     Play CDN, which supplies styling utilities only (its config lives in the
+     same-origin app/tw-config.js — no 'unsafe-inline' in script-src). style-src
+     keeps 'unsafe-inline' for the inline style= attributes and the <style> element
+     Tailwind injects; the real hardening is object/base/frame lockdown plus a
+     bounded connect-src that still permits BYO https providers and local model
+     servers. Tighten connect-src to your own provider hosts for a stricter
+     deployment. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'">
 <title>MERIDIAN — Workbench</title>
 <meta name="description" content="The Meridian workbench. Load a project into your browser's memory, ask questions, and get answers with inspectable evidence traces. Runs entirely in your browser with your own API key — or the no-API local engine.">
 <link rel="canonical" href="https://drewosi.github.io/lucid-engine/app.html">
@@ -18,86 +21,107 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://drewosi.github.io/lucid-engine/app.html">
 <link rel="stylesheet" href="app/app.css">
+<!-- Tailwind Play CDN — utility classes only. All load-bearing design lives in
+     app/app.css (DESIGN-DNA v1.2 tokens); if this script is blocked or offline,
+     the workbench remains fully functional. Config: app/tw-config.js. -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="app/tw-config.js"></script>
 </head>
 <body>
 <div id="app" data-mode="dark">
 
-  <a href="#prompt" style="position:absolute;left:-9999px" class="mono">Skip to composer</a>
+  <a href="#prompt" class="mono sr-only">Skip to composer</a>
 
-  <!-- NAV -->
+  <!-- ============ TOPNAV — wordmark · sidebar toggle · readouts · provider/model · palette · exports · settings ============ -->
   <nav class="primary" aria-label="Primary">
     <div class="nav-in">
       <a href="index.html" class="wordmark">MERIDIAN <span class="tag">WORKBENCH · FREE BETA</span></a>
-      <button class="btn-icon mono" id="railbtn" type="button" aria-expanded="false" aria-controls="rail">CONTEXT</button>
+      <button class="btn-icon mono" id="railbtn" type="button" aria-expanded="true" aria-controls="rail" title="Show / hide the context sidebar (Ctrl B)">◧ CONTEXT</button>
       <div class="nav-status">
         <span class="ctx-readout" id="ctxreadout" aria-live="off">CTX ≈ <b>0</b> tokens · <b>0</b> files</span>
         <span class="navcost mono" id="navcost" hidden>
           <button type="button" id="navcostbtn" title="Estimated cost this session — click for the token breakdown"><span id="navcostval">$0.00</span></button>
           <button type="button" class="navcost-rst" id="navcostrst" aria-label="Reset session cost" title="Reset session cost to zero">↺</button>
         </span>
-        <label for="navprov" style="position:absolute;left:-9999px">Provider</label>
+        <label for="navprov" class="sr-only">Provider</label>
         <select class="modelsel" id="navprov" title="Quick-switch provider — each keeps its own key, no settings trip">
           <option value="anthropic">ANTHROPIC</option>
           <option value="openai">OPENAI</option>
           <option value="custom">CUSTOM</option>
           <option value="local">LOCAL</option>
         </select>
-        <label for="modelsel" style="position:absolute;left:-9999px">Model</label>
+        <label for="modelsel" class="sr-only">Model</label>
         <select class="modelsel" id="modelsel" title="Model for the selected provider — switch providers in the box to the left or in settings"></select>
+        <span class="nav-sep" aria-hidden="true"></span>
+        <button class="btn-icon mono" id="palbtn" type="button" title="Command palette (Ctrl K) — every command, fuzzy-searched">⌘ K</button>
+        <button class="btn-icon mono nav-exp" id="exportmd" type="button" title="Download the session — answers, traces and the actual cited lines — as Markdown (Ctrl E)">↓ MD</button>
+        <button class="btn-icon mono nav-exp" id="exporthtml" type="button" title="Download the session as a self-contained HTML page — zero external assets">↓ HTML</button>
         <button class="btn-icon mono" id="keysbtn" type="button" title="Keyboard shortcuts (?)">? KEYS</button>
-        <button class="btn-icon mono" id="setbtn" type="button" aria-expanded="false" aria-controls="drawer">SETTINGS</button>
+        <button class="btn-icon mono" id="setbtn" type="button" aria-expanded="false" aria-controls="drawer" title="Settings — provider, key, context engine, spend limit (Ctrl .)">⚙ SETTINGS</button>
         <button class="btn-mode mono" id="modebtn" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
       </div>
     </div>
   </nav>
 
   <main class="deck">
-    <!-- CONTEXT RAIL -->
+    <!-- ============ LEFT SIDEBAR — projects · context controls · project tree · project intelligence ============ -->
     <aside class="rail" id="rail" aria-label="Project context">
-      <div id="projshelf" hidden>
-        <h2 class="rail-hd">PROJECTS <span class="n" id="projcount"></span></h2>
-        <div id="projlist"></div>
-        <button class="btn-quiet acc" type="button" id="saveproj">[ SAVE PROJECT ]</button>
-        <p class="rail-note" id="projnote" hidden></p>
-      </div>
-      <h2 class="rail-hd">CONTEXT <span class="n" id="filecount"></span></h2>
-      <div id="dropzone">
-        drop a project folder here
-        <div class="pickrow">
-          <button class="pick" type="button" id="dirbtn">[ PICK FOLDER ]</button>
-          <button class="pick" type="button" id="filebtn">[ PICK FILES ]</button>
+      <div class="rail-scroll">
+        <div id="projshelf" hidden>
+          <h2 class="rail-hd">PROJECTS <span class="n" id="projcount"></span></h2>
+          <div id="projlist"></div>
+          <button class="btn-quiet acc" type="button" id="saveproj">[ SAVE PROJECT ]</button>
+          <p class="rail-note" id="projnote" hidden></p>
         </div>
-        <input type="file" id="dirpick" webkitdirectory multiple hidden aria-label="Pick a project folder">
-        <input type="file" id="filepick" multiple hidden aria-label="Pick files">
+
+        <h2 class="rail-hd">CONTEXT <span class="n" id="filecount"></span></h2>
+        <div id="dropzone">
+          drop a project folder here
+          <div class="pickrow">
+            <button class="pick" type="button" id="dirbtn">[ PICK FOLDER ]</button>
+            <button class="pick" type="button" id="filebtn">[ PICK FILES ]</button>
+          </div>
+          <input type="file" id="dirpick" webkitdirectory multiple hidden aria-label="Pick a project folder">
+          <input type="file" id="filepick" multiple hidden aria-label="Pick files">
+        </div>
+        <p class="rail-note">// files are read into this tab's memory only. nothing is uploaded to us — <b>we run no servers</b>. selected files are sent to your chosen model provider with each question, under your key. in LOCAL mode nothing is sent at all.</p>
+        <div id="budget" hidden title="Estimated tokens vs the model's context window — the estimate is language-aware (code counts denser than prose)">
+          <div class="budget-bar" id="budgetbar"><i></i></div>
+          <div class="budget-txt"><span id="budgettxt">≈ 0 tokens selected</span><span id="budgetmax"></span></div>
+        </div>
+        <div id="ctxmoderow" hidden>
+          <button class="btn-quiet acc" type="button" id="ctxmodebtn" aria-pressed="false" title="SMART sends a project map + the most relevant files packed into a token budget; FULL sends every checked file whole">[ CONTEXT: FULL ]</button>
+          <button class="btn-quiet acc" type="button" id="groundbtn" aria-pressed="true" title="Run Meridian's deterministic investigation before each model question and send its verified findings (path:line evidence) as grounding. No effect in LOCAL mode.">[ GROUND: ON ]</button>
+          <button class="btn-quiet acc" type="button" id="prevbtn" title="See exactly what the next question will send — map, files, token estimates">[ PREVIEW SEND ]</button>
+        </div>
+        <p class="rail-note" id="smartnote" hidden></p>
+
+        <div id="treesearchrow" hidden>
+          <label for="treesearch" class="sr-only">Filter loaded files</label>
+          <input type="search" id="treesearch" class="mono" placeholder="filter files… (matches path)" autocomplete="off" spellcheck="false">
+        </div>
+        <div id="tree"></div>
+        <p class="rail-note" id="skipnote" hidden></p>
+        <div id="skiprevrow" hidden>
+          <button class="btn-quiet acc" type="button" id="skiprev" title="List every skipped file and pull specific ones back in">[ REVIEW SKIPPED ]</button>
+        </div>
+        <div id="ctxactions" hidden>
+          <button class="btn-quiet" type="button" id="selall">[ SELECT ALL ]</button>
+          <button class="btn-quiet" type="button" id="selnone">[ SELECT NONE ]</button>
+          <button class="btn-quiet acc" type="button" id="ignorebtn" title="Edit ignore patterns in settings — applied at ingest, saved with the project">[ IGNORE PATTERNS ]</button>
+          <button class="btn-quiet" type="button" id="clearctx">[ UNLOAD PROJECT ]</button>
+        </div>
+
+        <!-- Project Intelligence — rendered by local.js renderOverview(); real queries, not decoration -->
+        <div id="overview" hidden aria-label="Project intelligence overview"></div>
       </div>
-      <p class="rail-note">// files are read into this tab's memory only. nothing is uploaded to us — <b>we run no servers</b>. selected files are sent to your chosen model provider with each question, under your key. in LOCAL mode nothing is sent at all.</p>
-      <div id="budget" hidden title="Estimated tokens vs the model's context window — the estimate is language-aware (code counts denser than prose)">
-        <div class="budget-bar" id="budgetbar"><i></i></div>
-        <div class="budget-txt"><span id="budgettxt">≈ 0 tokens selected</span><span id="budgetmax"></span></div>
-      </div>
-      <div id="ctxmoderow" hidden>
-        <button class="btn-quiet acc" type="button" id="ctxmodebtn" aria-pressed="false" title="SMART sends a project map + the most relevant files packed into a token budget; FULL sends every checked file whole">[ CONTEXT: FULL ]</button>
-        <button class="btn-quiet acc" type="button" id="groundbtn" aria-pressed="true" title="Run Meridian's deterministic investigation before each model question and send its verified findings (path:line evidence) as grounding. No effect in LOCAL mode.">[ GROUND: ON ]</button>
-        <button class="btn-quiet acc" type="button" id="prevbtn" title="See exactly what the next question will send — map, files, token estimates">[ PREVIEW SEND ]</button>
-      </div>
-      <p class="rail-note" id="smartnote" hidden></p>
-      <div id="tree"></div>
-      <p class="rail-note" id="skipnote" hidden></p>
-      <div id="skiprevrow" hidden>
-        <button class="btn-quiet acc" type="button" id="skiprev" title="List every skipped file and pull specific ones back in">[ REVIEW SKIPPED ]</button>
-      </div>
-      <div id="ctxactions" hidden>
-        <button class="btn-quiet" type="button" id="selall">[ SELECT ALL ]</button>
-        <button class="btn-quiet" type="button" id="selnone">[ SELECT NONE ]</button>
-        <button class="btn-quiet" type="button" id="clearctx">[ UNLOAD PROJECT ]</button>
-      </div>
+      <div id="railresize" role="separator" aria-orientation="vertical" aria-label="Resize the context sidebar — drag, or use arrow keys" tabindex="0" title="Drag to resize · arrow keys when focused"></div>
     </aside>
 
-    <!-- STAGE -->
+    <!-- ============ CHAT PANE — streaming messages with traces + evidence chips ============ -->
     <section class="stage" aria-label="Conversation">
       <div id="convo">
         <div class="convo-in">
-          <div id="overview" hidden aria-label="Project intelligence overview"></div>
           <div id="empty">
             <h2>The workbench is live.</h2>
             <p>Ask a question and the answer arrives with its trace — the reasoning steps, pinned to the exact files and lines they stand on.</p>
@@ -116,29 +140,40 @@
         <div class="composer-in">
           <div id="statusline"><span id="status" role="status" aria-live="polite">CORE IDLE</span><span class="cost" id="costline"></span></div>
           <form id="askform" class="comp-row">
-            <label for="prompt" style="position:absolute;left:-9999px">Your question</label>
+            <label for="prompt" class="sr-only">Your question</label>
             <textarea id="prompt" placeholder="ask about the loaded project — or anything…" rows="1"></textarea>
             <button class="btn btn-signal" type="submit" id="sendbtn">Send</button>
             <button class="btn btn-hairline" type="button" id="stopbtn" hidden>Stop</button>
           </form>
           <div class="comp-note">
-            <span class="kbd-hint">// enter to send · ctrl-k commands · <button type="button" class="kbd-link mono" id="keymaphint">? keymap</button></span>
+            <span class="kbd-hint">// enter to send · ctrl-k commands · ctrl-e export · <button type="button" class="kbd-link mono" id="keymaphint">? keymap</button></span>
             <span>// AI output can be wrong or incomplete — verify before you rely on it</span>
             <span>// costs are estimates; your provider bills actuals — <a href="terms.html">terms</a> · <a href="privacy.html">privacy</a></span>
-            <button class="btn-quiet acc" type="button" id="exportmd" title="Download the session — answers, traces and the actual cited lines — as Markdown (Ctrl+E)">[ EXPORT MD ]</button>
-            <button class="btn-quiet acc" type="button" id="exporthtml" title="Download the session as a self-contained HTML page — zero external assets">[ EXPORT HTML ]</button>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- ============ FILE VIEWER — docked right detail pane ≥1100px, overlay below ============ -->
+    <div class="veil" id="viewveil">
+      <div class="viewer" role="dialog" aria-modal="false" aria-label="Cited file">
+        <div class="vh"><span id="vtitle">—</span><span class="rng" id="vrange"></span>
+          <span class="vh-acts">
+            <button class="btn-icon mono" type="button" id="vcopy" title="Copy the highlighted lines (whole file when nothing is highlighted)">⧉ COPY</button>
+            <button class="btn-icon mono" type="button" id="vclose">ESC CLOSE</button>
+          </span>
+        </div>
+        <div class="vb" id="vbody" tabindex="0"></div>
+      </div>
+    </div>
   </main>
 
   <!-- SETTINGS DRAWER -->
   <div id="drawer" role="dialog" aria-label="Settings" aria-modal="false">
     <h2>SETTINGS</h2>
     <h3>PROVIDER</h3>
-    <label for="provsel" style="position:absolute;left:-9999px">Model provider</label>
-    <select class="modelsel" id="provsel" style="width:100%;height:36px" title="Where requests go — directly from this browser, under your key. Each provider keeps its own key.">
+    <label for="provsel" class="sr-only">Model provider</label>
+    <select class="modelsel w-full" id="provsel" style="height:36px" title="Where requests go — directly from this browser, under your key. Each provider keeps its own key.">
       <option value="anthropic">ANTHROPIC</option>
       <option value="openai">OPENAI</option>
       <option value="custom">CUSTOM (OPENAI-COMPATIBLE)</option>
@@ -146,15 +181,15 @@
     </select>
     <p class="note" id="provnote"></p>
     <div id="customcfg" hidden>
-      <div class="key-row" style="margin-top:8px">
-        <label for="custurl" style="position:absolute;left:-9999px">Custom endpoint base URL</label>
+      <div class="key-row mt-2">
+        <label for="custurl" class="sr-only">Custom endpoint base URL</label>
         <input type="text" id="custurl" placeholder="base url, e.g. http://localhost:11434/v1" autocomplete="off" spellcheck="false">
       </div>
-      <div class="key-row" style="margin-top:8px">
-        <label for="custmodel" style="position:absolute;left:-9999px">Custom model id</label>
+      <div class="key-row mt-2">
+        <label for="custmodel" class="sr-only">Custom model id</label>
         <input type="text" id="custmodel" placeholder="model id, e.g. llama3.3:70b" autocomplete="off" spellcheck="false">
       </div>
-      <div class="key-row" style="margin-top:8px">
+      <div class="key-row mt-2">
         <button class="btn btn-hairline" type="button" id="custsave">Save endpoint</button>
         <button class="btn btn-hairline" type="button" id="custtest" title="Send a lightweight request to check reachability and CORS (EXPERIMENTAL)">Test endpoint</button>
       </div>
@@ -164,24 +199,24 @@
     <div id="keysec">
     <h3 id="keyhd">ANTHROPIC API KEY</h3>
     <div class="key-row">
-      <label for="keyin" style="position:absolute;left:-9999px">API key</label>
+      <label for="keyin" class="sr-only">API key</label>
       <input type="password" id="keyin" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
       <button class="btn btn-hairline" type="button" id="savekey">Save</button>
     </div>
     <div id="keystate" aria-live="polite"></div>
     <p class="note">// stored in this browser's localStorage only, per provider. it is sent to exactly one place: the selected provider's API endpoint, with your requests. we never see it — there is no server on our side to see it with.</p>
-    <p class="note">// recommended: create a key in a dedicated workspace with a monthly spend limit. any script running on a page can read its own origin's localStorage — this page loads zero third-party scripts, and keeping the blast radius small is still good practice.</p>
+    <p class="note">// recommended: create a key in a dedicated workspace with a monthly spend limit. any script running on a page can read its own origin's localStorage — this page loads one third-party script (tailwind css styling utilities, from cdn.tailwindcss.com; it receives no files, questions, or keys from us), so keeping the blast radius small is still good practice.</p>
     <button class="btn-quiet" type="button" id="clearkey">[ CLEAR KEY ]</button>
     </div>
 
     <h3>MODEL</h3>
     <p class="note" id="modelnote"></p>
-    <button class="btn-quiet acc" type="button" id="stricttracebtn" aria-pressed="false" style="margin-top:6px" title="Prepend a stricter trace instruction to every request — for models that don't reliably emit the meridian-trace block. Costs a few extra tokens per request.">[ FORCE STRICT TRACE: OFF ]</button>
+    <button class="btn-quiet acc mt-1.5" type="button" id="stricttracebtn" aria-pressed="false" title="Prepend a stricter trace instruction to every request — for models that don't reliably emit the meridian-trace block. Costs a few extra tokens per request.">[ FORCE STRICT TRACE: OFF ]</button>
 
     <h3>CONTEXT ENGINE</h3>
     <p class="note">// FULL sends every checked file whole. SMART sends a project map plus the files most relevant to each question, packed into a token budget — use it for medium and large projects.</p>
     <div class="key-row">
-      <label for="budgetin" style="position:absolute;left:-9999px">Smart context token budget</label>
+      <label for="budgetin" class="sr-only">Smart context token budget</label>
       <input type="number" id="budgetin" min="4000" step="1000" placeholder="smart budget (tokens)">
       <button class="btn btn-hairline" type="button" id="savebudget">Set</button>
     </div>
@@ -190,7 +225,7 @@
     <h3>SESSION SPEND LIMIT</h3>
     <p class="note">// optional. when the estimated session total would cross this, Meridian asks before sending — it never hard-blocks. estimates only; your provider bills actuals. 0 or blank = off.</p>
     <div class="key-row">
-      <label for="spendin" style="position:absolute;left:-9999px">Session spend limit (USD)</label>
+      <label for="spendin" class="sr-only">Session spend limit (USD)</label>
       <input type="number" id="spendin" min="0" step="0.5" placeholder="e.g. 5.00 (USD)">
       <button class="btn btn-hairline" type="button" id="savespend">Set</button>
     </div>
@@ -198,9 +233,9 @@
 
     <h3>IGNORE PATTERNS</h3>
     <p class="note">// one pattern per line; <b>*</b> matches anything (e.g. <b>*.test.ts</b>, <b>docs/*</b>). applied at ingest and saved with the project. lines starting with # are comments.</p>
-    <label for="ignorein" style="position:absolute;left:-9999px">Ignore patterns</label>
+    <label for="ignorein" class="sr-only">Ignore patterns</label>
     <textarea id="ignorein" rows="3" spellcheck="false" placeholder="*.test.ts&#10;docs/*"></textarea>
-    <div class="key-row" style="margin-top:8px">
+    <div class="key-row mt-2">
       <button class="btn btn-hairline" type="button" id="suggestignore" title="Propose common junk-file patterns — grounded in the files you've loaded">Suggest</button>
       <button class="btn btn-hairline" type="button" id="saveignore">Apply</button>
     </div>
@@ -209,7 +244,7 @@
     <button class="btn-mode mono" id="modebtn2" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
 
     <h3>LOCAL DATA</h3>
-    <p class="note">// everything meridian stores in this browser: your API key(s), model choice, color mode, context settings, ignore patterns, the terms-acceptance record, saved-project metadata in IndexedDB (file tree + settings — never file contents), and (on the landing page) your waitlist entry. loaded file contents and conversation live in memory only and vanish when the tab closes.</p>
+    <p class="note">// everything meridian stores in this browser: your API key(s), model choice, color mode, context settings, sidebar layout, ignore patterns, the terms-acceptance record, saved-project metadata in IndexedDB (file tree + settings — never file contents), and (on the landing page) your waitlist entry. loaded file contents and conversation live in memory only and vanish when the tab closes.</p>
     <button class="btn-quiet" type="button" id="clearall">[ CLEAR ALL MERIDIAN DATA FROM THIS BROWSER ]</button>
 
     <h3>LEGAL</h3>
@@ -222,7 +257,7 @@
       <div class="k mono">MERIDIAN // BEFORE YOU BEGIN</div>
       <h2 id="fr-title">A real instrument, in free beta.</h2>
       <ul>
-        <li><b>It runs entirely in your browser.</b> We operate no servers. Your files, questions, and key are never sent to us.</li>
+        <li><b>It runs entirely in your browser.</b> We operate no servers. Your files, questions, and key are never sent to us. (Styling utilities load from Tailwind's CDN — that request carries none of your data.)</li>
         <li><b>Bring your own API key.</b> Anthropic by default; OpenAI or a custom OpenAI-compatible endpoint in settings. Requests go directly from this browser to the provider under <b>your</b> account — usage is billed by the provider to you, at their rates. Prefer no API at all? The <b>LOCAL</b> engine answers by deterministic search over your loaded files — no key, no AI, zero network.</li>
         <li><b>Your key stays local.</b> It is stored in this browser's localStorage and sent only to the selected provider's API endpoint. Use a spend-limited key.</li>
         <li><b>AI output can be wrong.</b> Answers and traces are machine-generated and may be inaccurate or incomplete. They are not professional advice. Verify before you rely on them.</li>
@@ -234,14 +269,6 @@
         <button class="btn btn-hairline" type="button" id="fr-accept">I understand — begin</button>
         <a class="btn btn-hairline" href="index.html">Back to the front door</a>
       </div>
-    </div>
-  </div>
-
-  <!-- FILE VIEWER -->
-  <div class="veil" id="viewveil">
-    <div class="viewer" role="dialog" aria-modal="true" aria-label="Cited file">
-      <div class="vh"><span id="vtitle">—</span><span class="rng" id="vrange"></span><button class="btn-icon mono" type="button" id="vclose">ESC CLOSE</button></div>
-      <div class="vb" id="vbody" tabindex="0"></div>
     </div>
   </div>
 
@@ -266,7 +293,7 @@
   <!-- COMMAND PALETTE -->
   <div id="palette" role="dialog" aria-modal="true" aria-label="Command palette">
     <div class="pal-card">
-      <label for="pal-in" style="position:absolute;left:-9999px">Command</label>
+      <label for="pal-in" class="sr-only">Command</label>
       <input id="pal-in" class="mono" type="text" placeholder="type a command…" autocomplete="off" spellcheck="false">
       <div id="pal-list" role="listbox"></div>
     </div>
@@ -278,6 +305,7 @@
       <div class="k mono">MERIDIAN // KEYMAP</div>
       <table>
         <tr><td><kbd>ctrl k</kbd></td><td>command palette</td></tr>
+        <tr><td><kbd>ctrl b</kbd></td><td>show / hide the context sidebar</td></tr>
         <tr><td><kbd>ctrl e</kbd></td><td>export session as markdown</td></tr>
         <tr><td><kbd>ctrl .</kbd></td><td>settings drawer</td></tr>
         <tr><td><kbd>ctrl shift o</kbd></td><td>pick project folder</td></tr>
@@ -285,13 +313,13 @@
         <tr><td><kbd>?</kbd></td><td>this keymap (outside inputs)</td></tr>
         <tr><td><kbd>esc</kbd></td><td>close the topmost layer</td></tr>
       </table>
-      <p class="note mono" style="color:var(--ink-3);font-size:11px;letter-spacing:.06em;margin:10px 0 0">// also: <kbd>ctrl k</kbd> palette lists every command · copy a single answer with <b style="color:var(--ink-2)">[ COPY ]</b> in its header · reset session cost from the <b style="color:var(--ink-2)">$</b> chip</p>
+      <p class="note mono" style="color:var(--ink-3);font-size:11px;letter-spacing:.06em;margin:10px 0 0">// also: <kbd>ctrl k</kbd> palette lists every command · copy a single answer with <b style="color:var(--ink-2)">[ COPY ]</b> in its header · reset session cost from the <b style="color:var(--ink-2)">$</b> chip · arrow keys resize the sidebar when its handle is focused</p>
       <div class="row"><button class="btn btn-hairline" type="button" id="keymapclose">Close</button></div>
     </div>
   </div>
 
   <div id="toasts" aria-live="polite"></div>
-  <div id="sr-announce" aria-live="polite" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden"></div>
+  <div id="sr-announce" aria-live="polite" class="sr-only"></div>
 
   <footer class="strip">
     <span><b>MERIDIAN</b> // FREE BETA</span>
@@ -304,6 +332,20 @@
   </footer>
 
 </div>
+
+<!-- ============ COMPONENT TEMPLATES — cloned by app/ingest.js renderTree() ============ -->
+<template id="tpl-dir-row">
+  <div class="dir-row">
+    <button type="button" class="dir-tgl mono"><span class="chev" aria-hidden="true">▾</span><span class="dn"></span><span class="dc"></span></button>
+    <input type="checkbox" class="dir-check" title="Select / deselect every file in this directory">
+  </div>
+</template>
+<template id="tpl-file-row">
+  <div class="file-row">
+    <label><input type="checkbox"><span class="nm"></span></label>
+    <span class="tk mono"></span>
+  </div>
+</template>
 
 <noscript><p style="font-family:monospace;padding:20px">MERIDIAN is a browser application and requires JavaScript.</p></noscript>
 

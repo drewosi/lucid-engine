@@ -4,7 +4,7 @@ import { convoIn } from './trace.js';
 import { openPreview, openSkipReview, setCtxMode, suggestIgnore } from './ingest.js';
 import { promptEl, resetCost } from './chat.js';
 import { exportTraces } from './export.js';
-import { flipMode, openDrawer } from './shell.js';
+import { flipMode, openDrawer, toggleRail } from './shell.js';
 import { startDemo } from './demo.js';
 import { runAndShowSelfTests } from './selftest.js';
 
@@ -20,6 +20,7 @@ function clearConversation() {
   toast('Conversation cleared — loaded files stay in memory.');
 }
 var ACTIONS = [
+  { g: 'CONTEXT', n: 'Show / hide the context sidebar', k: 'ctrl B', f: toggleRail },
   { g: 'CONTEXT', n: 'Pick project folder', k: 'ctrl⇧O', f: function () { $('dirbtn').click(); } },
   { g: 'CONTEXT', n: 'Pick files', k: '', f: function () { $('filepick').click(); } },
   { g: 'CONTEXT', n: 'Toggle smart / full context', k: '', f: function () { setCtxMode(st.ctxMode === 'smart' ? 'full' : 'smart'); toast('Context mode: ' + st.ctxMode.toUpperCase() + '.'); } },
@@ -90,6 +91,7 @@ export function initPalette() {
     else if (e.key === 'Escape') { palClose(); }
   });
   palOv.addEventListener('click', function (e) { if (e.target === palOv) palClose(); });
+  $('palbtn').addEventListener('click', palOpen);
   $('keysbtn').addEventListener('click', openKeymap);
   $('keymaphint').addEventListener('click', openKeymap);
   $('keymapclose').addEventListener('click', closeKeymap);

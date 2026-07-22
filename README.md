@@ -114,13 +114,13 @@ LOCAL-engine intents: `def`, `refs`, `imports`, `importers`, `related`, `symbols
 
 ### Security / CSP
 
-`app.html` ships a Content-Security-Policy `<meta>` tag (GitHub Pages can't set HTTP headers). The workbench's code lives in same-origin ES modules under `app/`, so `script-src` is a strict `'self'` — inline script injection is blocked outright. `style-src` keeps `'unsafe-inline'` only for the markup's inline `style=` attributes; the rest of the hardening is `object-src 'none'`, `base-uri 'none'`, and a bounded `connect-src` that still permits BYO **https** providers and local model servers:
+`app.html` ships a Content-Security-Policy `<meta>` tag (GitHub Pages can't set HTTP headers). The workbench's code lives in same-origin ES modules under `app/`, plus exactly one allowed third-party script origin — Tailwind's Play CDN, styling utilities only — so `script-src` is `'self' https://cdn.tailwindcss.com` and inline script injection stays blocked outright (Tailwind's config is the same-origin `app/tw-config.js`, not an inline block). `style-src` keeps `'unsafe-inline'` for the markup's inline `style=` attributes and the `<style>` element Tailwind injects; the rest of the hardening is `object-src 'none'`, `base-uri 'none'`, and a bounded `connect-src` that still permits BYO **https** providers and local model servers:
 
 ```
-default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'
+default-src 'self'; script-src 'self' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'
 ```
 
-Tighten `connect-src` to your own provider hosts for a stricter deployment. Note `frame-ancestors` is intentionally omitted — it is ignored in a `<meta>` CSP and needs an HTTP header (or a JS frame-buster) to take effect. `app.html` still loads **zero third-party scripts**; `index.html` (the landing page) uses the optional goatcounter analytics, so if you add a CSP there it must allow `https://gc.zgo.at`.
+Tighten `connect-src` to your own provider hosts for a stricter deployment. Note `frame-ancestors` is intentionally omitted — it is ignored in a `<meta>` CSP and needs an HTTP header (or a JS frame-buster) to take effect. The Tailwind CDN receives a page-load request (so, an IP address — disclosed in the privacy policy) but none of your files, questions, or keys; if it is blocked or you're offline, `app/tw-config.js` guards against the missing global and the workbench runs fully on `app/app.css` alone. To return to a zero-third-party build, delete the two Tailwind `<script>` tags and drop `https://cdn.tailwindcss.com` from `script-src` — every load-bearing style lives in `app/app.css`. `index.html` (the landing page) uses the optional goatcounter analytics, so if you add a CSP there it must allow `https://gc.zgo.at`.
 
 ### Self-tests
 
@@ -129,11 +129,45 @@ A deterministic self-test suite exercises the index, smart packer, and trace par
 ## What's in here
 
 - **[index.html](index.html)** — the MERIDIAN landing page. Single dependency-free file: live Canvas particle field, command palette (`Ctrl-K`), simulated trace console (labeled SIM), FAQ, waitlist form, ceremony/daylight modes, debug panel (`d`).
-- **[app.html](app.html)** + **`app/`** — the workbench: markup in `app.html`, styles in `app/app.css`, and the engine as dependency-free ES modules under `app/` (no framework, no npm, no build step — the files ship as authored). Multi-provider key management, folder ingestion (drag-and-drop, picker, or File System Access API — with binary sniffing, ignore-dir filters, and user ignore patterns), the smart context engine (scoring + project map + budgeted packing), IndexedDB project memory, streaming Anthropic/OpenAI-compatible API calls, trace parsing/rendering with evidence chips + file viewer, proposed-action cards, Markdown/HTML trace export, command palette, session cost estimates. Loads **zero third-party scripts**.
+- **[app.html](app.html)** + **`app/`** — the workbench: markup in `app.html`, styles in `app/app.css`, and the engine as dependency-free ES modules under `app/` (no framework, no npm, no build step — the files ship as authored). Multi-provider key management, folder ingestion (drag-and-drop, picker, or File System Access API — with binary sniffing, ignore-dir filters, and user ignore patterns), the smart context engine (scoring + project map + budgeted packing), IndexedDB project memory, streaming Anthropic/OpenAI-compatible API calls, trace parsing/rendering with evidence chips + a docked file viewer, proposed-action cards, Markdown/HTML trace export, command palette, session cost estimates. Loads exactly **one third-party script** — Tailwind's CDN, utilities only, with a full no-CDN fallback (see Security / CSP).
   - Module map: `main.js` (entry + init order + global keys) · `state.js` (the shared store + cache invalidation) · `config.js` (providers/models/localStorage keys) · `helpers.js` · `shell.js` (provider/model/theme/first-run/settings) · `ingest.js` (folder loading, tree, budget, preview, ignore patterns) · `demo.js` (bundled sample project) · `memory.js` (IndexedDB projects) · `smart-context.js` (scoring + packing + project map) · `indexer.js` (symbols/imports index) · `prompt.js` (context assembly + grounding) · `chat.js` (provider request loop + cost) · `local.js` (the no-API LOCAL engine) · `trace.js` (rendering + trace parsing) · `actions.js` · `viewer.js` · `export.js` · `palette.js` · `selftest.js`.
 - **[privacy.html](privacy.html)** / **[terms.html](terms.html)** — the legal layer, written for this exact architecture (no servers, BYO key, localStorage-only storage).
 - **[dna.html](dna.html)** — the Lucid Engine design system as a browsable page.
 - **[DESIGN-DNA.md](DESIGN-DNA.md)** — the full system spec (v1.2), including a paste-ready instruction block for AI design tools (§10).
+
+## Workbench UI architecture
+
+The workbench is one primary HTML file (`app.html`) whose markup is organized into four fixed regions, driven by dependency-free ES modules. There is no build step — edit, refresh, ship.
+
+### Regions
+
+1. **TopNav** (`nav.primary`) — wordmark, sidebar toggle, live context readout, session-cost chip, provider quick-switch + model select, `⌘K` palette trigger, MD/HTML export, keymap, settings, mode toggle. Controls hide progressively as the viewport narrows; every hidden control remains reachable through the command palette (the palette is a shortcut, never the only path).
+2. **Left sidebar** (`aside.rail`) — saved projects, the context engine (dropzone, token-budget bar, `SMART/FULL` + `GROUND` + `PREVIEW SEND`), the project tree (search filter, collapsible directories, tri-state per-directory checkboxes, skipped-file review, ignore-pattern shortcut), and the Project Intelligence panel (`#overview`, rendered by `local.js` — every stat tile runs a real deterministic query). The rail is resizable via the `#railresize` handle (drag, or arrow keys when focused; width persisted in `localStorage`) and collapsible (`Ctrl B`, the nav toggle, or the palette). Below 860px it becomes a full-screen overlay.
+3. **Main area** — the chat stage (`section.stage`: streaming messages, trace consoles, evidence chips, composer) plus the **file viewer** (`#viewveil`). At ≥1100px the viewer docks as a third grid column — a non-modal right detail pane with line highlighting and a copy control, so the chat stays interactive while you read evidence. Below 1100px it falls back to a focus-trapped overlay.
+4. **Layers** — settings drawer, command palette, keymap, send preview, skipped-files review, first-run modal, toasts. `Esc` always closes the topmost layer (ordering lives in `main.js`).
+
+### The id contract
+
+Modules never query by structure — every JS↔DOM touchpoint is a stable element **id** (`$('tree')`, `$('prompt')`, `$('vbody')`, …). Markup can be rearranged freely (this refactor moved the exports into the nav and the overview into the rail without touching their modules) as long as ids survive. When adding UI: give the element an id, wire it in the owning module's `init*()`, and keep the visible control + palette action pair in sync.
+
+### Components
+
+- **`<template>` components** — repeated rows are cloned from templates at the bottom of `app.html` (`tpl-dir-row`, `tpl-file-row`, used by `ingest.js renderTree()`). Prefer this pattern for any new repeated markup.
+- **JS component functions** — richer dynamic pieces (messages, trace steps, evidence chips, stat tiles, demo banner) are built by small builder functions in their owning modules (`trace.js addAiMsg()`, `local.js renderOverview()`, …).
+- **Module map** — see *What's in here* above. `main.js` owns init order and global keys; `state.js` is the single shared store; everything else owns its own DOM region and wiring.
+
+### Styling
+
+- **`app/app.css`** is the source of truth: DESIGN-DNA v1.2 tokens (`--paper`, `--accent` Signal Orange `#FF4F00`/`#FF5C0A`, the gray ramp, `--ease-*` easings, `--t-*` durations) on `#app`, with `#app[data-mode="light"]` overrides — both modes always work.
+- **Tailwind (CDN)** supplies utility classes only, configured in `app/tw-config.js` to alias the same tokens (`bg-surface`, `text-ink-3`, `ease-snap`, …) with preflight disabled. Never put load-bearing design in utilities: the workbench must survive the CDN being blocked (the config file guards for that, and `.sr-only` has a local fallback).
+- Layout is a CSS grid: `main.deck { grid-template-columns: var(--rail-w) minmax(0,1fr) auto }` — the rail width is a custom property set by the resize handle; the third column is the docked viewer (auto → 0 when closed). Breakpoints: ≥1100 three-column, 860–1100 rail + chat with the viewer overlaying, ≤860 single column with the rail as an overlay.
+- Motion uses only the DNA's named patterns (Signal Trace, Light Lift, Flare Pulse, Machinery Reveal…), 120–240ms with the custom easings, and everything degrades to instant under `prefers-reduced-motion`.
+
+### Extending
+
+- **New command:** add a visible control, then append `{ g, n, k, f }` to `ACTIONS` in `palette.js`; add a `<kbd>` row to the keymap modal if it gets a shortcut (global shortcuts live in `main.js`).
+- **New sidebar section:** add a `rail-hd` heading + content inside `.rail-scroll`, wire by id in the owning module.
+- **New modal:** copy the `.veil > .modal` pattern, use `rememberFocus()/trap()/returnFocus()` from `helpers.js`, and register it in `main.js`'s `Escape` chain.
 
 ## Before public launch — fill the legal placeholders
 
@@ -152,7 +186,7 @@ grep -rn "TODO(drew)" *.html
 Out of the box the waitlist form falls back to localStorage (entries never leave the visitor's browser, and the page says so). Two steps make it live:
 
 1. **Email capture (required).** Create a free form at [formspree.io](https://formspree.io), copy the id from its endpoint (`formspree.io/f/<id>`), and paste it into the `FORMSPREE_ID` constant in `index.html` (search for `YOUR_FORM_ID`). The page's copy switches to disclose the transmission automatically — and the privacy policy already describes both states.
-2. **Analytics (optional).** Create a free site at [goatcounter.com](https://www.goatcounter.com) (privacy-friendly, no cookies, no consent banner needed), then uncomment the snippet at the bottom of `index.html` and replace `YOURCODE`. Never add analytics to `app.html` — the workbench's zero-third-party-scripts guarantee is part of the privacy policy.
+2. **Analytics (optional).** Create a free site at [goatcounter.com](https://www.goatcounter.com) (privacy-friendly, no cookies, no consent banner needed), then uncomment the snippet at the bottom of `index.html` and replace `YOURCODE`. Never add analytics to `app.html` — the workbench's only permitted third-party request is the Tailwind styling asset, and that boundary is part of the privacy policy.
 
 ## Developing / verifying
 

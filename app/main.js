@@ -8,7 +8,7 @@
    script — provider/model state first, then context UI, then the final sync pass. */
 import { st } from './state.js';
 import { $ } from './helpers.js';
-import { initShell, syncProviderUI, openDrawer, drawer, rail, railbtn } from './shell.js';
+import { initShell, syncProviderUI, openDrawer, drawer, rail, railbtn, toggleRail } from './shell.js';
 import { initIngest, setCtxMode, closePreview, closeSkipReview, prevveil, skipveil } from './ingest.js';
 import { initDemo } from './demo.js';
 import { initMemory } from './memory.js';
@@ -40,6 +40,9 @@ document.addEventListener('keydown', function (e) {
   }
   if (mod && !e.altKey && !e.shiftKey && e.key === '.') {
     e.preventDefault(); openDrawer(!drawer.classList.contains('open')); return;
+  }
+  if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
+    e.preventDefault(); toggleRail(); return;
   }
   if (mod && !e.altKey && e.shiftKey && e.key.toLowerCase() === 'o') {
     e.preventDefault(); $('dirbtn').click(); return;

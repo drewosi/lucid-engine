@@ -122,9 +122,62 @@ function openDrawer(open) {
   if (open) $('keyin').focus();
 }
 
-/* mobile rail toggle */
-var railbtn = $('railbtn'), rail = $('rail');
-export { curKeyLS, drawer, flipMode, openDrawer, rail, railbtn, syncProviderUI, dismissFirstRun, setProvider, syncModelSel };
+/* ============ CONTEXT RAIL — collapse + resize ============ */
+var railbtn = $('railbtn'), rail = $('rail'), railHandle = $('railresize');
+var narrowMQ = window.matchMedia('(max-width: 860px)');
+/* one toggle, two behaviors: overlay open/close on narrow screens, column
+   collapse on wide ones (collapse state persisted) */
+function toggleRail() {
+  if (narrowMQ.matches) {
+    var open = !rail.classList.contains('open');
+    rail.classList.toggle('open', open);
+    railbtn.setAttribute('aria-expanded', String(open));
+  } else {
+    var collapsed = app.classList.toggle('rail-collapsed');
+    railbtn.setAttribute('aria-expanded', String(!collapsed));
+    lsSet(LS.railopen, collapsed ? '0' : '1');
+  }
+}
+var RAIL_MIN = 240, RAIL_MAX = 520, RAIL_DEFAULT = 320;
+function setRailWidth(w, persist) {
+  w = Math.max(RAIL_MIN, Math.min(RAIL_MAX, Math.round(w)));
+  app.style.setProperty('--rail-w', w + 'px');
+  railHandle.setAttribute('aria-valuenow', String(w));
+  if (persist) lsSet(LS.railw, String(w));
+  return w;
+}
+function railWidth() { return parseInt(getComputedStyle(app).getPropertyValue('--rail-w'), 10) || RAIL_DEFAULT; }
+function initRailResize() {
+  railHandle.setAttribute('aria-valuemin', String(RAIL_MIN));
+  railHandle.setAttribute('aria-valuemax', String(RAIL_MAX));
+  railHandle.setAttribute('aria-valuenow', String(railWidth()));
+  railHandle.addEventListener('pointerdown', function (e) {
+    if (narrowMQ.matches) return;
+    e.preventDefault();
+    railHandle.setPointerCapture(e.pointerId);
+    railHandle.classList.add('dragging');
+    var startX = e.clientX, startW = railWidth();
+    function onMove(ev) { setRailWidth(startW + (ev.clientX - startX), false); }
+    function onUp() {
+      railHandle.classList.remove('dragging');
+      railHandle.removeEventListener('pointermove', onMove);
+      railHandle.removeEventListener('pointerup', onUp);
+      railHandle.removeEventListener('pointercancel', onUp);
+      lsSet(LS.railw, String(railWidth()));
+    }
+    railHandle.addEventListener('pointermove', onMove);
+    railHandle.addEventListener('pointerup', onUp);
+    railHandle.addEventListener('pointercancel', onUp);
+  });
+  railHandle.addEventListener('keydown', function (e) {
+    var step = e.shiftKey ? 48 : 16;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); setRailWidth(railWidth() - step, true); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); setRailWidth(railWidth() + step, true); }
+    else if (e.key === 'Home') { e.preventDefault(); setRailWidth(RAIL_DEFAULT, true); }
+  });
+  railHandle.addEventListener('dblclick', function () { setRailWidth(RAIL_DEFAULT, true); });
+}
+export { curKeyLS, drawer, flipMode, openDrawer, rail, railbtn, syncProviderUI, dismissFirstRun, setProvider, syncModelSel, toggleRail };
 
 export function initShell() {
   st.curProvider = lsGet(LS.provider);
@@ -210,9 +263,12 @@ export function initShell() {
     toast('All Meridian data cleared from this browser.');
     setTimeout(function () { location.reload(); }, 600);
   });
-  railbtn.addEventListener('click', function () {
-    var open = !rail.classList.contains('open');
-    rail.classList.toggle('open', open);
-    railbtn.setAttribute('aria-expanded', String(open));
-  });
+  /* rail: restore persisted width + collapse state, then wire toggle + resize */
+  var savedW = parseInt(lsGet(LS.railw) || '', 10);
+  if (savedW) setRailWidth(savedW, false);
+  if (lsGet(LS.railopen) === '0') { app.classList.add('rail-collapsed'); railbtn.setAttribute('aria-expanded', 'false'); }
+  if (narrowMQ.matches) railbtn.setAttribute('aria-expanded', 'false'); /* overlay starts closed */
+  initRailResize();
+  railbtn.addEventListener('click', toggleRail);
+  $('ignorebtn').addEventListener('click', function () { openDrawer(true); $('ignorein').focus(); });
 }

@@ -24,6 +24,6 @@ var MODELS = {
 };
 var LS = { key: 'meridian.key', model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget', ignore: 'meridian.ignore',
            provider: 'meridian.provider', okey: 'meridian.key.openai', ckey: 'meridian.key.custom', curl: 'meridian.custom.url', cmodel: 'meridian.custom.model', ground: 'meridian.ground',
-           strictTrace: 'meridian.stricttrace', spendcap: 'meridian.spendcap' };
+           strictTrace: 'meridian.stricttrace', spendcap: 'meridian.spendcap', railw: 'meridian.rail.width', railopen: 'meridian.rail.open' };
 
 export { PROVIDERS, MODELS, LS };
