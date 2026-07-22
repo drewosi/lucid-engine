@@ -130,7 +130,6 @@ var SAMPLE_PROJECT = {
   ].join('\n')
 };
 var DEMO_QUESTIONS = ['where is API_BASE_URL defined?', 'what imports store.js?', 'show the entry points'];
-st.demoMode = false;
 
 function loadSampleProject() {
   st.files.clear();
@@ -198,6 +197,10 @@ function startDemo() {
   $('prompt').value = DEMO_QUESTIONS[0];
   $('askform').requestSubmit(); /* LOCAL engine answers instantly — trace + evidence chips */
 }
-$('fr-demo').addEventListener('click', startDemo);
-$('emptydemo').addEventListener('click', startDemo);
 export { SAMPLE_PROJECT, startDemo };
+
+export function initDemo() {
+  st.demoMode = false;
+  $('fr-demo').addEventListener('click', startDemo);
+  $('emptydemo').addEventListener('click', startDemo);
+}

@@ -7,9 +7,6 @@ import { renderOverview } from './local.js';
 import { LS, MODELS } from './config.js';
 import { INSTRUCTIONS, buildInvestigationBlock } from './prompt.js';
 /* ============ CONTEXT ENGINE ============ */
-st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
-st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
-st.skippedFiles = [];       /* {path, reason, size, ref} — File refs kept so users can include-back */
 var SKIP_LIST_MAX = 500;
 function recordSkip(path, reason, size, ref) {
   if (st.skippedFiles.length < SKIP_LIST_MAX) st.skippedFiles.push({ path: path, reason: reason, size: size || 0, ref: ref || null });
@@ -131,46 +128,14 @@ function afterIngest() {
 }
 
 var dz = $('dropzone');
-['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('hot'); }); });
-['dragleave', 'drop'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('hot'); }); });
-dz.addEventListener('drop', function (e) {
-  st.lastDirHandle = null; /* dropped folders have no persistent handle */
-  var items = e.dataTransfer.items;
-  var jobs = [];
-  if (items && items.length && items[0].webkitGetAsEntry) {
-    for (var i = 0; i < items.length; i++) {
-      var entry = items[i].webkitGetAsEntry && items[i].webkitGetAsEntry();
-      if (entry) jobs.push(walkEntry(entry, ''));
-    }
-  } else if (e.dataTransfer.files) {
-    for (var j = 0; j < e.dataTransfer.files.length; j++) jobs.push(ingestFile(e.dataTransfer.files[j], null));
-  }
-  Promise.all(jobs).then(afterIngest);
-});
 /* Prefer the File System Access API when available — its directory handle can be
    persisted to IndexedDB, enabling one-click project reload later. */
-$('dirbtn').addEventListener('click', function () {
-  if (window.showDirectoryPicker) {
-    window.showDirectoryPicker({ mode: 'read' }).then(function (h) {
-      st.lastDirHandle = h;
-      return walkHandle(h, h.name + '/').then(afterIngest);
-    }).catch(function (e) {
-      if (e && e.name === 'AbortError') return;
-      toast('Folder pick failed — using the fallback picker.');
-      $('dirpick').click();
-    });
-  } else $('dirpick').click();
-});
-$('filebtn').addEventListener('click', function () { $('filepick').click(); });
 function pickHandler(input) {
   st.lastDirHandle = null;
   var list = Array.prototype.slice.call(input.files || []);
   Promise.all(list.map(function (f) { return ingestFile(f, f.webkitRelativePath || f.name); })).then(afterIngest);
   input.value = '';
 }
-$('dirpick').addEventListener('change', function () { pickHandler(this); });
-$('filepick').addEventListener('change', function () { pickHandler(this); });
-
 
 function renderTree() {
   var tree = $('tree');
@@ -240,19 +205,6 @@ function renderBudget() {
     : 'CTX ≈ <b>' + fmtTok(sel.tokens) + '</b> tokens · <b>' + sel.count + '</b> files';
 }
 
-$('selall').addEventListener('click', function () { st.files.forEach(function (f) { f.checked = true; }); invalidateSelection(); renderTree(); renderBudget(); });
-$('selnone').addEventListener('click', function () { st.files.forEach(function (f) { f.checked = false; }); invalidateSelection(); renderTree(); renderBudget(); });
-$('clearctx').addEventListener('click', function () {
-  st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
-  st.skippedFiles.length = 0;
-  invalidateAll(); renderTree(); renderBudget();
-  renderOverview();
-  $('skipnote').hidden = true;
-  $('skiprevrow').hidden = true;
-  updateSkipBadge();
-  toast('Project unloaded from memory.');
-});
-
 /* ---- skipped-file review + include-back ---- */
 var skipveil = $('skipveil'), untrapSkip = null;
 var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE' };
@@ -321,9 +273,6 @@ function closeSkipReview() {
   if (untrapSkip) { untrapSkip(); untrapSkip = null; }
   returnFocus();
 }
-$('skiprev').addEventListener('click', openSkipReview);
-$('skipclose').addEventListener('click', closeSkipReview);
-skipveil.addEventListener('click', function (e) { if (e.target === skipveil) closeSkipReview(); });
 
 /* ---- context send preview ----
    Shows exactly what the next question will send, computed by the SAME
@@ -405,12 +354,6 @@ function closePreview() {
   if (untrapPrev) { untrapPrev(); untrapPrev = null; }
   returnFocus();
 }
-$('prevbtn').addEventListener('click', openPreview);
-$('prevclose').addEventListener('click', closePreview);
-prevveil.addEventListener('click', function (e) { if (e.target === prevveil) closePreview(); });
-
-st.ctxMode = lsGet(LS.ctxmode) === 'smart' ? 'smart' : 'full';
-st.groundMode = lsGet(LS.ground) !== 'off'; /* Phase 5: ground model answers in the local investigation. default ON. */
 
 var ctxmodebtn = $('ctxmodebtn');
 function setCtxMode(m) {
@@ -423,7 +366,6 @@ function setCtxMode(m) {
   if (m === 'smart') note.textContent = '// smart select: each question sends a project map plus the most relevant files, packed into ≈' + fmtTok(getBudget()) + ' tokens. unchecked files are always excluded.';
   renderBudget();
 }
-ctxmodebtn.addEventListener('click', function () { setCtxMode(st.ctxMode === 'smart' ? 'full' : 'smart'); });
 
 var groundbtn = $('groundbtn');
 function setGround(on) {
@@ -432,11 +374,6 @@ function setGround(on) {
   groundbtn.setAttribute('aria-pressed', String(on));
   groundbtn.classList.toggle('on', on);
 }
-setGround(st.groundMode);
-groundbtn.addEventListener('click', function () {
-  setGround(!st.groundMode);
-  toast(st.groundMode ? 'Grounding on — model answers build on the local investigation.' : 'Grounding off — model receives context only.');
-});
 
 /* Force Strict Trace — prepend the stricter trace instruction to every request */
 var stricttracebtn = $('stricttracebtn');
@@ -446,11 +383,6 @@ function setStrictTrace(on) {
   stricttracebtn.setAttribute('aria-pressed', String(on));
   stricttracebtn.classList.toggle('on', on);
 }
-setStrictTrace(lsGet(LS.strictTrace) === '1');
-stricttracebtn.addEventListener('click', function () {
-  setStrictTrace(lsGet(LS.strictTrace) !== '1');
-  toast(lsGet(LS.strictTrace) === '1' ? 'Force strict trace on — stricter trace instruction each request.' : 'Force strict trace off.');
-});
 
 function maybeAutoSmart() {
   if (st.ctxMode === 'smart') return;
@@ -465,27 +397,12 @@ function maybeAutoSmart() {
 function syncBudgetState() {
   $('budgetstate').textContent = '// current smart budget ≈ ' + fmtTok(getBudget()) + ' tokens per question' + (lsGet(LS.ctxbudget) ? ' (custom).' : ' (auto: 40% of model ctx, max 120K).');
 }
-$('savebudget').addEventListener('click', function () {
-  var v = parseInt($('budgetin').value, 10);
-  if (!v || v < 4000) { lsDel(LS.ctxbudget); toast('Smart budget reset to auto.'); }
-  else { lsSet(LS.ctxbudget, String(v)); toast('Smart budget set ≈ ' + fmtTok(v) + ' tokens.'); }
-  $('budgetin').value = '';
-  syncBudgetState(); setCtxMode(st.ctxMode);
-});
-syncBudgetState();
 
 function syncSpendState() {
   var v = parseFloat(lsGet(LS.spendcap) || '0');
   $('spendin').value = v > 0 ? v : '';
   $('spendstate').textContent = v > 0 ? '// limit: $' + v.toFixed(2) + ' per session — you’ll be warned before crossing it.' : '// no spend limit set.';
 }
-$('savespend').addEventListener('click', function () {
-  var v = parseFloat($('spendin').value);
-  if (isNaN(v) || v <= 0) { lsDel(LS.spendcap); toast('Spend limit cleared.'); }
-  else { lsSet(LS.spendcap, String(v)); toast('Spend limit set to $' + v.toFixed(2) + ' — warns before the estimate crosses it.'); }
-  syncSpendState();
-});
-syncSpendState();
 /* ---- ignore patterns (glob-lite: * matches anything) ---- */
 var ignoreRes = [];
 function compileIgnore(txt) {
@@ -507,15 +424,6 @@ function setIgnoreText(txt) {
   compileIgnore(txt);
 }
 function getIgnoreText() { return $('ignorein').value; }
-$('saveignore').addEventListener('click', function () {
-  setIgnoreText($('ignorein').value);
-  var removed = 0;
-  Array.from(st.files.keys()).forEach(function (p) {
-    if (matchesIgnore(p)) { st.files.delete(p); removed++; }
-  });
-  if (removed) { invalidateAll(); renderTree(); renderBudget(); }
-  toast(removed ? removed + ' loaded file' + (removed === 1 ? '' : 's') + ' removed by patterns.' : 'Ignore patterns saved.');
-});
 /* one-click junk-glob suggestions. Directory-level junk (node_modules, dist, .git…)
    is already covered by IGNORE_DIRS, so these target file-level noise the user would
    otherwise type by hand. When a project is loaded we only propose globs that actually
@@ -548,6 +456,98 @@ function suggestIgnore() {
   $('ignorein').focus();
   toast(add.length + ' pattern' + (add.length === 1 ? '' : 's') + ' suggested — review, then Apply.', { label: '[ APPLY ]', fn: function () { $('saveignore').click(); } });
 }
-$('suggestignore').addEventListener('click', suggestIgnore);
-setIgnoreText(lsGet(LS.ignore) || '');
 export { IGNORE_DIRS, afterIngest, closePreview, closeSkipReview, getIgnoreText, ingestFile, maybeAutoSmart, openPreview, openSkipReview, prevveil, renderBudget, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
+
+export function initIngest() {
+  st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
+  st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
+  st.skippedFiles = [];       /* {path, reason, size, ref} — File refs kept so users can include-back */
+  ['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('hot'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('hot'); }); });
+  dz.addEventListener('drop', function (e) {
+    st.lastDirHandle = null; /* dropped folders have no persistent handle */
+    var items = e.dataTransfer.items;
+    var jobs = [];
+    if (items && items.length && items[0].webkitGetAsEntry) {
+      for (var i = 0; i < items.length; i++) {
+        var entry = items[i].webkitGetAsEntry && items[i].webkitGetAsEntry();
+        if (entry) jobs.push(walkEntry(entry, ''));
+      }
+    } else if (e.dataTransfer.files) {
+      for (var j = 0; j < e.dataTransfer.files.length; j++) jobs.push(ingestFile(e.dataTransfer.files[j], null));
+    }
+    Promise.all(jobs).then(afterIngest);
+  });
+  $('dirbtn').addEventListener('click', function () {
+    if (window.showDirectoryPicker) {
+      window.showDirectoryPicker({ mode: 'read' }).then(function (h) {
+        st.lastDirHandle = h;
+        return walkHandle(h, h.name + '/').then(afterIngest);
+      }).catch(function (e) {
+        if (e && e.name === 'AbortError') return;
+        toast('Folder pick failed — using the fallback picker.');
+        $('dirpick').click();
+      });
+    } else $('dirpick').click();
+  });
+  $('filebtn').addEventListener('click', function () { $('filepick').click(); });
+  $('dirpick').addEventListener('change', function () { pickHandler(this); });
+  $('filepick').addEventListener('change', function () { pickHandler(this); });
+  $('selall').addEventListener('click', function () { st.files.forEach(function (f) { f.checked = true; }); invalidateSelection(); renderTree(); renderBudget(); });
+  $('selnone').addEventListener('click', function () { st.files.forEach(function (f) { f.checked = false; }); invalidateSelection(); renderTree(); renderBudget(); });
+  $('clearctx').addEventListener('click', function () {
+    st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
+    st.skippedFiles.length = 0;
+    invalidateAll(); renderTree(); renderBudget();
+    renderOverview();
+    $('skipnote').hidden = true;
+    $('skiprevrow').hidden = true;
+    updateSkipBadge();
+    toast('Project unloaded from memory.');
+  });
+  $('skiprev').addEventListener('click', openSkipReview);
+  $('skipclose').addEventListener('click', closeSkipReview);
+  skipveil.addEventListener('click', function (e) { if (e.target === skipveil) closeSkipReview(); });
+  $('prevbtn').addEventListener('click', openPreview);
+  $('prevclose').addEventListener('click', closePreview);
+  prevveil.addEventListener('click', function (e) { if (e.target === prevveil) closePreview(); });
+  st.ctxMode = lsGet(LS.ctxmode) === 'smart' ? 'smart' : 'full';
+  st.groundMode = lsGet(LS.ground) !== 'off'; /* Phase 5: ground model answers in the local investigation. default ON. */
+  ctxmodebtn.addEventListener('click', function () { setCtxMode(st.ctxMode === 'smart' ? 'full' : 'smart'); });
+  setGround(st.groundMode);
+  groundbtn.addEventListener('click', function () {
+    setGround(!st.groundMode);
+    toast(st.groundMode ? 'Grounding on — model answers build on the local investigation.' : 'Grounding off — model receives context only.');
+  });
+  setStrictTrace(lsGet(LS.strictTrace) === '1');
+  stricttracebtn.addEventListener('click', function () {
+    setStrictTrace(lsGet(LS.strictTrace) !== '1');
+    toast(lsGet(LS.strictTrace) === '1' ? 'Force strict trace on — stricter trace instruction each request.' : 'Force strict trace off.');
+  });
+  $('savebudget').addEventListener('click', function () {
+    var v = parseInt($('budgetin').value, 10);
+    if (!v || v < 4000) { lsDel(LS.ctxbudget); toast('Smart budget reset to auto.'); }
+    else { lsSet(LS.ctxbudget, String(v)); toast('Smart budget set ≈ ' + fmtTok(v) + ' tokens.'); }
+    $('budgetin').value = '';
+    syncBudgetState(); setCtxMode(st.ctxMode);
+  });
+  syncBudgetState();
+  $('savespend').addEventListener('click', function () {
+    var v = parseFloat($('spendin').value);
+    if (isNaN(v) || v <= 0) { lsDel(LS.spendcap); toast('Spend limit cleared.'); }
+    else { lsSet(LS.spendcap, String(v)); toast('Spend limit set to $' + v.toFixed(2) + ' — warns before the estimate crosses it.'); }
+    syncSpendState();
+  });
+  syncSpendState();
+  $('saveignore').addEventListener('click', function () {
+    setIgnoreText($('ignorein').value);
+    var removed = 0;
+    Array.from(st.files.keys()).forEach(function (p) {
+      if (matchesIgnore(p)) { st.files.delete(p); removed++; }
+    });
+    if (removed) { invalidateAll(); renderTree(); renderBudget(); }
+    toast(removed ? removed + ' loaded file' + (removed === 1 ? '' : 's') + ' removed by patterns.' : 'Ignore patterns saved.');
+  });
+  $('suggestignore').addEventListener('click', suggestIgnore);
+  setIgnoreText(lsGet(LS.ignore) || '');
+}

@@ -8,7 +8,6 @@ import { askLocal } from './local.js';
 import { addAiMsg, addUserMsg, attachCopy, extractTrace, renderFound, renderRich, renderTrace, scrollEnd } from './trace.js';
 import { FENCE, INSTRUCTIONS, STRICT_SUFFIX, buildContextBlocks } from './prompt.js';
 /* ============ COST ============ */
-st.spent = { in: 0, out: 0, cacheW: 0, cacheR: 0 };
 function renderCost() {
   var m = MODELS[st.model];
   var navc = $('navcost'), navv = $('navcostval');
@@ -36,19 +35,9 @@ function resetCost() {
   renderCost();
   toast('Session cost reset to zero.');
 }
-$('navcostbtn').addEventListener('click', function () { openDrawer(true); });
-$('navcostrst').addEventListener('click', function (e) { e.stopPropagation(); resetCost(); });
-
 
 /* ============ CHAT ============ */
-st.history = [];   /* {role, content} for the API */
-st.transcript = []; /* {q, answer, trace, model, provider, ts} for export */
-st.streaming = false; st.aborter = null;
 var promptEl = $('prompt'), sendbtn = $('sendbtn'), stopbtn = $('stopbtn'), statusEl = $('status');
-
-promptEl.addEventListener('keydown', function (e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('askform').requestSubmit(); }
-});
 
 /* rough per-request cost estimate (input context + a small output allowance) */
 function estRequestUSD() {
@@ -72,30 +61,6 @@ function preSendOK() {
   }
   return true;
 }
-$('askform').addEventListener('submit', function (e) {
-  e.preventDefault();
-  if (st.streaming) return;
-  var q = promptEl.value.trim();
-  if (!q) return;
-  if (st.curProvider === 'local') { promptEl.value = ''; askLocal(q); return; }
-  var key = lsGet(curKeyLS()) || '';
-  if (!key && st.curProvider !== 'custom') {
-    setStatus('NO KEY — add your ' + PROVIDERS[st.curProvider].label + ' API key in settings', true);
-    openDrawer(true);
-    toast('Add your ' + PROVIDERS[st.curProvider].label + ' API key first — it stays in this browser.');
-    return;
-  }
-  if (st.curProvider === 'custom' && (!lsGet(LS.curl) || !lsGet(LS.cmodel))) {
-    setStatus('CUSTOM ENDPOINT NOT CONFIGURED — set base URL + model in settings', true);
-    openDrawer(true);
-    return;
-  }
-  if (!preSendOK()) return;
-  promptEl.value = '';
-  ask(q, key);
-});
-
-stopbtn.addEventListener('click', function () { if (st.aborter) st.aborter.abort(); });
 
 function httpErrorText(status, body, retryAfter) {
   var detail = '';
@@ -333,3 +298,39 @@ function ask(q, key, opts) {
   });
 }
 export { promptEl, resetCost };
+
+export function initChat() {
+  st.spent = { in: 0, out: 0, cacheW: 0, cacheR: 0 };
+  $('navcostbtn').addEventListener('click', function () { openDrawer(true); });
+  $('navcostrst').addEventListener('click', function (e) { e.stopPropagation(); resetCost(); });
+  st.history = [];   /* {role, content} for the API */
+  st.transcript = []; /* {q, answer, trace, model, provider, ts} for export */
+  st.streaming = false; st.aborter = null;
+  st.streaming = false; st.aborter = null;
+  promptEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('askform').requestSubmit(); }
+  });
+  $('askform').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (st.streaming) return;
+    var q = promptEl.value.trim();
+    if (!q) return;
+    if (st.curProvider === 'local') { promptEl.value = ''; askLocal(q); return; }
+    var key = lsGet(curKeyLS()) || '';
+    if (!key && st.curProvider !== 'custom') {
+      setStatus('NO KEY — add your ' + PROVIDERS[st.curProvider].label + ' API key in settings', true);
+      openDrawer(true);
+      toast('Add your ' + PROVIDERS[st.curProvider].label + ' API key first — it stays in this browser.');
+      return;
+    }
+    if (st.curProvider === 'custom' && (!lsGet(LS.curl) || !lsGet(LS.cmodel))) {
+      setStatus('CUSTOM ENDPOINT NOT CONFIGURED — set base URL + model in settings', true);
+      openDrawer(true);
+      return;
+    }
+    if (!preSendOK()) return;
+    promptEl.value = '';
+    ask(q, key);
+  });
+  stopbtn.addEventListener('click', function () { if (st.aborter) st.aborter.abort(); });
+}
