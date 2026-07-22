@@ -3,7 +3,7 @@ import { estTokens, staticScore } from './smart-context.js';
 import { afterIngest } from './ingest.js';
 import { $ } from './helpers.js';
 import { convoIn } from './trace.js';
-import { dismissFirstRun, setProvider } from './main.js';
+import { dismissFirstRun, setProvider } from './shell.js';
 /* ---- first-run demo: a tiny bundled project answered by the LOCAL engine, so a
    new visitor sees a real trace + evidence chips before committing an API key.
    File contents are line arrays (no template literals / backticks) to stay robust
