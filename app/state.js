@@ -39,3 +39,6 @@ export function invalidateSelection() { st.contextDirty = true; st.mapDirty = tr
 
 /* content changed (files added/removed/reloaded): everything is stale */
 export function invalidateAll() { invalidateSelection(); st.indexDirty = true; }
+
+/* every path currently loaded, alphabetical — the shared iteration order */
+export function sortedPaths() { return Array.from(st.files.keys()).sort(); }
