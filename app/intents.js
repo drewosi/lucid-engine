@@ -2,6 +2,7 @@ import { sortedPaths, st } from './state.js';
 import { queryTerms } from './smart-context.js';
 import { dirOf, fileExt, getIndex } from './indexer.js';
 import { localSearchData } from './actions.js';
+import { makeFingerprint, projectSig } from './drift.js';
 import { fmtTok } from './helpers.js';
 /* ============ INTENT REGISTRY (DETERMINISTIC REASONING INSTANCES) ============
    The single source of truth for every deterministic reasoning instance the
@@ -18,7 +19,7 @@ import { fmtTok } from './helpers.js';
    Adding a reasoning instance = adding ONE entry here. DOM-free by design so
    the registry is reusable from the grounding bridge and the self-tests.     */
 
-var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Dependency graph (cycles · hubs · orphans · broken imports · paths)', 'Code health (TODOs · env vars · duplicates · hotspots)', 'Exports & coverage gaps', 'Signals digest', 'Evidence collection'];
+var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Dependency graph (cycles · hubs · orphans · broken imports · paths)', 'Code health (TODOs · env vars · duplicates · hotspots)', 'Exports & coverage gaps', 'Signals digest', 'Session drift', 'Evidence collection'];
 var CAP_MODEL = ['Architectural reasoning', 'Natural-language synthesis', 'Root-cause analysis', 'Refactoring recommendations'];
 
 function localEvidence(h) {
@@ -286,6 +287,46 @@ var INTENTS = [
       steps.push({ action: 'read entry-point classification', note: idx.entries.length + ' entry point' + (idx.entries.length === 1 ? '' : 's'), evidence: idx.entries.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: idx.entries.length ? 'Likely entry points (index/main/app/server/cli/core/lib):\n\n' + idx.entries.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') : 'No conventional entry-point filenames detected.' };
+    } },
+
+  /* before `recent`: "what changed since last session" would otherwise match its
+     what-changed regex. Reads only st.driftPrev (loaded at ingest by drift.js) —
+     the run itself is synchronous and deterministic. */
+  { kind: 'drift', aliases: ['drift'], ground: 'drift', helpCmd: '`drift`', needsModel: false,
+    route: function (s, lo) { return /\b(drift(ed)?|what changed since (my |the |your )?last (session|time)|since (my |the )?last session)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [], sig = projectSig();
+      if (!st.driftPrev) {
+        steps.push({ action: 'record drift baseline', note: 'paths + counts only, never contents', evidence: [], status: 'done' });
+        return { steps: steps, verdict: LOCAL_VERDICT(),
+          answer: 'Baseline recorded for `' + sig + '` — no earlier snapshot to compare against. Ask `drift` again in your next session and Meridian will report what changed: new, removed, and reshaped files, from a local metadata fingerprint (paths and counts, never file contents), identified by top-level folder name.' };
+      }
+      var prev = st.driftPrev, cur = makeFingerprint(idx);
+      var added = [], removed = [], reshaped = [];
+      Object.keys(cur.files).forEach(function (p) {
+        var a = prev.files[p], b = cur.files[p];
+        if (!a) { added.push(p); return; }
+        var tokD = b[0] - a[0], symD = b[1] - a[1];
+        if (symD !== 0 || Math.abs(tokD) >= Math.max(30, a[0] * 0.1)) reshaped.push({ p: p, tokD: tokD, symD: symD, mag: Math.abs(tokD) + 40 * Math.abs(symD) });
+      });
+      Object.keys(prev.files).forEach(function (p) { if (!cur.files[p]) removed.push(p); });
+      reshaped.sort(function (x, y) { return y.mag - x.mag; });
+      var topR = reshaped.slice(0, 15);
+      steps.push({ action: 'compare the index against the last session\'s snapshot', note: plural(added.length, 'new file') + ' · ' + plural(removed.length, 'removed file') + ' · ' + plural(reshaped.length, 'reshaped file'),
+        evidence: added.slice(0, 6).map(function (p) { return evAt(p, 1); }).concat(topR.slice(0, 6).map(function (r) { return evAt(r.p, 1); })), status: 'done' });
+      var when = prev.ts ? new Date(prev.ts).toISOString().slice(0, 10) : 'unknown date';
+      function delta(n) { return (n >= 0 ? '+' : '') + n; }
+      if (!added.length && !removed.length && !reshaped.length) {
+        return { steps: steps, verdict: LOCAL_VERDICT(),
+          answer: 'No drift — `' + sig + '` matches the snapshot from ' + when + ' (' + prev.fileCount + ' files, ' + prev.symbolCount + ' symbols). Session-over-session comparison from paths and counts only.' };
+      }
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: '**Drift since the last session** (`' + sig + '`, vs snapshot from ' + when + '):\n\n'
+          + '**Net:** ' + delta(cur.fileCount - prev.fileCount) + ' files · ' + delta(cur.symbolCount - prev.symbolCount) + ' symbols · ' + delta(cur.importCount - prev.importCount) + ' imports\n'
+          + (added.length ? '**New:** ' + added.slice(0, 10).map(function (p) { return '`' + p + '`'; }).join(', ') + (added.length > 10 ? ' (+' + (added.length - 10) + ' more)' : '') + '\n' : '')
+          + (removed.length ? '**Removed:** ' + removed.slice(0, 10).map(function (p) { return '`' + p + '`'; }).join(', ') + (removed.length > 10 ? ' (+' + (removed.length - 10) + ' more)' : '') + '\n' : '')
+          + (topR.length ? '**Reshaped:**\n' + topR.map(function (r) { return '- `' + r.p + '` — ' + delta(r.tokD) + ' tokens, ' + delta(r.symD) + ' symbols'; }).join('\n') + '\n' : '')
+          + '\nSession-over-session comparison from a local metadata fingerprint (paths + counts, never contents), keyed by top-level folder name — not continuous monitoring.' };
     } },
 
   { kind: 'recent', aliases: ['recent'], ground: 'recent-change', helpCmd: '`recent <n>`', needsModel: false,

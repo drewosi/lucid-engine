@@ -105,9 +105,11 @@ function runSelfTests() {
   function ok(name, cond, extra) { results.push({ name: name, pass: !!cond, extra: extra || '' }); }
   var savedFiles = st.files, savedIndex = st.projectIndex, savedDirty = st.indexDirty;
   var savedSkipped = st.skipped, savedSkipList = st.skippedFiles, savedBytes = st.totalBytes;
+  var savedDriftSig = st.driftSig, savedDriftPrev = st.driftPrev;
   function restore() {
     st.files = savedFiles; st.projectIndex = savedIndex; st.indexDirty = savedDirty;
     st.skipped = savedSkipped; st.skippedFiles = savedSkipList; st.totalBytes = savedBytes;
+    st.driftSig = savedDriftSig; st.driftPrev = savedDriftPrev;
   }
   try {
     st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
@@ -228,7 +230,10 @@ function runSelfTests() {
       ['what should i look at', 'signals'],
       ['what matters', 'signals'],
       ['biggest problems', 'signals'],
-      ['where is signalHandler defined', 'def']
+      ['where is signalHandler defined', 'def'],
+      /* drift — must beat recent's what-changed regex */
+      ['drift', 'drift'],
+      ['what changed since last session', 'drift']
     ];
     ROUTES.forEach(function (rc) {
       var got = classifyIntent(rc[0]) || {};
@@ -285,6 +290,16 @@ function runSelfTests() {
     ok('intent · signals leads with the broken-import CRITICAL', /CRITICAL/.test(sg.answer) && /broken relative import/.test(sg.answer) && /`broken`/.test(sg.answer));
     ok('intent · signals includes the cycle finding', /import cycle/.test(sg.answer) && /`cycles`/.test(sg.answer));
     ok('intent · signals caps at five, verdict local', sg.steps.length <= 5 && sg.verdict.local === true);
+    /* drift — baseline case, then a synthetic previous snapshot */
+    st.driftPrev = null;
+    ok('intent · drift baseline message on first run', /Baseline recorded/.test(inv('drift').answer));
+    st.driftPrev = { sig: 'scratch', ts: 0, fileCount: 2, symbolCount: 3, importCount: 0,
+      files: { 'ghost/old.js': [100, 2], 'src/store.js': [10, 1] } };
+    var dr = inv('drift');
+    ok('intent · drift detects removed files', /Removed:/.test(dr.answer) && dr.answer.indexOf('ghost/old.js') !== -1);
+    ok('intent · drift detects new files', /New:/.test(dr.answer));
+    ok('intent · drift detects reshaped files', /Reshaped:/.test(dr.answer) && /`src\/store\.js` — \+/.test(dr.answer));
+    st.driftPrev = null;
     /* trace parser fallbacks */
     ok('trace · clean fence', extractTrace('a\n```meridian-trace\n{"steps":[{"action":"x"}]}\n```').degraded === null);
     ok('trace · ```json salvaged', extractTrace('a\n```json\n{"steps":[{"action":"x"}]}\n```').degraded === 'salvaged');

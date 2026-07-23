@@ -4,6 +4,7 @@ import { detectLang } from './indexer.js';
 import { $, fmtTok, lsDel, lsGet, lsSet, rememberFocus, returnFocus, setStatus, toast, trap } from './helpers.js';
 import { applyPendingProject, renderProjects, walkHandle } from './memory.js';
 import { renderOverview } from './local.js';
+import { recordSession as recordSessionDrift } from './drift.js';
 import { LS, MODELS } from './config.js';
 import { INSTRUCTIONS, buildInvestigationBlock } from './prompt.js';
 /* ============ CONTEXT ENGINE ============ */
@@ -157,6 +158,7 @@ function afterIngest() {
   else if (st.skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
   else if (st.files.size >= Math.floor(MAX_FILES * 0.9)) toast('Approaching the ' + MAX_FILES + '-file cap (' + st.files.size + ' loaded) — large repos may hit it; ignore patterns help.');
   maybeAutoSmart();
+  recordSessionDrift(); /* last: renderOverview above has already rebuilt the index */
 }
 
 var dz = $('dropzone');

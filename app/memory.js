@@ -203,6 +203,7 @@ function initMemory() {
    browser can actually delete the database */
 function wipeMemory() {
   try { if (idb) idb.close(); indexedDB.deleteDatabase('meridian'); } catch (e) {}
+  try { indexedDB.deleteDatabase('meridian-drift'); } catch (e) {} /* drift snapshots (drift.js) */
 }
 
 export { applyPendingProject, renderProjects, walkHandle, loadProject, initMemory, wipeMemory };
