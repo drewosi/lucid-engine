@@ -18,7 +18,7 @@ import { fmtTok } from './helpers.js';
    Adding a reasoning instance = adding ONE entry here. DOM-free by design so
    the registry is reusable from the grounding bridge and the self-tests.     */
 
-var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Dependency graph (cycles · hubs · orphans · broken imports · paths)', 'Code health (TODOs · env vars · duplicates · hotspots)', 'Exports & coverage gaps', 'Evidence collection'];
+var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Dependency graph (cycles · hubs · orphans · broken imports · paths)', 'Code health (TODOs · env vars · duplicates · hotspots)', 'Exports & coverage gaps', 'Signals digest', 'Evidence collection'];
 var CAP_MODEL = ['Architectural reasoning', 'Natural-language synthesis', 'Root-cause analysis', 'Refactoring recommendations'];
 
 function localEvidence(h) {
@@ -137,6 +137,30 @@ function classifiedSet(idx) {
   idx.entries.concat(idx.tests, idx.configs, idx.docs).forEach(function (p) { s[p] = 1; });
   return s;
 }
+/* unresolved relative imports — shared by the broken investigation and signals */
+function listBroken(idx) {
+  var broken = [];
+  idx.importsByFile.forEach(function (list, f) {
+    list.forEach(function (x) { if (!x.resolved && (x.raw.charAt(0) === '.' || x.raw.charAt(0) === '/')) broken.push({ file: f, raw: x.raw, line: x.line }); });
+  });
+  return broken;
+}
+/* code files with no matching test — shared by the untested investigation and signals */
+function listUntestedGaps(idx) {
+  var stems = {}, testedByImport = {}, skip = {};
+  idx.tests.forEach(function (t) {
+    stems[testStem(t)] = 1; skip[t] = 1;
+    (idx.importsByFile.get(t) || []).forEach(function (x) { if (x.resolved) testedByImport[x.resolved] = 1; });
+  });
+  idx.configs.concat(idx.docs).forEach(function (p) { skip[p] = 1; });
+  var gaps = [];
+  sortedPaths().forEach(function (p) {
+    if (skip[p] || !isCodeFile(p)) return;
+    if (stems[baseStem(p)] || testedByImport[p]) return;
+    gaps.push(p);
+  });
+  return gaps;
+}
 /* code files never imported and not classified — shared by the orphans
    investigation and the overview tile so both always agree */
 function listOrphans(idx) {
@@ -148,6 +172,43 @@ function listOrphans(idx) {
   });
   return orphans;
 }
+/* ---- Signal extraction: the top findings worth attention, ranked by severity.
+   Every signal is computed from analyses the niche intents already run — the
+   digest and its drill-in intents always agree. Cached on index identity so the
+   overview tile and the intent share one computation per index build. ---- */
+var SEV_LABEL = { 5: 'CRITICAL', 4: 'HIGH', 3: 'MEDIUM', 2: 'LOW' };
+var sigCache = { idx: null, out: null };
+function computeSignals(idx) {
+  if (sigCache.idx === idx) return sigCache.out;
+  var out = [];
+  var broken = listBroken(idx);
+  if (broken.length) out.push({ severity: 5, count: broken.length, title: plural(broken.length, 'broken relative import') + ' — likely real breakage, or files not loaded', evidence: evAt(broken[0].file, broken[0].line), drill: 'broken' });
+  var cycles = findCycles(idx, 10);
+  if (cycles.length) out.push({ severity: 4, count: cycles.length, title: plural(cycles.length, 'import cycle') + ' in the dependency graph', evidence: evAt(cycles[0].from, cycles[0].line), drill: 'cycles' });
+  var hubGaps = listUntestedGaps(idx).filter(function (p) { return (idx.importedBy.get(p) || []).length >= 3; });
+  if (hubGaps.length) {
+    hubGaps.sort(function (a, b) { return (idx.importedBy.get(b) || []).length - (idx.importedBy.get(a) || []).length; });
+    out.push({ severity: 3, count: hubGaps.length, title: plural(hubGaps.length, 'untested load-bearing file') + ' (imported by 3+, no test)', evidence: evAt(hubGaps[0], 1), drill: 'untested' });
+  }
+  var dupeNames = [];
+  idx.symbols.forEach(function (defsArr, name) {
+    if (name.length < 4) return;
+    var files = {};
+    defsArr.forEach(function (d) { files[d.file] = 1; });
+    if (Object.keys(files).length > 1) dupeNames.push({ name: name, def: defsArr[0] });
+  });
+  if (dupeNames.length >= 3) out.push({ severity: 2, count: dupeNames.length, title: plural(dupeNames.length, 'symbol name') + ' defined in more than one file', evidence: evAt(dupeNames[0].def.file, dupeNames[0].def.line), drill: 'dupes' });
+  var orphans = listOrphans(idx);
+  if (orphans.length) out.push({ severity: 2, count: orphans.length, title: plural(orphans.length, 'code file') + ' never imported — possible dead weight', evidence: evAt(orphans[0], 1), drill: 'orphans' });
+  var byFileTodo = {}, maxOneFile = 0;
+  idx.todos.forEach(function (t) { byFileTodo[t.file] = (byFileTodo[t.file] || 0) + 1; if (byFileTodo[t.file] > maxOneFile) maxOneFile = byFileTodo[t.file]; });
+  if (idx.todos.length >= 10 || maxOneFile >= 5) out.push({ severity: 2, count: idx.todos.length, title: plural(idx.todos.length, 'debt tag') + (maxOneFile >= 5 ? ' — one file carries ' + maxOneFile : ' across the project'), evidence: evAt(idx.todos[0].file, idx.todos[0].line), drill: 'todos' });
+  out.sort(function (a, b) { return b.severity - a.severity || b.count - a.count; });
+  out = out.slice(0, 5);
+  sigCache.idx = idx; sigCache.out = out;
+  return out;
+}
+
 /* iterative 3-color DFS over resolved import edges; returns up to cap cycles,
    each with the node ring and the import line that closes it */
 function findCycles(idx, cap) {
@@ -273,6 +334,23 @@ var INTENTS = [
       return { steps: steps, verdict: LOCAL_VERDICT(), answer: sans };
     } },
 
+  /* before `hotspots` ("biggest") and `reason` ("should i"): the ranked digest */
+  { kind: 'signals', aliases: ['signals'], ground: 'signal', helpCmd: '`signals`', needsModel: false,
+    route: function (s, lo) { return /\b(signal extraction|what matters|worth (my |your |the )?attention|top issues|what should i (look at|fix|worry about)|what['’]?s wrong|biggest (problems?|issues?))\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [], sigs = computeSignals(idx);
+      if (!sigs.length) {
+        steps.push({ action: 'extract signals from the index', note: 'no high-signal findings', evidence: [], status: 'done' });
+        return { steps: steps, verdict: LOCAL_VERDICT(),
+          answer: 'No high-signal findings — no broken relative imports, no import cycles, no untested high-fan-in files, and no unusual debt concentration. That is a real reading of the terrain, not a placeholder.' };
+      }
+      sigs.forEach(function (g) { steps.push({ action: 'signal · ' + SEV_LABEL[g.severity], note: g.title, evidence: [g.evidence], status: 'done' }); });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: 'Signal extraction — the ' + plural(sigs.length, 'finding') + ' worth your attention, ranked (not thirty):\n\n'
+          + sigs.map(function (g, i) { return (i + 1) + '. **' + SEV_LABEL[g.severity] + '** — ' + g.title + ' → drill in: `' + g.drill + '`'; }).join('\n')
+          + '\n\nEach step\'s chip opens the first piece of evidence; run the named command for the full list. Deterministic — computed from the index, no model.' };
+    } },
+
   /* before `tests`: "files without tests" must not be answered with the test list */
   { kind: 'untested', aliases: ['untested'], ground: 'coverage-gap', helpCmd: '`untested`', needsModel: false,
     route: function (s, lo) { return /\b(untested|without tests?|missing tests?|coverage gaps?|lack(s|ing)? tests?|no tests? for)\b/.test(lo) ? { arg: '' } : null; },
@@ -283,18 +361,7 @@ var INTENTS = [
         return { steps: steps, verdict: LOCAL_VERDICT(),
           answer: 'No test files detected by the standard patterns (`.test.` `.spec.` `_test` `tests/` `__tests__`) — every code file is a coverage gap. That is a real finding about this project, not a limitation.' };
       }
-      var stems = {}, testedByImport = {}, skip = {};
-      idx.tests.forEach(function (t) {
-        stems[testStem(t)] = 1; skip[t] = 1;
-        (idx.importsByFile.get(t) || []).forEach(function (x) { if (x.resolved) testedByImport[x.resolved] = 1; });
-      });
-      idx.configs.concat(idx.docs).forEach(function (p) { skip[p] = 1; });
-      var gaps = [];
-      sortedPaths().forEach(function (p) {
-        if (skip[p] || !isCodeFile(p)) return;
-        if (stems[baseStem(p)] || testedByImport[p]) return;
-        gaps.push(p);
-      });
+      var gaps = listUntestedGaps(idx);
       steps.push({ action: 'match test files to sources (name stems + what tests import)', note: plural(idx.tests.length, 'test file') + ' · ' + plural(gaps.length, 'uncovered code file'), evidence: gaps.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: gaps.length
@@ -341,10 +408,7 @@ var INTENTS = [
     route: function (s, lo) { return /\b(broken|unresolved|missing|dangling)\b[\s\S]*\bimports?\b/.test(lo) ? { arg: '' } : null; },
     run: function (arg, q, idx) {
       var steps = [];
-      var broken = [];
-      idx.importsByFile.forEach(function (list, f) {
-        list.forEach(function (x) { if (!x.resolved && (x.raw.charAt(0) === '.' || x.raw.charAt(0) === '/')) broken.push({ file: f, raw: x.raw, line: x.line }); });
-      });
+      var broken = listBroken(idx);
       steps.push({ action: 'scan relative imports that resolve to no loaded file', note: plural(broken.length, 'unresolved relative import'), evidence: broken.slice(0, 12).map(function (b) { return evAt(b.file, b.line); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: broken.length
@@ -691,4 +755,4 @@ function groundKinds() {
   return out;
 }
 
-export { CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, classifyIntent, evAt, groundKinds, listOrphans, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };
+export { CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, classifyIntent, computeSignals, evAt, groundKinds, listOrphans, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };

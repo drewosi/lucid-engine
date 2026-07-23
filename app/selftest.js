@@ -220,7 +220,15 @@ function runSelfTests() {
       ['dupes', 'dupes'],
       ['duplicate symbols', 'dupes'],                  /* must beat the symbols intent */
       ['path src/index.js src/store.js', 'path'],
-      ['dependency path from index.js to store.js', 'path']
+      ['dependency path from index.js to store.js', 'path'],
+      /* signals — command + NL, incl. pins vs hotspots ("biggest") and reason ("should i") */
+      ['signals', 'signals'],
+      ['top issues', 'signals'],
+      ["what's wrong here", 'signals'],
+      ['what should i look at', 'signals'],
+      ['what matters', 'signals'],
+      ['biggest problems', 'signals'],
+      ['where is signalHandler defined', 'def']
     ];
     ROUTES.forEach(function (rc) {
       var got = classifyIntent(rc[0]) || {};
@@ -273,6 +281,10 @@ function runSelfTests() {
     ok('intent · dupes finds dupeSym in both files', dp.answer.indexOf('dupeSym') !== -1 && /dupea/.test(dp.answer) && /dupeb/.test(dp.answer));
     var pt = inv('path src/index.js src/store.js');
     ok('intent · path walks index → server → store', pt.answer.indexOf('src/index.js') !== -1 && pt.answer.indexOf('src/server.js') !== -1 && pt.answer.indexOf('src/store.js') !== -1);
+    var sg = inv('signals');
+    ok('intent · signals leads with the broken-import CRITICAL', /CRITICAL/.test(sg.answer) && /broken relative import/.test(sg.answer) && /`broken`/.test(sg.answer));
+    ok('intent · signals includes the cycle finding', /import cycle/.test(sg.answer) && /`cycles`/.test(sg.answer));
+    ok('intent · signals caps at five, verdict local', sg.steps.length <= 5 && sg.verdict.local === true);
     /* trace parser fallbacks */
     ok('trace · clean fence', extractTrace('a\n```meridian-trace\n{"steps":[{"action":"x"}]}\n```').degraded === null);
     ok('trace · ```json salvaged', extractTrace('a\n```json\n{"steps":[{"action":"x"}]}\n```').degraded === 'salvaged');

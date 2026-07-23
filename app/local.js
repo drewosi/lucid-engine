@@ -1,6 +1,6 @@
 import { sortedPaths, st } from './state.js';
 import { dirOf, getIndex } from './indexer.js';
-import { CAP_LOCAL, CAP_MODEL, LOCAL_HELP, classifyIntent, listOrphans, pickSymbol, runInvestigation, symLookup } from './intents.js';
+import { CAP_LOCAL, CAP_MODEL, LOCAL_HELP, classifyIntent, computeSignals, listOrphans, pickSymbol, runInvestigation, symLookup } from './intents.js';
 import { addAiMsg, addUserMsg, attachCopy, renderRich, renderTrace, scrollEnd } from './trace.js';
 import { $, announce, fmtTok, setStatus } from './helpers.js';
 /* ============ LOCAL ENGINE (NO API · NO AI) ============
@@ -79,7 +79,8 @@ function renderOverview() {
     { label: 'TESTS', value: idx.tests.length, q: 'where are the tests' },
     { label: 'SYMBOLS', value: idx.symbolCount, q: 'symbols' },
     { label: 'TODOS', value: idx.todos.length, q: 'todos' },
-    { label: 'ORPHANS', value: listOrphans(idx).length, q: 'orphans' }
+    { label: 'ORPHANS', value: listOrphans(idx).length, q: 'orphans' },
+    { label: 'SIGNALS', value: computeSignals(idx).length, q: 'signals' }
   ];
   ov.hidden = false;
   ov.innerHTML = '<div class="ov-hd mono">PROJECT INTELLIGENCE // <b>deterministic</b> — Meridian understands the terrain before a model enters the room</div>'
