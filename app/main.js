@@ -1,7 +1,9 @@
-/* MERIDIAN Engine v0.3 — v0.2-hardened plus the audit pass: tight-by-default CSP
-   + frame-buster, streaming concurrency guard, rAF-batched paints, windowed
-   evidence viewer with cited-quote highlight, ~300MB ingest memory cap, and
-   self-tests covering the stream adapters and ingest filters.
+/* MERIDIAN Engine v0.4 — v0.3-hardened plus the deterministic reasoning pass:
+   a unified intent registry (intents.js) where every reasoning instance is one
+   entry, eleven niche deterministic analyses (cycles, orphans, broken imports,
+   hubs, dependency paths, exports, hotspots, todos, env vars, coverage gaps,
+   duplicate symbols), an index extended with exports/todos/env-var tracking,
+   and a 115-check self-test suite with a full intent-routing table.
 
    Entry point. Modules own their functions and wiring; this file fixes the one
    thing that must stay global: the order things initialize in. The init*() calls
@@ -78,4 +80,4 @@ syncProviderUI();
 setCtxMode(st.ctxMode); /* also renders the budget */
 window.__meridianSelfTest = runSelfTests; /* L3: run from the console (async — returns a Promise of results) */
 if (/[?&]selftest\b/.test(location.search)) setTimeout(runAndShowSelfTests, 300);
-console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— Engine v0.3 · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');
+console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— Engine v0.4 · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');

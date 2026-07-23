@@ -6,6 +6,7 @@ import { promptEl, resetCost } from './chat.js';
 import { exportTraces } from './export.js';
 import { flipMode, openDrawer, toggleRail } from './shell.js';
 import { startDemo } from './demo.js';
+import { askLocal } from './local.js';
 import { runAndShowSelfTests } from './selftest.js';
 
 /* ============ COMMAND PALETTE (Ctrl/Cmd-K) ============
@@ -37,6 +38,11 @@ var ACTIONS = [
   { g: 'EXPORT', n: 'Export session as HTML', k: '', f: function () { exportTraces('html'); } },
   { g: 'CONTEXT', n: 'Suggest ignore patterns', k: '', f: function () { openDrawer(true); suggestIgnore(); } },
   { g: 'CONVERSE', n: 'Reset session cost', k: '', f: resetCost },
+  { g: 'LOCAL', n: 'Scan for TODO / FIXME tags', k: '', f: function () { askLocal('todos'); } },
+  { g: 'LOCAL', n: 'Find circular imports', k: '', f: function () { askLocal('cycles'); } },
+  { g: 'LOCAL', n: 'Find orphan (never-imported) files', k: '', f: function () { askLocal('orphans'); } },
+  { g: 'LOCAL', n: 'List env vars the code reads', k: '', f: function () { askLocal('env'); } },
+  { g: 'LOCAL', n: 'Find files without tests', k: '', f: function () { askLocal('untested'); } },
   { g: 'SETTINGS', n: 'Open settings', k: 'ctrl .', f: function () { openDrawer(true); } },
   { g: 'SETTINGS', n: 'Load the demo project (LOCAL)', k: '', f: function () { startDemo(); } },
   { g: 'SETTINGS', n: 'Toggle ceremony / daylight', k: '', f: flipMode },

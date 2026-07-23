@@ -137,6 +137,17 @@ function classifiedSet(idx) {
   idx.entries.concat(idx.tests, idx.configs, idx.docs).forEach(function (p) { s[p] = 1; });
   return s;
 }
+/* code files never imported and not classified — shared by the orphans
+   investigation and the overview tile so both always agree */
+function listOrphans(idx) {
+  var skip = classifiedSet(idx), orphans = [];
+  sortedPaths().forEach(function (p) {
+    if (skip[p] || !isCodeFile(p)) return;
+    if ((idx.importedBy.get(p) || []).length) return;
+    orphans.push(p);
+  });
+  return orphans;
+}
 /* iterative 3-color DFS over resolved import edges; returns up to cap cycles,
    each with the node ring and the import line that closes it */
 function findCycles(idx, cap) {
@@ -318,12 +329,7 @@ var INTENTS = [
     route: function (s, lo) { return /\b(orphan(ed)?s?|dead (files?|code)|unused files?|never imported|unreferenced files?)\b/.test(lo) ? { arg: '' } : null; },
     run: function (arg, q, idx) {
       var steps = [];
-      var skip = classifiedSet(idx), orphans = [];
-      sortedPaths().forEach(function (p) {
-        if (skip[p] || !isCodeFile(p)) return;
-        if ((idx.importedBy.get(p) || []).length) return;
-        orphans.push(p);
-      });
+      var orphans = listOrphans(idx);
       steps.push({ action: 'scan importer edges for unreferenced code files', note: plural(orphans.length, 'candidate'), evidence: orphans.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: orphans.length
@@ -684,4 +690,4 @@ function groundKinds() {
   return out;
 }
 
-export { CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, classifyIntent, evAt, groundKinds, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };
+export { CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, classifyIntent, evAt, groundKinds, listOrphans, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };
