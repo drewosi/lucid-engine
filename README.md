@@ -49,7 +49,7 @@ The architecture *is* the privacy story:
 
 - **No backend.** The whole product is static files on GitHub Pages. There is no server of ours to receive your data.
 - **BYO key.** Requests go directly from the browser to the chosen provider's API under the user's own account. Keys live in localStorage only, one per provider.
-- **Zero egress to us.** File contents and conversations exist in tab memory and vanish on close. Saved projects persist **metadata only** (file tree + settings) in IndexedDB.
+- **Zero egress to us.** File contents and conversations exist in tab memory and vanish on close. Saved projects persist **metadata only** (selection + settings) in IndexedDB.
 - **Prompt caching.** On Anthropic, the stable context block is cached, so multi-turn conversations over a big project cost ~10× less on input after the first turn.
 
 ### The smart context engine
@@ -69,7 +69,7 @@ With `[ GROUND: ON ]` (default), every model question first runs Meridian's dete
 
 - **Project intelligence engine** *(deterministic, no API)* — on load MERIDIAN builds a structured index of the project (symbols, import/importer edges, entry points, tests, configs, docs, packages) and surfaces a **PROJECT INTELLIGENCE** overview of the terrain. This index powers the LOCAL engine and is always available regardless of provider.
 - **LOCAL engine** *(no API)* — a provider that uses no key, no model, and no network. It routes each question by intent and runs a real investigation over the index: definitions (`def`), references (`refs`), importers/imports, related files, symbols, structure, tests, entry points, recent changes, plus `search` / `dir` / `recent` commands — all answered through the same trace + evidence-chip UI with a **KNOWN LOCALLY / REQUIRES MODEL REASONING** verdict, labeled `LOCAL · NO AI`. Interpretation questions honestly say a model is needed rather than fabricating an answer. Fully offline; keeps the zero-third-party-scripts guarantee.
-- **Project memory** — save named projects (tree + selection + ignore patterns + context prefs, never contents). Folders opened via the File System Access API reload from disk in one click.
+- **Project memory** — save named projects (selection + ignore patterns + context prefs, never contents). Folders opened via the File System Access API reload from disk in one click.
 - **Ignore patterns** — per-project glob-lite filters applied at ingest, with a one-click **Suggest** that proposes common junk-file globs grounded in what you've actually loaded.
 - **First-run demo** — new visitors can load a tiny bundled sample project and get a real answer from the **LOCAL** engine — trace, evidence chips, and a `KNOWN LOCALLY` verdict — before committing any API key. Reachable any time from the empty state or the command palette.
 - **Propose Action** *(experimental)* — the model may suggest read-only actions: `search` (with optional path filter), `def` / `refs` symbol navigation, `dir` summaries, `recent` changes — all run locally against in-memory files after a click; `open` opens the viewer, `git` commands are display + copy only. Nothing ever executes without approval; shell is never executed.

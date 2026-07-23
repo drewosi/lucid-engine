@@ -16,7 +16,7 @@ function recordSkip(path, reason, size, ref) {
    — they describe everything currently in memory, not one batch. */
 var batchBase = null;
 function beginBatch() {
-  batchBase = { dirs: st.skipped.dirs, binary: st.skipped.binary, big: st.skipped.big, over: st.skipped.over, user: st.skipped.user, readerr: st.skipped.readerr };
+  batchBase = { dirs: st.skipped.dirs, binary: st.skipped.binary, big: st.skipped.big, over: st.skipped.over, user: st.skipped.user, readerr: st.skipped.readerr, memcap: st.skipped.memcap };
 }
 function skipSummary(c) {
   var s = [];
@@ -26,12 +26,16 @@ function skipSummary(c) {
   if (c.user) s.push(c.user + ' ignore-pattern');
   if (c.readerr) s.push(c.readerr + ' read-error');
   if (c.over) s.push(c.over + ' over the ' + MAX_FILES + '-file cap');
+  if (c.memcap) s.push(c.memcap + ' over the ' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB memory cap');
   return s;
 }
 var IGNORE_DIRS = ['.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', 'target', 'vendor', '__pycache__', '.venv', 'venv', 'coverage', '.cache', '.idea', '.vscode',
                    'obj', '.gradle', 'pods', '.tox', '.mypy_cache', '.pytest_cache', '.terraform', '_build', '.dart_tool'];
 var BIN_EXT = /\.(png|jpe?g|gif|webp|avif|ico|icns|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|m4[av]|mov|avi|mkv|webm|ogg|wav|flac|zip|gz|bz2|xz|7z|rar|tar|jar|war|class|pyc|pyo|o|a|so|dylib|dll|exe|bin|dat|db|sqlite3?|pdf|doc[x]?|xls[x]?|ppt[x]?|ds_store|lockb|wasm)$/i;
 var MAX_FILE = 512 * 1024, MAX_FILES = 8000;
+/* aggregate cap — 8000 × 512KB is ~4GB, a tab-killer long before the file-count
+   cap fires. Measured in text length (≈bytes for source), tracked in st.totalBytes. */
+var MAX_TOTAL = 300 * 1024 * 1024;
 
 function ignoredPath(path) {
   return path.split('/').some(function (seg) { return IGNORE_DIRS.indexOf(seg.toLowerCase()) !== -1 || (seg !== '.' && seg.charAt(0) === '.' && seg !== '.github' && seg !== '.env.example'); });
@@ -58,6 +62,7 @@ function sniffEncoding(v) {
 function ingestFile(file, path, force) {
   path = (path || file.name).replace(/^\.?\//, '');
   if (st.files.size >= MAX_FILES) { st.skipped.over++; return Promise.resolve(); }
+  if (st.totalBytes >= MAX_TOTAL) { st.skipped.memcap++; return Promise.resolve(); }
   if (!force && ignoredPath(path)) { st.skipped.dirs++; return Promise.resolve(); }
   if (!force && matchesIgnore(path)) { st.skipped.user++; recordSkip(path, 'ignore-pattern', file.size, file); return Promise.resolve(); }
   if (!force && BIN_EXT.test(path)) { st.skipped.binary++; recordSkip(path, 'binary-ext', file.size, file); return Promise.resolve(); }
@@ -69,6 +74,8 @@ function ingestFile(file, path, force) {
     try { text = new TextDecoder(enc, { fatal: false }).decode(buf); }
     catch (e) { text = new TextDecoder('utf-8', { fatal: false }).decode(buf); }
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); /* strip a leading BOM */
+    if (st.files.has(path)) st.totalBytes -= st.files.get(path).content.length; /* re-ingest replaces, not double-counts */
+    st.totalBytes += text.length;
     st.files.set(path, {
       content: text,
       lines: text.split('\n').length,
@@ -129,12 +136,12 @@ function afterIngest() {
   /* this batch's skips = counters minus the batch-start snapshot; callers that
      reset the counters themselves (project reload, demo) have no snapshot, so
      the delta is simply the totals */
-  var b0 = batchBase || { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0 };
+  var b0 = batchBase || { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
   batchBase = null;
   var batchSkipped = (st.skipped.binary - b0.binary) + (st.skipped.big - b0.big) + (st.skipped.dirs - b0.dirs)
-    + (st.skipped.user - b0.user) + (st.skipped.over - b0.over) + (st.skipped.readerr - b0.readerr);
+    + (st.skipped.user - b0.user) + (st.skipped.over - b0.over) + (st.skipped.readerr - b0.readerr) + (st.skipped.memcap - (b0.memcap || 0));
   var s = skipSummary(st.skipped);
-  var totSkipped = st.skipped.binary + st.skipped.big + st.skipped.dirs + st.skipped.user + st.skipped.over + st.skipped.readerr;
+  var totSkipped = st.skipped.binary + st.skipped.big + st.skipped.dirs + st.skipped.user + st.skipped.over + st.skipped.readerr + st.skipped.memcap;
   var note = $('skipnote');
   note.hidden = !s.length;
   if (s.length) note.textContent = '// ' + totSkipped + ' skipped: ' + s.join(' · ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files.';
@@ -146,7 +153,8 @@ function afterIngest() {
   renderOverview();
   setStatus('CORE IDLE — ' + st.files.size + ' files in memory');
   /* graceful scaling: warn as the in-memory file cap approaches or is hit */
-  if (st.skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
+  if (st.skipped.memcap) toast('Memory cap reached (~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB of text) — ' + st.skipped.memcap + ' file' + (st.skipped.memcap === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
+  else if (st.skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
   else if (st.files.size >= Math.floor(MAX_FILES * 0.9)) toast('Approaching the ' + MAX_FILES + '-file cap (' + st.files.size + ' loaded) — large repos may hit it; ignore patterns help.');
   maybeAutoSmart();
 }
@@ -163,7 +171,8 @@ function pickHandler(input) {
 }
 /* full unload — shared by the [ CLEAR ] control and the REPLACE ingest path */
 function clearContext() {
-  st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0 };
+  st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
+  st.totalBytes = 0;
   st.skippedFiles.length = 0;
   collapsedDirs = {}; treeQuery = '';
   var ts = $('treesearch'); if (ts) ts.value = '';
@@ -207,13 +216,21 @@ function renderTree() {
   }
   var dirTpl = $('tpl-dir-row'), fileTpl = $('tpl-file-row');
   var frag = document.createDocumentFragment();
+  /* one pass groups paths by parent dir — the old per-directory filter over all
+     paths was O(dirs × files), millions of comparisons at the 8K-file target */
+  var byDir = new Map();
+  allPaths.forEach(function (p) {
+    var d = parentDir(p);
+    var arr = byDir.get(d);
+    if (arr) arr.push(p); else byDir.set(d, [p]);
+  });
   var lastDir = null, dirClosed = false, curCheck = null, curMine = null;
   paths.forEach(function (p) {
     var dir = parentDir(p);
     if (dir !== lastDir) {
       lastDir = dir;
       dirClosed = !q && !!collapsedDirs[dir]; /* filtering always shows matches expanded */
-      var mine = allPaths.filter(function (x) { return parentDir(x) === dir; });
+      var mine = byDir.get(dir);
       var row = dirTpl.content.firstElementChild.cloneNode(true);
       row.classList.toggle('closed', dirClosed);
       var tgl = row.querySelector('.dir-tgl');
@@ -221,11 +238,26 @@ function renderTree() {
       tgl.querySelector('.dc').textContent = '· ' + mine.length;
       tgl.setAttribute('aria-expanded', String(!dirClosed));
       tgl.setAttribute('aria-label', (dirClosed ? 'Expand ' : 'Collapse ') + (dir || 'project root') + ' — ' + mine.length + ' file' + (mine.length === 1 ? '' : 's'));
-      tgl.addEventListener('click', function () {
-        if (treeQuery.trim()) return; /* collapse is moot while filtering */
-        collapsedDirs[dir] = !collapsedDirs[dir];
-        renderTree();
-      });
+      (function (dirRow, dirTgl) {
+        dirTgl.addEventListener('click', function () {
+          if (treeQuery.trim()) return; /* collapse is moot while filtering */
+          var closed = collapsedDirs[dir] = !collapsedDirs[dir];
+          /* incremental: toggle this group's existing rows instead of a full re-render */
+          dirRow.classList.toggle('closed', closed);
+          dirTgl.setAttribute('aria-expanded', String(!closed));
+          dirTgl.setAttribute('aria-label', (closed ? 'Expand ' : 'Collapse ') + (dir || 'project root') + ' — ' + mine.length + ' file' + (mine.length === 1 ? '' : 's'));
+          var sib = dirRow.nextElementSibling;
+          if (closed) {
+            /* rows for this group exist — hide them */
+            while (sib && sib.dataset && sib.dataset.dir === dir) { sib.hidden = true; sib = sib.nextElementSibling; }
+          } else if (sib && sib.dataset && sib.dataset.dir === dir) {
+            while (sib && sib.dataset && sib.dataset.dir === dir) { sib.hidden = false; sib = sib.nextElementSibling; }
+          } else {
+            /* group was rendered collapsed (no file rows built) — full render once */
+            renderTree();
+          }
+        });
+      })(row, tgl);
       var check = row.querySelector('.dir-check');
       syncDirCheck(check, mine);
       check.setAttribute('aria-label', 'Select or deselect all files in ' + (dir || 'project root'));
@@ -240,6 +272,7 @@ function renderTree() {
     if (dirClosed) return;
     var f = st.files.get(p);
     var frow = fileTpl.content.firstElementChild.cloneNode(true);
+    frow.dataset.dir = dir; /* lets the collapse toggle hide this group without a re-render */
     var cb = frow.querySelector('input');
     cb.checked = f.checked;
     (function (dirCheck, mine) {
@@ -536,7 +569,8 @@ export { IGNORE_DIRS, afterIngest, closePreview, closeSkipReview, getIgnoreText,
 
 export function initIngest() {
   st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
-  st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0 };
+  st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
+  st.totalBytes = 0;
   st.skippedFiles = [];       /* {path, reason, size, ref} — File refs kept so users can include-back */
   ['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('hot'); }); });
   ['dragleave', 'drop'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('hot'); }); });
@@ -656,7 +690,7 @@ export function initIngest() {
     setIgnoreText($('ignorein').value);
     var removed = 0;
     Array.from(st.files.keys()).forEach(function (p) {
-      if (matchesIgnore(p)) { st.files.delete(p); removed++; }
+      if (matchesIgnore(p)) { st.totalBytes -= st.files.get(p).content.length; st.files.delete(p); removed++; }
     });
     if (removed) { invalidateAll(); renderTree(); renderBudget(); }
     toast(removed ? removed + ' loaded file' + (removed === 1 ? '' : 's') + ' removed by patterns.' : 'Ignore patterns saved.');

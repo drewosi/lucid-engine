@@ -133,10 +133,12 @@ var DEMO_QUESTIONS = ['where is API_BASE_URL defined?', 'what imports store.js?'
 
 function loadSampleProject() {
   st.files.clear();
-  st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0 };
+  st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
+  st.totalBytes = 0;
   st.skippedFiles.length = 0;
   Object.keys(SAMPLE_PROJECT).forEach(function (path) {
     var text = SAMPLE_PROJECT[path];
+    st.totalBytes += text.length;
     st.files.set(path, {
       content: text,
       lines: text.split('\n').length,
@@ -180,7 +182,6 @@ function renderDemoBanner() {
 }
 
 function exitDemo() {
-  st.demoMode = false;
   var b = $('demobanner'); if (b) b.remove();
   $('clearctx').click(); /* unloads the sample project (and toasts) */
   if (window.innerWidth <= 860 && !$('rail').classList.contains('open')) { $('rail').classList.add('open'); $('railbtn').setAttribute('aria-expanded', 'true'); }
@@ -190,7 +191,6 @@ function exitDemo() {
 function startDemo() {
   /* accept the same terms record the normal path writes, then hand the demo to LOCAL */
   dismissFirstRun();
-  st.demoMode = true;
   setProvider('local');
   loadSampleProject();
   renderDemoBanner();
@@ -200,7 +200,6 @@ function startDemo() {
 export { SAMPLE_PROJECT, startDemo };
 
 export function initDemo() {
-  st.demoMode = false;
   $('fr-demo').addEventListener('click', startDemo);
   $('emptydemo').addEventListener('click', startDemo);
 }

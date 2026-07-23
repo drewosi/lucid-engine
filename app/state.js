@@ -8,9 +8,9 @@
 export var st = {
   /* context engine */
   files: new Map(),        /* path -> {content, lines, tokens, mtime, base, checked} */
-  skipped: { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0 },
+  skipped: { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 },
+  totalBytes: 0,           /* sum of loaded text lengths — the aggregate memory cap's meter */
   skippedFiles: [],        /* {path, reason, size, ref} */
-  demoMode: false,
   /* provider + model */
   curProvider: null,
   model: null,

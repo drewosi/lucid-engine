@@ -186,7 +186,7 @@ function evidenceChip(ev) {
       if (q60 && st.files.get(ev.file).content.indexOf(q60) === -1) { title = 'Quote not found in this file — the model may have paraphrased or mis-cited these lines'; btn.classList.add('unverified'); }
     }
     btn.title = title;
-    btn.addEventListener('click', function () { openViewer(ev.file, a, b); });
+    btn.addEventListener('click', function () { openViewer(ev.file, a, b, ev.quote); });
   } else { btn.disabled = true; btn.title = 'File is not in the loaded context — the citation cannot be verified.'; }
   return btn;
 }
@@ -346,6 +346,9 @@ function renderTrace(msgEl, trace, opts) {
   /* Constellation Link — lines from the trace header to hovered evidence */
   var svg = tree.querySelector('.linkcanvas');
   function drawLinks(activeEl) {
+    /* read the two theme colors once per draw, not twice per line */
+    var cs = getComputedStyle(app);
+    var accent = cs.getPropertyValue('--accent').trim(), lineCol = cs.getPropertyValue('--line').trim();
     svg.innerHTML = '';
     svg.setAttribute('width', tree.clientWidth); svg.setAttribute('height', tree.clientHeight);
     var tr = tree.getBoundingClientRect();
@@ -354,7 +357,7 @@ function renderTrace(msgEl, trace, opts) {
       var ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       ln.setAttribute('x1', 14); ln.setAttribute('y1', 10);
       ln.setAttribute('x2', er.left - tr.left + er.width / 2); ln.setAttribute('y2', er.top - tr.top);
-      ln.setAttribute('stroke', ev === activeEl ? getComputedStyle(app).getPropertyValue('--accent').trim() : getComputedStyle(app).getPropertyValue('--line').trim());
+      ln.setAttribute('stroke', ev === activeEl ? accent : lineCol);
       ln.setAttribute('stroke-width', '1');
       svg.appendChild(ln);
     });
@@ -367,6 +370,15 @@ function renderTrace(msgEl, trace, opts) {
       ev.addEventListener('focus', function () { drawLinks(ev); });
       ev.addEventListener('blur', function () { drawLinks(null); });
     });
+    /* line geometry drifts if the viewport resizes while a trace is visible —
+       debounced redraw; the listener removes itself once this tree leaves the DOM */
+    var rsTimer = null;
+    function onResize() {
+      if (!tree.isConnected) { window.removeEventListener('resize', onResize); return; }
+      clearTimeout(rsTimer);
+      rsTimer = setTimeout(function () { if (tree.isConnected) drawLinks(null); }, 150);
+    }
+    window.addEventListener('resize', onResize);
   }
 }
 

@@ -172,8 +172,10 @@ function packSmartContext(q, budgetTokens) {
     var scan = Math.min(scored.length, 200);
     for (var si = 0; si < scan; si++) {
       var it = scored[si];
-      if (it.f.lc === undefined) it.f.lc = it.f.content.toLowerCase();
-      for (var t = 0; t < terms.length; t++) it.s += Math.min(countHits(it.f.lc, terms[t]), 12) * 2;
+      /* recomputed per scan — memoizing this on the file object converged toward
+         a full lowercase copy of the corpus in memory, and could go stale */
+      var lc = it.f.content.toLowerCase();
+      for (var t = 0; t < terms.length; t++) it.s += Math.min(countHits(lc, terms[t]), 12) * 2;
     }
     scored.sort(function (a, b) { return b.s - a.s; });
   }

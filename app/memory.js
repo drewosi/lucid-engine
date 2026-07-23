@@ -3,8 +3,8 @@ import { IGNORE_DIRS, afterIngest, getIgnoreText, ingestFile, recordSkip, setCtx
 import { $, fmtTok, lsDel, lsGet, lsSet, setStatus, toast } from './helpers.js';
 import { LS } from './config.js';
 /* ============ PROJECT MEMORY (IndexedDB) ============
-   Saves named projects: file-tree summary, selection, ignore patterns and
-   context prefs — NEVER file contents. When the folder was opened through
+   Saves named projects: selection, ignore patterns and context prefs —
+   NEVER file contents. When the folder was opened through
    showDirectoryPicker() the directory handle itself is persisted too, so a
    saved project can be reloaded from disk in one click (after the browser
    re-confirms read permission). Drag-dropped projects restore settings only
@@ -111,7 +111,8 @@ function loadProject(rec) {
       return perm === 'granted' ? perm : rec.handle.requestPermission({ mode: 'read' });
     }).then(function (perm) {
       if (perm !== 'granted') { toast('Read permission declined — drop the folder instead.'); return; }
-      st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0 };
+      st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
+      st.totalBytes = 0;
       st.skippedFiles.length = 0;
       st.lastDirHandle = rec.handle;
       setStatus('RELOADING “' + rec.name + '”…');
@@ -169,21 +170,22 @@ function initMemory() {
     var name = window.prompt('Save project as:', guessProjectName());
     if (name === null) return;
     name = name.trim().slice(0, 60) || 'project';
-    var tree = [], unchecked = [], total = 0;
+    /* older records also carried a full per-file `tree` array — it was never
+       read back, so it is no longer written (old records still load fine) */
+    var unchecked = [], total = 0;
     st.files.forEach(function (f, p) {
-      tree.push({ path: p, tokens: f.tokens, mtime: f.mtime });
       total += f.tokens;
       if (!f.checked) unchecked.push(p);
     });
     var rec = {
       name: name, savedAt: Date.now(), fileCount: st.files.size, totalTokens: total,
-      tree: tree, unchecked: unchecked, ignore: getIgnoreText(),
+      unchecked: unchecked, ignore: getIgnoreText(),
       prefs: { ctxmode: st.ctxMode, budget: parseInt(lsGet(LS.ctxbudget), 10) || 0 },
       handle: st.lastDirHandle || null
     };
     idbPut(rec).then(function () {
       toast(rec.handle
-        ? '“' + name + '” saved — one-click reload enabled (tree + settings only, never contents).'
+        ? '“' + name + '” saved — one-click reload enabled (selection + settings only, never contents).'
         : '“' + name + '” saved — settings + selection only; ' + (window.showDirectoryPicker ? 'open via [ PICK FOLDER ] to enable one-click reload.' : 'this browser can’t re-open folders — re-drop to reload.'));
       renderProjects();
     }).catch(function (e) {

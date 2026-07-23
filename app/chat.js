@@ -83,6 +83,38 @@ function httpErrorText(status, body, retryAfter) {
   return 'HTTP ' + status + ' — ' + detail;
 }
 
+/* One parsed SSE event → a plain effect object. Pure — shared by the live pump
+   below and the self-tests, so the provider adapters' event handling is testable
+   with canned events and no network. Returns { text, usage, stopReason, errorMsg }
+   with nulls where the event carries nothing; usage is a delta the caller adds. */
+function parseStreamEvent(p, anthro) {
+  var out = { text: null, usage: null, stopReason: null, errorMsg: null };
+  if (anthro) {
+    if (p.type === 'message_start' && p.message && p.message.usage) {
+      var u = p.message.usage;
+      out.usage = { in: u.input_tokens || 0, out: 0, cacheW: u.cache_creation_input_tokens || 0, cacheR: u.cache_read_input_tokens || 0 };
+    } else if (p.type === 'content_block_delta' && p.delta) {
+      if (p.delta.type === 'text_delta') out.text = p.delta.text;
+      /* thinking_delta blocks are skipped — not rendered */
+    } else if (p.type === 'message_delta') {
+      if (p.usage) out.usage = { in: 0, out: p.usage.output_tokens || 0, cacheW: 0, cacheR: 0 };
+      if (p.delta && p.delta.stop_reason) out.stopReason = p.delta.stop_reason;
+    } else if (p.type === 'error') {
+      out.errorMsg = (p.error && p.error.message) || 'stream error';
+    }
+  } else {
+    /* OpenAI-compatible chat-completions stream */
+    if (p.error) { out.errorMsg = p.error.message || 'stream error'; return out; }
+    if (p.usage) out.usage = { in: p.usage.prompt_tokens || 0, out: p.usage.completion_tokens || 0, cacheW: 0, cacheR: 0 };
+    var c = p.choices && p.choices[0];
+    if (c) {
+      if (c.delta && typeof c.delta.content === 'string' && c.delta.content) out.text = c.delta.content;
+      if (c.finish_reason) out.stopReason = c.finish_reason === 'length' ? 'max_tokens' : c.finish_reason;
+    }
+  }
+  return out;
+}
+
 function ask(q, key, opts) {
   opts = opts || {};
   /* concurrency guard — a stale [ RETRY ] / [ RE-GROUND & RETRY ] click while an
@@ -214,36 +246,15 @@ function ask(q, key, opts) {
             if (++badEvents === 3) { var mw = document.createElement('div'); mw.className = 'errline'; mw.textContent = '// some stream data could not be parsed — the answer may be incomplete'; msgEl.querySelector('.bd').appendChild(mw); }
             return;
           }
-          if (anthro) {
-            if (p.type === 'message_start' && p.message && p.message.usage) {
-              var u = p.message.usage;
-              st.spent.in += u.input_tokens || 0;
-              st.spent.cacheW += u.cache_creation_input_tokens || 0;
-              st.spent.cacheR += u.cache_read_input_tokens || 0;
-              renderCost();
-            } else if (p.type === 'content_block_delta' && p.delta) {
-              if (p.delta.type === 'text_delta') { raw += p.delta.text; paint(false); }
-              /* thinking_delta blocks are skipped — not rendered */
-            } else if (p.type === 'message_delta') {
-              if (p.usage) { st.spent.out += p.usage.output_tokens || 0; renderCost(); }
-              if (p.delta && p.delta.stop_reason) stopReason = p.delta.stop_reason;
-            } else if (p.type === 'error') {
-              var se = new Error('stream error'); se.streamMsg = (p.error && p.error.message) || 'stream error'; throw se;
-            }
-          } else {
-            /* OpenAI-compatible chat-completions stream */
-            if (p.error) { var se2 = new Error('stream error'); se2.streamMsg = p.error.message || 'stream error'; throw se2; }
-            if (p.usage) {
-              st.spent.in += p.usage.prompt_tokens || 0;
-              st.spent.out += p.usage.completion_tokens || 0;
-              renderCost();
-            }
-            var c = p.choices && p.choices[0];
-            if (c) {
-              if (c.delta && typeof c.delta.content === 'string' && c.delta.content) { raw += c.delta.content; paint(false); }
-              if (c.finish_reason) stopReason = c.finish_reason === 'length' ? 'max_tokens' : c.finish_reason;
-            }
+          var eff = parseStreamEvent(p, anthro);
+          if (eff.errorMsg) { var se = new Error('stream error'); se.streamMsg = eff.errorMsg; throw se; }
+          if (eff.usage) {
+            st.spent.in += eff.usage.in; st.spent.out += eff.usage.out;
+            st.spent.cacheW += eff.usage.cacheW; st.spent.cacheR += eff.usage.cacheR;
+            renderCost();
           }
+          if (eff.text) { raw += eff.text; paint(false); }
+          if (eff.stopReason) stopReason = eff.stopReason;
         });
         return pump();
       });
@@ -325,7 +336,7 @@ function ask(q, key, opts) {
     promptEl.focus();
   });
 }
-export { promptEl, resetCost };
+export { httpErrorText, parseStreamEvent, promptEl, resetCost };
 
 export function initChat() {
   st.spent = { in: 0, out: 0, cacheW: 0, cacheR: 0 };
