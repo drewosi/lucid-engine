@@ -88,16 +88,81 @@ function dirOf(path) { return path.indexOf('/') === -1 ? '' : path.slice(0, path
 /* ---- import resolvers: tsconfig paths, Go module prefix, workspace packages.
    Rebuilt each index pass from the loaded manifests. ---- */
 var idxAlias = [], idxGoModule = '', idxWorkspace = [];
+var idxPkgMeta = {};  /* package.json dir -> { exports, imports, main } */
+var idxCrates = [];   /* Cargo.toml [package] names (hyphens→underscores) -> crate dir */
 function joinPath(a, b) {
   var parts = (a ? a.split('/') : []).concat(b ? b.split('/') : []), stack = [];
   parts.forEach(function (s) { if (s === '' || s === '.') return; if (s === '..') stack.pop(); else stack.push(s); });
   return stack.join('/');
 }
+/* conditional-exports value → concrete path: import > default > require > node >
+   browser, recursively; the 'types' condition is never taken. */
+function pickCond(v) {
+  if (typeof v === 'string') return v;
+  if (v && typeof v === 'object') {
+    var order = ['import', 'default', 'require', 'node', 'browser'];
+    for (var i = 0; i < order.length; i++) if (v[order[i]] !== undefined) return pickCond(v[order[i]]);
+  }
+  return null;
+}
+/* package.json "exports" (string | conditional object | dotted-key map) → flat
+   { '.': path, './sub': path, './feat/*': path } map, or null */
+function normExports(ex) {
+  if (!ex) return null;
+  if (typeof ex === 'string') return { '.': ex };
+  var keys = Object.keys(ex), map = {}, dotted = keys.some(function (k) { return k.charAt(0) === '.'; });
+  if (!dotted) { var one = pickCond(ex); return one ? { '.': one } : null; }
+  keys.forEach(function (k) { if (k.charAt(0) === '.') { var t = pickCond(ex[k]); if (t) map[k] = t; } });
+  return map;
+}
+/* look a subpath up in a flat exports map: exact key first, then single-* patterns */
+function lookupExports(map, sub) {
+  var key = sub ? './' + sub : '.';
+  if (map[key]) return map[key];
+  var ks = Object.keys(map);
+  for (var i = 0; i < ks.length; i++) {
+    var star = ks[i].indexOf('*');
+    if (star === -1) continue;
+    var pre = ks[i].slice(2, star), suf = ks[i].slice(star + 1);
+    if (sub.indexOf(pre) === 0 && sub.length >= pre.length + suf.length
+        && (suf === '' || sub.slice(sub.length - suf.length) === suf))
+      return map[ks[i]].replace('*', sub.slice(pre.length, sub.length - suf.length));
+  }
+  return null;
+}
+/* the crate a file belongs to: longest Cargo.toml dir prefix */
+function crateFor(f) {
+  var best = null, bestLen = -1;
+  for (var i = 0; i < idxCrates.length; i++) {
+    var dd = idxCrates[i].dir === '' ? '' : idxCrates[i].dir + '/';
+    if ((dd === '' || f.indexOf(dd) === 0) && dd.length > bestLen) { best = idxCrates[i]; bestLen = dd.length; }
+  }
+  return best;
+}
+/* the directory a Rust file's own module owns: mod.rs/lib.rs/main.rs own their dir;
+   foo.rs owns foo/ by convention */
+function selfModDir(f) {
+  var b = f.slice(f.lastIndexOf('/') + 1);
+  return (b === 'mod.rs' || b === 'lib.rs' || b === 'main.rs') ? dirOf(f) : f.slice(0, -3);
+}
 function buildResolvers(paths) {
-  idxAlias = []; idxGoModule = ''; idxWorkspace = [];
+  idxAlias = []; idxGoModule = ''; idxWorkspace = []; idxPkgMeta = {}; idxCrates = [];
   paths.forEach(function (p) {
     var nm = p.slice(p.lastIndexOf('/') + 1).toLowerCase();
-    if (nm === 'tsconfig.json' || nm === 'jsconfig.json') {
+    if (nm === 'package.json') {
+      try {
+        var pj = JSON.parse(st.files.get(p).content), pdir = dirOf(p) || '.';
+        idxPkgMeta[pdir] = { exports: normExports(pj.exports), imports: pj.imports || null, main: typeof pj.main === 'string' ? pj.main : '' };
+      } catch (e) {}
+    } else if (nm === 'cargo.toml') {
+      /* section-split so a `name =` under [dependencies] can't masquerade as the package */
+      var sects = st.files.get(p).content.split(/^\s*\[/m);
+      for (var cs = 0; cs < sects.length; cs++) {
+        if (!/^package\]/.test(sects[cs])) continue;
+        var cn = sects[cs].match(/^\s*name\s*=\s*["']([^"']+)["']/m);
+        if (cn) idxCrates.push({ name: cn[1].replace(/-/g, '_'), dir: dirOf(p) });
+      }
+    } else if (nm === 'tsconfig.json' || nm === 'jsconfig.json') {
       try {
         var raw = st.files.get(p).content.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
         var cfg = JSON.parse(raw), co = cfg.compilerOptions || {};
@@ -130,6 +195,21 @@ function resolveCand(cand) {
 function resolveImport(fromFile, mod) {
   if (!mod) return null;
   var ext = fileExt(fromFile);
+  /* package.json "imports" (#alias) — resolved against the nearest ancestor
+     package.json that declares an imports map; never falls through */
+  if (mod.charAt(0) === '#') {
+    var bestDir = null, bestLen = -1;
+    Object.keys(idxPkgMeta).forEach(function (d) {
+      if (!idxPkgMeta[d].imports) return;
+      var dd = d === '.' ? '' : d + '/';
+      if ((dd === '' || fromFile.indexOf(dd) === 0) && dd.length > bestLen) { bestDir = d; bestLen = dd.length; }
+    });
+    if (bestDir !== null) {
+      var iv = pickCond(idxPkgMeta[bestDir].imports[mod]);
+      if (iv) return resolveCand(joinPath(bestDir === '.' ? '' : bestDir, iv));
+    }
+    return null;
+  }
   /* Python dotted imports: from .mod / from ..pkg.mod / import pkg.mod */
   if (ext === 'py' && mod.indexOf('/') === -1 && /^[.\w]/.test(mod)) {
     if (mod.charAt(0) === '.') {
@@ -171,6 +251,28 @@ function resolveImport(fromFile, mod) {
   }
   /* Rust: mod foo; resolves beside the file */
   if (ext === 'rs' && /^[A-Za-z_]\w*$/.test(mod)) { var rc = resolveCand(joinPath(dirOf(fromFile), mod)); if (rc) return rc; }
+  /* Rust ::-paths: crate:: / self:: / super:: / cross-crate via Cargo.toml names.
+     Longest module-path prefix wins (use paths name items, not files); every
+     return guards !== fromFile so `use crate::{…}` can't self-edge. */
+  if (ext === 'rs' && mod.indexOf('::') !== -1) {
+    var segs = mod.replace(/:+$/, '').split('::').filter(Boolean);
+    var head = segs.shift(), rbase = null;
+    if (head === 'crate') { var cr = crateFor(fromFile); rbase = cr ? joinPath(cr.dir, 'src') : 'src'; }
+    else if (head === 'self') { rbase = selfModDir(fromFile); }
+    else if (head === 'super') {
+      rbase = dirOf(fromFile);
+      while (segs.length && segs[0] === 'super') { segs.shift(); rbase = dirOf(rbase); }
+    } else {
+      for (var ci = 0; ci < idxCrates.length; ci++) if (idxCrates[ci].name === head) { rbase = joinPath(idxCrates[ci].dir, 'src'); break; }
+      if (rbase === null) return null; /* std::, serde:: … external */
+    }
+    for (var rk = segs.length; rk >= 1; rk--) {
+      var rcand = resolveCand(joinPath(rbase, segs.slice(0, rk).join('/')));
+      if (rcand && rcand !== fromFile) return rcand;
+    }
+    if (head !== 'crate') { var rlz = resolveCand(rbase); if (rlz && rlz !== fromFile) return rlz; }
+    return null;
+  }
   /* tsconfig/jsconfig path aliases (@/x, ~/x, etc.) */
   for (var a = 0; a < idxAlias.length; a++) {
     var m = idxAlias[a].re.exec(mod);
@@ -182,11 +284,18 @@ function resolveImport(fromFile, mod) {
   }
   /* Go module-prefix: <module>/pkg/x -> pkg/x inside the repo */
   if (idxGoModule && mod.indexOf(idxGoModule + '/') === 0) { var gr = resolveCand(mod.slice(idxGoModule.length + 1)); if (gr) return gr; }
-  /* workspace package: bare 'pkg' or '@scope/pkg[/sub]' -> its dir */
+  /* workspace package: bare 'pkg' or '@scope/pkg[/sub]' -> its dir, honoring the
+     package's exports map first, then its main field, then dir/src conventions */
   for (var w = 0; w < idxWorkspace.length; w++) {
     var wp = idxWorkspace[w];
     if (mod === wp.name || mod.indexOf(wp.name + '/') === 0) {
       var sub = mod === wp.name ? '' : mod.slice(wp.name.length + 1);
+      var meta = idxPkgMeta[wp.dir === '' ? '.' : wp.dir];
+      if (meta && meta.exports) {
+        var xt = lookupExports(meta.exports, sub);
+        if (xt) { var xr = resolveCand(joinPath(wp.dir, xt)); if (xr) return xr; }
+      }
+      if (sub === '' && meta && meta.main) { var mr = resolveCand(joinPath(wp.dir, meta.main)); if (mr) return mr; }
       var wr = resolveCand(joinPath(wp.dir, sub)) || resolveCand(joinPath(wp.dir, joinPath('src', sub)));
       if (wr) return wr;
     }

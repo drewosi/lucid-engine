@@ -110,7 +110,7 @@ LOCAL-engine intents: `def`, `refs`, `imports`, `importers`, `related`, `symbols
 ### Known limitations
 
 - **Token counts are estimates** (heuristic char/divisor + a token-regex blend, ~±15–20% vs a real BPE tokenizer). Your provider bills the actual counts. The session `$` and spend-limit warnings are estimate-based.
-- **Alias / `exports` resolution is best-effort** — tsconfig `paths` and workspace package names resolve; full `package.json` `exports`/`imports` maps and non-relative cross-crate Rust `use` are not.
+- **Alias / `exports` resolution is best-effort** — tsconfig `paths`, workspace package names, `package.json` `exports` / `imports` / `main` maps (conditions picked import > default > require > node > browser; `types` never taken; single-`*` patterns), and Rust `crate::` / `self::` / `super::` / cross-crate `use` (via Cargo.toml package names, hyphens→underscores) all resolve. Still not resolved: nested condition edge cases, `browser`-field objects, Rust `#[path]` attributes and re-export chains.
 - **File System Access reload is Chromium-only** — Firefox/Safari lack `showDirectoryPicker`, so saved projects there restore settings/selection only and ask you to re-drop the folder (never file contents, in any browser).
 - **Indexing is synchronous** — a multi-thousand-file scan briefly blocks the tab; a progress status is shown first. Tuned for medium repos (~5–8k files).
 - **Ingest caps** — 512KB per file, 8,000 files, ~300MB of text total. Everything skipped is counted, attributed, and reviewable in `[ REVIEW SKIPPED ]`.

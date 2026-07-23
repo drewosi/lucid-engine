@@ -50,7 +50,23 @@ function selfTestFixture() {
     'csapp/Services/Greeter.cs':
       'namespace Acme.Services;\npublic class Greeter {\n  public string Greet(string name) => name;\n  public int Count { get; set; }\n}',
     'csapp/GreeterTests.cs':
-      'namespace Acme.Tests;\npublic class GreeterTests {\n  public void GreetWorks() { }\n}'
+      'namespace Acme.Tests;\npublic class GreeterTests {\n  public void GreetWorks() { }\n}',
+    /* resolver depth: exports map (conditional + star), imports (#alias), main field */
+    'wspkg/package.json': '{ "name": "@acme/tools", "main": "src/entry.js", "exports": { ".": "./src/entry.js", "./sub": { "types": "./x.d.ts", "import": "./src/sub.mjs" }, "./feat/*": "./src/feat/*.js" }, "imports": { "#util": "./src/u.js" } }',
+    'wspkg/src/entry.js': "import u from '#util';\nexport const ENTRY = 1;",
+    'wspkg/src/sub.mjs': 'export const SUB = 1;',
+    'wspkg/src/feat/deep.js': 'export const DEEP = 1;',
+    'wspkg/src/u.js': 'export const U = 1;',
+    'mainpkg/package.json': '{ "name": "plainmain", "main": "lib/entry-main.js" }',
+    'mainpkg/lib/entry-main.js': 'module.exports = { pm: 1 };',
+    'src/usewspkg.js': "import { ENTRY } from '@acme/tools';\nimport { SUB } from '@acme/tools/sub';\nimport { DEEP } from '@acme/tools/feat/deep';\nimport pm from 'plainmain';",
+    /* resolver depth: two Rust crates — crate::, super::, cross-crate, decoy name */
+    'crates/alpha/Cargo.toml': '[package]\nname = "alpha"\n\n[dependencies]\nname = "decoy"',
+    'crates/alpha/src/lib.rs': 'mod engine;\nuse crate::engine::start;\nuse beta_core::api::run;\nuse serde::Serialize;\npub fn alpha_main() {}',
+    'crates/alpha/src/engine.rs': 'use super::alpha_main;\npub fn start() {}',
+    'crates/beta/Cargo.toml': '[package]\nname = "beta-core"',
+    'crates/beta/src/lib.rs': 'pub mod api;',
+    'crates/beta/src/api.rs': 'pub fn run() {}'
   };
 }
 /* async ingest cases — drive the REAL ingestFile with synthetic files against
@@ -138,6 +154,20 @@ function runSelfTests() {
       && !(idx.exportsByFile.get('csapp/Program.cs') || []).some(function (e) { return e.name === 'Program'; }));
     ok('classify · Java/C# test filenames detected', idx.tests.indexOf('javapkg/src/main/java/com/acme/util/StringsTest.java') !== -1 && idx.tests.indexOf('csapp/GreeterTests.cs') !== -1);
     ok('classify · Program.cs is an entry point', idx.entries.indexOf('csapp/Program.cs') !== -1);
+    /* resolver depth — package.json exports/imports/main maps */
+    var USEW = idx.importsByFile.get('src/usewspkg.js') || [];
+    ok('resolve · exports map "." entry', USEW.some(function (e) { return e.raw === '@acme/tools' && e.resolved === 'wspkg/src/entry.js'; }));
+    ok('resolve · conditional exports pick import, never types', USEW.some(function (e) { return e.raw === '@acme/tools/sub' && e.resolved === 'wspkg/src/sub.mjs'; }));
+    ok('resolve · star pattern exports', USEW.some(function (e) { return e.raw === '@acme/tools/feat/deep' && e.resolved === 'wspkg/src/feat/deep.js'; }));
+    ok('resolve · main field for bare specifier', USEW.some(function (e) { return e.raw === 'plainmain' && e.resolved === 'mainpkg/lib/entry-main.js'; }));
+    ok('resolve · #imports alias', (idx.importsByFile.get('wspkg/src/entry.js') || []).some(function (e) { return e.raw === '#util' && e.resolved === 'wspkg/src/u.js'; }));
+    /* resolver depth — Rust ::-paths */
+    var ALIB = idx.importsByFile.get('crates/alpha/src/lib.rs') || [];
+    ok('resolve · rust crate:: path', ALIB.some(function (e) { return e.raw === 'crate::engine::start' && e.resolved === 'crates/alpha/src/engine.rs'; }));
+    ok('resolve · rust cross-crate via Cargo name', ALIB.some(function (e) { return e.raw === 'beta_core::api::run' && e.resolved === 'crates/beta/src/api.rs'; }), 'hyphen→underscore');
+    ok('resolve · rust external crate stays null', ALIB.some(function (e) { return e.raw === 'serde::Serialize' && e.resolved === null; }));
+    ok('resolve · rust super:: to crate root', (idx.importsByFile.get('crates/alpha/src/engine.rs') || []).some(function (e) { return e.raw === 'super::alpha_main' && e.resolved === 'crates/alpha/src/lib.rs'; }));
+    ok('resolve · [dependencies] name is not a crate', !ALIB.some(function (e) { return e.resolved !== null && e.resolved.indexOf('decoy') !== -1; }));
     ok('index · importCount > 0', (idx.importCount || 0) > 0, String(idx.importCount));
     /* packer respects budget and never emits a line number past a file's length */
     var packed = packSmartContext('where is API_BASE_URL defined', 4000);
