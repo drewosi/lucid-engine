@@ -1,11 +1,8 @@
-/* MERIDIAN Engine v0.4 — v0.3-hardened plus the deterministic reasoning pass:
-   a unified intent registry (intents.js) where every reasoning instance is one
-   entry, eleven niche deterministic analyses (cycles, orphans, broken imports,
-   hubs, dependency paths, exports, hotspots, todos, env vars, coverage gaps,
-   duplicate symbols), an index extended with exports/todos/env-var tracking,
-   real Java/Ruby/C# indexing, exports/imports/main + Rust ::-path resolution,
-   and a 143-check self-test suite with a full intent-routing table, run in CI
-   on every push.
+/* MERIDIAN Engine v0.5 — v0.4's deterministic reasoning pass plus the
+   instruments pass: Signal Extraction (ranked top-findings digest) and Drift
+   Watch (session-over-session index drift, metadata only) are real, Kotlin/
+   Swift/PHP join the indexed languages, and the self-test suite grows to 174
+   checks, run in CI on every push.
 
    Entry point. Modules own their functions and wiring; this file fixes the one
    thing that must stay global: the order things initialize in. The init*() calls
@@ -82,4 +79,4 @@ syncProviderUI();
 setCtxMode(st.ctxMode); /* also renders the budget */
 window.__meridianSelfTest = runSelfTests; /* L3: run from the console (async — returns a Promise of results) */
 if (/[?&]selftest\b/.test(location.search)) setTimeout(runAndShowSelfTests, 300);
-console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— Engine v0.4 · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');
+console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— Engine v0.5 · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');

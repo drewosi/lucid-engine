@@ -471,15 +471,15 @@
         <div class="cap rv" style="--i:2"><span class="anno">// egress to us: 0 bytes</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="5" y="11" width="16" height="11"/><path d="M9 11V7a4 4 0 018 0v4"/></svg>
           <h3>Private Core<span class="flag live">LIVE</span></h3><p>We run no servers. Your files and questions travel only from your browser to your chosen provider — Anthropic, OpenAI, or your own OpenAI-compatible endpoint — under your own key.</p></div>
-        <div class="cap road rv" style="--i:3"><span class="anno">// roadmap</span>
+        <div class="cap rv" style="--i:3"><span class="anno">// deterministic, from the index</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M2 13h5l3-8 4 16 3-8h7"/></svg>
-          <h3>Signal Extraction<span class="flag">ROADMAP</span></h3><p>Will separate what matters from what's loud — surfacing the three things worth your attention, not thirty.</p></div>
+          <h3>Signal Extraction<span class="flag live">LIVE</span></h3><p>Ranks what's worth your attention — broken imports, import cycles, untested load-bearing files, duplicate names — and surfaces the top three to five signals, each pinned to file:line evidence. Deterministic, computed from the index; no model required.</p></div>
         <div class="cap rv" style="--i:4"><span class="anno">// approval-gated, read-only</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="13" cy="13" r="10"/><path d="M13 6v7l5 3"/></svg>
           <h3>Instruments<span class="flag live">LIVE · V1</span></h3><p>The core proposes read-only actions — local search, file inspection, git commands to copy — and every one waits for your click. It never executes shell commands. Deeper mounting (terminals, trackers) is still on the bench.</p></div>
-        <div class="cap road rv" style="--i:5"><span class="anno">// roadmap</span>
+        <div class="cap rv" style="--i:5"><span class="anno">// between sessions, metadata only</span>
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M3 20L10 8l5 7 3-4 5 9z"/></svg>
-          <h3>Drift Watch<span class="flag">ROADMAP</span></h3><p>Will monitor your systems for slow change and flag it before it breaks. Not built yet.</p></div>
+          <h3>Drift Watch<span class="flag live">LIVE · V1</span></h3><p>Compares this session's index against your last one — new, removed, and reshaped files, symbol and import drift — from a local fingerprint of paths and counts, never file contents. Session-over-session comparison; continuous monitoring is still on the bench.</p></div>
       </div>
     </div>
   </section>
@@ -584,7 +584,7 @@
       <div class="faq rv" id="faqbox">
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.01</span>Is Meridian real?<span class="x">+</span></button>
-          <div class="faq-a"><p>Yes — as of this beta, the workbench is a real, working instrument: it loads your project into your browser's memory and answers with live evidence traces. Two honest footnotes: the trace console on this page is still a scripted simulation (it wears a SIM chip), and the capabilities marked ROADMAP don't exist yet. Meridian began as a demonstration of the Lucid Engine design system; the demonstration got promoted.</p></div>
+          <div class="faq-a"><p>Yes — as of this beta, the workbench is a real, working instrument: it loads your project into your browser's memory and answers with live evidence traces. Three honest footnotes: the trace console on this page is still a scripted simulation (it wears a SIM chip), the pricing tiers marked PLANNED can't be purchased yet, and Drift Watch compares sessions — it does not monitor continuously. Meridian began as a demonstration of the Lucid Engine design system; the demonstration got promoted.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.02</span>Where does my data live?<span class="x">+</span></button>
