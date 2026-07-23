@@ -1,0 +1,20 @@
+# Runs MERIDIAN's in-app deterministic self-test suite headlessly on every push/PR.
+# The repo intentionally ships zero dependencies and has no package.json — the
+# throwaway Playwright toolchain (same as scripts/record-demo.mjs) is installed
+# here per-run and never committed (node_modules/ and package.json are gitignored).
+name: selftests
+on:
+  push:
+  pull_request:
+jobs:
+  selftests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm i playwright
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/run-selftests.mjs

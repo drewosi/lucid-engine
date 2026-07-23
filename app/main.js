@@ -3,7 +3,9 @@
    entry, eleven niche deterministic analyses (cycles, orphans, broken imports,
    hubs, dependency paths, exports, hotspots, todos, env vars, coverage gaps,
    duplicate symbols), an index extended with exports/todos/env-var tracking,
-   and a 115-check self-test suite with a full intent-routing table.
+   real Java/Ruby/C# indexing, exports/imports/main + Rust ::-path resolution,
+   and a 143-check self-test suite with a full intent-routing table, run in CI
+   on every push.
 
    Entry point. Modules own their functions and wiring; this file fixes the one
    thing that must stay global: the order things initialize in. The init*() calls
