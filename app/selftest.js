@@ -66,7 +66,25 @@ function selfTestFixture() {
     'crates/alpha/src/engine.rs': 'use super::alpha_main;\npub fn start() {}',
     'crates/beta/Cargo.toml': '[package]\nname = "beta-core"',
     'crates/beta/src/lib.rs': 'pub mod api;',
-    'crates/beta/src/api.rs': 'pub fn run() {}'
+    'crates/beta/src/api.rs': 'pub fn run() {}',
+    /* Kotlin: gradle-kotlin layout, data class/object/val, receiver fun, kt test */
+    'ktapp/src/main/kotlin/com/acme/Main.kt':
+      'package com.acme\nimport com.acme.util.Text\nimport kotlinx.coroutines.launch\nfun main() { }\ndata class Point(val x: Int)\nobject Registry\nval MAX_RETRIES = 3',
+    'ktapp/src/main/kotlin/com/acme/util/Text.kt':
+      'package com.acme.util\nclass Text {\n  fun shout(s: String) = s\n  private fun hidden() { }\n}',
+    'ktapp/src/test/kotlin/com/acme/util/TextTest.kt':
+      'package com.acme.util\nclass TextTest {\n  fun testShout() { }\n}',
+    /* Swift: SwiftPM Sources/ modules, protocol/extension/open class, Tests/ */
+    'swiftapp/Sources/Render/Render.swift':
+      'import Foundation\nimport Helper\npublic protocol Drawable { }\nopen class Canvas { }\npublic func render() { }\nextension Canvas { }',
+    'swiftapp/Sources/Helper/Helper.swift': 'public struct Palette { }',
+    'swiftapp/Tests/RenderTests/RenderTests.swift': 'final class RenderTests { }',
+    /* PHP: composer psr-4, backslashed use, paren-less require, Test.php suffix */
+    'phpapp/composer.json': '{ "autoload": { "psr-4": { "App\\\\": "src/" } } }',
+    'phpapp/src/Models/User.php': '<?php\nnamespace App\\Models;\nclass User {\n  public function name() { return "u"; }\n}',
+    'phpapp/src/Service.php': '<?php\nnamespace App;\nuse App\\Models\\User;\nuse Symfony\\Component\\Console;\nrequire \'legacy.php\';\nclass Service { }\nfunction boot() { }',
+    'phpapp/src/legacy.php': '<?php\nfunction legacy_fn() { }',
+    'phpapp/tests/ServiceTest.php': '<?php\nclass ServiceTest { }'
   };
 }
 /* async ingest cases — drive the REAL ingestFile with synthetic files against
@@ -170,6 +188,30 @@ function runSelfTests() {
     ok('resolve · rust external crate stays null', ALIB.some(function (e) { return e.raw === 'serde::Serialize' && e.resolved === null; }));
     ok('resolve · rust super:: to crate root', (idx.importsByFile.get('crates/alpha/src/engine.rs') || []).some(function (e) { return e.raw === 'super::alpha_main' && e.resolved === 'crates/alpha/src/lib.rs'; }));
     ok('resolve · [dependencies] name is not a crate', !ALIB.some(function (e) { return e.resolved !== null && e.resolved.indexOf('decoy') !== -1; }));
+    /* Kotlin / Swift / PHP depth */
+    var KMAIN = 'ktapp/src/main/kotlin/com/acme/Main.kt', KTEXT = 'ktapp/src/main/kotlin/com/acme/util/Text.kt';
+    ok('kotlin · fun/data class/object/val symbols', (idx.symbols.get('main') || []).some(function (d) { return d.file === KMAIN && d.kind === 'fun'; })
+      && idx.symbols.has('Point') && idx.symbols.has('Registry') && (idx.symbols.get('MAX_RETRIES') || []).some(function (d) { return d.kind === 'val'; }));
+    ok('kotlin · member fun indexed', (idx.symbols.get('shout') || []).some(function (d) { return d.file === KTEXT; }));
+    ok('kotlin · import resolves via kotlin source root', (idx.importsByFile.get(KMAIN) || []).some(function (e) { return e.raw === 'com.acme.util.Text' && e.resolved === KTEXT; }));
+    ok('kotlin · external import stays null', (idx.importsByFile.get(KMAIN) || []).some(function (e) { return e.raw === 'kotlinx.coroutines.launch' && e.resolved === null; }));
+    ok('kotlin · public exported, private not', (idx.exportsByFile.get(KTEXT) || []).some(function (e) { return e.name === 'shout'; })
+      && !(idx.exportsByFile.get(KTEXT) || []).some(function (e) { return e.name === 'hidden'; }));
+    ok('kotlin · TextTest.kt classified as a test', idx.tests.indexOf('ktapp/src/test/kotlin/com/acme/util/TextTest.kt') !== -1);
+    var SREND = 'swiftapp/Sources/Render/Render.swift';
+    ok('swift · protocol/extension/open class symbols', (idx.symbols.get('Drawable') || []).some(function (d) { return d.kind === 'protocol'; })
+      && (idx.symbols.get('Canvas') || []).filter(function (d) { return d.file === SREND; }).length === 2
+      && idx.symbols.has('render'));
+    ok('swift · import resolves via Sources convention', (idx.importsByFile.get(SREND) || []).some(function (e) { return e.raw === 'Helper' && e.resolved === 'swiftapp/Sources/Helper/Helper.swift'; }));
+    ok('swift · Foundation stays external', (idx.importsByFile.get(SREND) || []).some(function (e) { return e.raw === 'Foundation' && e.resolved === null; }));
+    ok('swift · RenderTests.swift classified as a test', idx.tests.indexOf('swiftapp/Tests/RenderTests/RenderTests.swift') !== -1);
+    var PSVC = 'phpapp/src/Service.php';
+    ok('php · class/function symbols', idx.symbols.has('Service') && idx.symbols.has('boot') && idx.symbols.has('legacy_fn')
+      && (idx.symbols.get('name') || []).some(function (d) { return d.file === 'phpapp/src/Models/User.php'; }));
+    ok('php · use resolves via composer psr-4', (idx.importsByFile.get(PSVC) || []).some(function (e) { return e.raw === 'App\\Models\\User' && e.resolved === 'phpapp/src/Models/User.php'; }));
+    ok('php · external namespace stays null', (idx.importsByFile.get(PSVC) || []).some(function (e) { return e.raw.indexOf('Symfony') === 0 && e.resolved === null; }));
+    ok('php · paren-less require resolves beside importer', (idx.importsByFile.get(PSVC) || []).some(function (e) { return e.raw === 'legacy.php' && e.resolved === 'phpapp/src/legacy.php'; }));
+    ok('php · ServiceTest.php classified as a test', idx.tests.indexOf('phpapp/tests/ServiceTest.php') !== -1);
     ok('index · importCount > 0', (idx.importCount || 0) > 0, String(idx.importCount));
     /* packer respects budget and never emits a line number past a file's length */
     var packed = packSmartContext('where is API_BASE_URL defined', 4000);

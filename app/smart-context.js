@@ -32,7 +32,7 @@ var README_NAMES = /^readme(\.|$)/i;
 var LOWVALUE_PATH = /(\.min\.|\.lock$|-lock\.|\.snap$|\.map$|\.d\.ts$|\bfixtures?\b|\b__snapshots__\b|\bmigrations\b|\bgenerated\b)/i;
 /* test detection across ecosystems: JS/TS .test/.spec, Go/py _test., Ruby _spec.,
    Python test_*.py prefix, tests/ or spec/ directories, Java FooTest / C# FooTests */
-var TEST_PATH = /(\.test\.|\.spec\.|_test\.|_spec\.|\/test_[^\/]*\.py$|\btests?\/|\bspec\/|\b__tests__\b|tests?\.(java|cs)$)/i;
+var TEST_PATH = /(\.test\.|\.spec\.|_test\.|_spec\.|\/test_[^\/]*\.py$|\btests?\/|\bspec\/|\b__tests__\b|tests?\.(java|cs|kt|swift|php)$)/i;
 
 /* language-aware token estimate — code tokenizes denser than prose, so one
    chars-per-token divisor per family beats a flat /4 */

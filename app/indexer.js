@@ -23,6 +23,12 @@ var DEF_CJ_METHOD_RE = /^\s*(?:(?:public|private|protected|internal|static|final
 var DEF_CS_PROP_RE = /^\s*(?:(?:public|private|protected|internal|static|virtual|override|abstract|sealed|required)\s+)+(?:[\w$.<>\[\],?]+\s+)*([A-Za-z_$][\w$]*)\s*\{\s*(?:get|set|init)\b/;
 /* Ruby attribute declarations are the class's public surface */
 var DEF_RB_ATTR_RE = /^\s*attr_(?:accessor|reader|writer)\s+(:\w+(?:\s*,\s*:\w+)*)/;
+/* Kotlin declarations, gated to .kt — `fun`/`object`/`val` ungated would index
+   Markdown prose ("fun facts…"). Optional generics + extension receivers so
+   `fun <T> map()` and `fun String.shout()` capture the real name. */
+var DEF_KT_RE = /^\s*(?:(?:public|private|protected|internal|open|abstract|final|sealed|data|inner|inline|suspend|operator|override|const|lateinit|annotation|value|enum)\s+)*(fun|class|interface|object|val|var|typealias)\s+(?:<[^>]*>\s*)?(?:[A-Za-z_][\w.<>]*\.)?([A-Za-z_]\w*)/;
+/* Swift declarations the global regex misses (protocol/extension/actor/open-prefixed) */
+var DEF_SWIFT_RE = /^\s*(?:(?:public|private|internal|fileprivate|open|final|static|indirect|mutating|override)\s+)*(protocol|extension|actor|class|struct|enum|func|typealias)\s+([A-Za-z_]\w*)/;
 /* C# namespace declarations (braced and file-scoped) — recorded for using-resolution */
 var CS_NAMESPACE_RE = /^\s*namespace\s+([\w.]+)/;
 var DEF_ASSIGN_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:const|let|var|public|private|protected|static|readonly)?\s*([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s+)?(?:function\*?\b|\([^()]*\)\s*(?::[^={]+)?=>|class\b|\([^)]*\)\s*\{)/;
@@ -42,15 +48,19 @@ var IMPORT_RES = [
   { re: /\bimport\s+(?:[\w${},*\s]+\s+from\s+)?['"]([^'"]+)['"]/, lang: null },     /* import x from 'm' | import 'm' */
   { re: /\bexport\s+(?:[\w${},*\s]+)\s+from\s+['"]([^'"]+)['"]/, lang: null },      /* export … from 'm' */
   { re: /\brequire\(\s*['"]([^'"]+)['"]\s*\)/, lang: null },                        /* require('m') */
-  { re: /^\s*(?:pub\s+)?use\s+([A-Za-z_][\w:]*)/, lang: { rust: 1, php: 1 } },      /* rust: use crate::a::b (php `use` kept as before) */
+  { re: /^\s*(?:pub\s+)?use\s+([A-Za-z_][\w:]*)/, lang: { rust: 1 } },              /* rust: use crate::a::b */
   { re: /^\s*(?:pub\s+)?mod\s+([A-Za-z_]\w*)\s*;/, lang: { rust: 1 } },             /* rust: mod foo; */
   { re: /^\s*require(?:_relative)?\s+['"]([^'"]+)['"]/, lang: { ruby: 1 } },        /* ruby: require 'x' | require_relative 'x' */
+  { re: /^\s*use\s+(?:function\s+|const\s+)?([A-Za-z_][\w\\]*)/, lang: { php: 1 } },/* php: use App\Ns\Class; (full backslashed path) */
+  { re: /^\s*(?:require|include)(?:_once)?\s+(?:__DIR__\s*\.\s*)?['"]([^'"]+)['"]\s*;/, lang: { php: 1 } }, /* php: require 'x.php'; */
+  { re: /^\s*import\s+([\w.]+?)(?:\.\*)?(?:\s+as\s+\w+)?\s*;?\s*$/, lang: { kotlin: 1 } }, /* kotlin: import a.b.C [as D] — no semicolons */
+  { re: /^\s*import\s+(?:(?:class|struct|func|enum|protocol|typealias|var|let)\s+)?([A-Za-z_][\w.]*)\s*$/, lang: { swift: 1 } }, /* swift: import Module */
   { re: /^\s*(?:global\s+)?using\s+(?:static\s+)?(?:\w+\s*=\s*)?([A-Za-z_][\w.]*)\s*;/, lang: { 'c#': 1 } }, /* c#: using Ns; — shape excludes using-statements */
   { re: /^\s*import\s+(?:static\s+)?([\w.]+?)(?:\.\*)?\s*;/, lang: { java: 1 } },   /* java: import a.b.C; | import static a.b.C.m; | a.b.* */
   { re: /^\s*from\s+([.\w]+)\s+import\b/, lang: { python: 1 } },                    /* py: from m import … (incl. relative) */
   { re: /^\s*import\s+([\w.]+)/, lang: { python: 1 } }                              /* py: import m */
 ];
-var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.rb', '.php', '.java', '.cs', '.vue', '.svelte'];
+var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.rb', '.php', '.java', '.cs', '.vue', '.svelte', '.kt', '.swift'];
 /* export-shaped lines the definition regexes don't cover: JS/TS named re-exports
    and CommonJS. Declaration exports (export function x / pub fn / Go capitals)
    are detected off the already-matched definition instead — no second pass. */
@@ -90,6 +100,7 @@ function dirOf(path) { return path.indexOf('/') === -1 ? '' : path.slice(0, path
 var idxAlias = [], idxGoModule = '', idxWorkspace = [];
 var idxPkgMeta = {};  /* package.json dir -> { exports, imports, main } */
 var idxCrates = [];   /* Cargo.toml [package] names (hyphens→underscores) -> crate dir */
+var idxPsr4 = [];     /* composer.json psr-4 entries { prefix: 'App\\', dir }, longest first */
 function joinPath(a, b) {
   var parts = (a ? a.split('/') : []).concat(b ? b.split('/') : []), stack = [];
   parts.forEach(function (s) { if (s === '' || s === '.') return; if (s === '..') stack.pop(); else stack.push(s); });
@@ -146,10 +157,20 @@ function selfModDir(f) {
   return (b === 'mod.rs' || b === 'lib.rs' || b === 'main.rs') ? dirOf(f) : f.slice(0, -3);
 }
 function buildResolvers(paths) {
-  idxAlias = []; idxGoModule = ''; idxWorkspace = []; idxPkgMeta = {}; idxCrates = [];
+  idxAlias = []; idxGoModule = ''; idxWorkspace = []; idxPkgMeta = {}; idxCrates = []; idxPsr4 = [];
   paths.forEach(function (p) {
     var nm = p.slice(p.lastIndexOf('/') + 1).toLowerCase();
-    if (nm === 'package.json') {
+    if (nm === 'composer.json') {
+      try {
+        var cj = JSON.parse(st.files.get(p).content), cdir = dirOf(p);
+        [(cj.autoload || {})['psr-4'], (cj['autoload-dev'] || {})['psr-4']].forEach(function (map) {
+          if (map) Object.keys(map).forEach(function (pref) {
+            var tgt = Array.isArray(map[pref]) ? map[pref][0] : map[pref];
+            if (typeof tgt === 'string') idxPsr4.push({ prefix: pref, dir: joinPath(cdir, tgt) });
+          });
+        });
+      } catch (e) {}
+    } else if (nm === 'package.json') {
       try {
         var pj = JSON.parse(st.files.get(p).content), pdir = dirOf(p) || '.';
         idxPkgMeta[pdir] = { exports: normExports(pj.exports), imports: pj.imports || null, main: typeof pj.main === 'string' ? pj.main : '' };
@@ -178,6 +199,7 @@ function buildResolvers(paths) {
       if (mm) idxGoModule = mm[1].replace(/\/+$/, '');
     }
   });
+  idxPsr4.sort(function (a, b) { return b.prefix.length - a.prefix.length; }); /* longest prefix wins */
   detectPackages(paths).forEach(function (pk) { if (pk.name) idxWorkspace.push({ name: pk.name, dir: pk.dir === '.' ? '' : pk.dir }); });
 }
 /* try a resolved base against known extensions and index-file conventions */
@@ -220,20 +242,58 @@ function resolveImport(fromFile, mod) {
     }
     var pr = resolveCand(mod.replace(/\./g, '/')); if (pr) return pr;
   }
-  /* Java dotted imports: com.foo.Bar under a source root aligned off the importer's
-     own path, then repo root and Maven conventions; `import static a.b.C.m` retries
-     with the member segment dropped. */
-  if (ext === 'java' && mod.indexOf('.') !== -1 && mod.indexOf('/') === -1) {
+  /* Java/Kotlin dotted imports: com.foo.Bar under a source root aligned off the
+     importer's own path, then repo root and Maven/Gradle conventions;
+     `import static a.b.C.m` retries with the member segment dropped. */
+  if ((ext === 'java' || ext === 'kt') && mod.indexOf('.') !== -1 && mod.indexOf('/') === -1) {
     var jsegs = mod.split('.');
     var jroots = [], jdir = dirOf(fromFile) + '/';
     var jcut = jdir.lastIndexOf('/' + jsegs[0] + '/');
     if (jcut !== -1) jroots.push(jdir.slice(0, jcut + 1));
-    jroots.push('', 'src/main/java/', 'src/test/java/', 'src/');
+    jroots.push('', 'src/main/java/', 'src/main/kotlin/', 'src/test/java/', 'src/test/kotlin/', 'src/');
     for (var jr = 0; jr < jroots.length; jr++) {
       var jc = resolveCand(jroots[jr] + jsegs.join('/'));
       if (!jc && jsegs.length > 1) jc = resolveCand(jroots[jr] + jsegs.slice(0, -1).join('/'));
       if (jc && jc !== fromFile) return jc;
     }
+    return null;
+  }
+  /* Swift: module names map to SwiftPM's Sources/<Module>/ convention when it
+     exists; otherwise honest external (Foundation, UIKit…). Best-effort by design. */
+  if (ext === 'swift') {
+    var smod = mod.split('.')[0];
+    var srcAt = fromFile.indexOf('/Sources/');
+    if (srcAt !== -1) {
+      var sroot = fromFile.slice(0, srcAt + 9); /* keep the trailing slash */
+      var sw1 = resolveCand(sroot + smod + '/' + smod) || resolveCand(sroot + smod);
+      if (sw1 && sw1 !== fromFile) return sw1;
+    }
+    var sw2 = resolveCand(joinPath('Sources', smod + '/' + smod)) || resolveCand(joinPath('Sources', smod)) || resolveCand(joinPath(dirOf(fromFile), smod));
+    if (sw2 && sw2 !== fromFile) return sw2;
+    return null;
+  }
+  /* PHP: namespaced `use` via composer psr-4 (longest prefix), then a backslash→
+     slash path guess under common roots; path-ish require/include resolves beside
+     the importer (a leading '/' usually means a stripped __DIR__ concatenation). */
+  if (ext === 'php') {
+    if (mod.indexOf('\\') !== -1) {
+      for (var pi = 0; pi < idxPsr4.length; pi++) {
+        if (mod.indexOf(idxPsr4[pi].prefix) !== 0) continue;
+        var prest = mod.slice(idxPsr4[pi].prefix.length).replace(/\\/g, '/');
+        var pc = resolveCand(joinPath(idxPsr4[pi].dir, prest));
+        if (pc && pc !== fromFile) return pc;
+      }
+      var pflat = mod.replace(/\\/g, '/'), proots = ['', 'src/', 'app/', 'lib/'];
+      for (var pr = 0; pr < proots.length; pr++) {
+        var pg = resolveCand(proots[pr] + pflat);
+        if (pg && pg !== fromFile) return pg;
+      }
+      return null;
+    }
+    var ph1 = resolveCand(joinPath(dirOf(fromFile), mod.replace(/^\//, '')));
+    if (ph1 && ph1 !== fromFile) return ph1;
+    var ph2 = resolveCand(mod.replace(/^\//, ''));
+    if (ph2 && ph2 !== fromFile) return ph2;
     return null;
   }
   /* Ruby: require_relative resolves beside the importer; bare require tries the
@@ -369,6 +429,8 @@ function buildIndex() {
         if (mcj) { kind = 'method'; sym = mcj[1]; }
         else if (ext === 'cs') { var mcp = DEF_CS_PROP_RE.exec(ln); if (mcp) { kind = 'property'; sym = mcp[1]; } }
       }
+      else if (ext === 'kt') { var mkt = DEF_KT_RE.exec(ln); if (mkt) { kind = mkt[1]; sym = mkt[2]; } }
+      else if (ext === 'swift') { var msw = DEF_SWIFT_RE.exec(ln); if (msw) { kind = msw[1]; sym = msw[2]; } }
       if (!sym) {
         if (ext === 'py') { var mp = DEF_PY_ASSIGN_RE.exec(ln); if (mp) { kind = 'const'; sym = mp[1]; } }
         else { var ma = DEF_ASSIGN_RE.exec(ln); if (ma) { kind = assignKind(ln); sym = ma[1]; } }
@@ -382,6 +444,7 @@ function buildIndex() {
         else if (ext === 'rs' && /^\s*pub\b/.test(ln)) recordExport(p, sym, i + 1, kind);
         else if (isGo && /^[A-Z]/.test(sym)) recordExport(p, sym, i + 1, kind);
         else if ((ext === 'java' || ext === 'cs') && /^\s*public\b/.test(ln)) recordExport(p, sym, i + 1, kind);
+        else if (ext === 'kt' && !/^\s*(?:private|protected|internal)\b/.test(ln)) recordExport(p, sym, i + 1, kind);
       }
       /* Ruby attr declarations: each :name is a public accessor */
       if (ext === 'rb') {
