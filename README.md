@@ -111,6 +111,7 @@ LOCAL-engine intents: `def`, `refs`, `imports`, `importers`, `related`, `symbols
 - **Alias / `exports` resolution is best-effort** — tsconfig `paths` and workspace package names resolve; full `package.json` `exports`/`imports` maps and non-relative cross-crate Rust `use` are not.
 - **File System Access reload is Chromium-only** — Firefox/Safari lack `showDirectoryPicker`, so saved projects there restore settings/selection only and ask you to re-drop the folder (never file contents, in any browser).
 - **Indexing is synchronous** — a multi-thousand-file scan briefly blocks the tab; a progress status is shown first. Tuned for medium repos (~5–8k files).
+- **Ingest caps** — 512KB per file, 8,000 files, ~300MB of text total. Everything skipped is counted, attributed, and reviewable in `[ REVIEW SKIPPED ]`.
 
 ### Security / CSP
 

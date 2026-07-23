@@ -144,7 +144,7 @@ function afterIngest() {
   var totSkipped = st.skipped.binary + st.skipped.big + st.skipped.dirs + st.skipped.user + st.skipped.over + st.skipped.readerr + st.skipped.memcap;
   var note = $('skipnote');
   note.hidden = !s.length;
-  if (s.length) note.textContent = '// ' + totSkipped + ' skipped: ' + s.join(' · ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files.';
+  if (s.length) note.textContent = '// ' + totSkipped + ' skipped: ' + s.join(' · ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files, ~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB total.';
   $('skiprevrow').hidden = !st.skippedFiles.length;
   updateSkipBadge();
   var base = st.files.size + ' file' + (st.files.size === 1 ? '' : 's') + ' loaded into memory';
