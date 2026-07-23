@@ -2,6 +2,7 @@ import { sortedPaths, st } from './state.js';
 import { GROUND_EXCERPT_PAD, GROUND_EXCERPT_TOK, GROUND_MAX_CITES, GROUND_MAX_EVIDENCE, GROUND_MAX_TOK, buildProjectMap, estTokens, getBudget, numberLines, packSmartContext } from './smart-context.js';
 import { dirOf, getIndex } from './indexer.js';
 import { classifyIntent, pickSymbol, runInvestigation, symLookup } from './local.js';
+import { groundKinds } from './intents.js';
 import { fmtTok } from './helpers.js';
 /* ============ PROMPT ASSEMBLY ============ */
 var FENCE = '```meridian-trace';
@@ -49,11 +50,10 @@ function assembleContext() {
 
 /* Phase 2 — evidence-kind label for a step/intent, so every excerpt in the pack
    is attributed by what produced it. The engine's evidence.kind stays 'evidence';
-   this is a display/label mapping only, never a change to the deterministic data. */
-var GROUND_KIND = { def: 'definition', refs: 'reference', importers: 'importer', imports: 'import',
-  related: 'related', symbols: 'symbol', structure: 'structure', tests: 'test', entries: 'entry-point',
-  recent: 'recent-change', dir: 'directory', search: 'match', listType: 'file',
-  reason: 'evidence', plain: 'evidence', help: 'evidence' };
+   this is a display/label mapping only, never a change to the deterministic data.
+   Derived from the intent registry — every reasoning instance labels its own
+   evidence; unknown kinds fall back to 'evidence' at the lookup sites. */
+var GROUND_KIND = groundKinds();
 
 /* Line-true excerpt around an evidence span. Reuses numberLines so the numbers the
    model sees are the file's real 1-indexed lines — never altered. A bare single line

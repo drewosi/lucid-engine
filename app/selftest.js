@@ -3,6 +3,7 @@ import { buildIndex, detectLang } from './indexer.js';
 import { st } from './state.js';
 import { SAMPLE_PROJECT } from './demo.js';
 import { classifyIntent } from './local.js';
+import { INTENTS, runInvestigation } from './intents.js';
 import { extractTrace } from './trace.js';
 import { httpErrorText, parseStreamEvent } from './chat.js';
 import { ingestFile } from './ingest.js';
@@ -95,8 +96,45 @@ function runSelfTests() {
     ok('packer · within budget', packed.tokens <= 4000, packed.tokens + ' / 4000');
     ok('packer · emits FILE markers', /═══ FILE:/.test(packed.text));
     ok('packer · line-numbered content present', /\d+│/.test(packed.text) || packed.included.every(function (x) { return x.whole; }));
-    /* intent routing returns a decision */
-    ok('intent · classifyIntent returns a kind', !!(classifyIntent('where is addTodo defined') || {}).kind);
+    /* intent routing — the full query → kind table, command grammar + NL cascade.
+       Order-sensitive: several rows exist purely to pin cascade precedence. */
+    var ROUTES = [
+      ['def addTodo', 'def'],
+      ['where is addTodo defined', 'def'],
+      ['refs addTodo', 'refs'],
+      ['what references addTodo', 'refs'],
+      ['who calls addTodo', 'refs'],
+      ['importers store.js', 'importers'],
+      ['what imports store.js', 'importers'],
+      ['what does server.js import', 'imports'],
+      ['files related to store.js', 'related'],
+      ['project structure', 'structure'],
+      ['where are the tests', 'tests'],
+      ['entry points', 'entries'],
+      ['what changed recently', 'recent'],
+      ['recent 5', 'recent'],
+      ['list js files', 'listType'],
+      ['search API_BASE_URL', 'search'],
+      ['dir src', 'dir'],
+      ['symbols', 'symbols'],
+      ['help', 'help'],
+      ['why is the store slow', 'reason'],
+      ['summarize everything about it', 'plain']
+    ];
+    ROUTES.forEach(function (rc) {
+      var got = classifyIntent(rc[0]) || {};
+      ok('route · “' + rc[0] + '” → ' + rc[1], got.kind === rc[1], got.kind !== rc[1] ? 'got ' + got.kind : '');
+    });
+    ok('route · reason needs a model', classifyIntent('why is the store slow').needsModel === true);
+    ok('route · def arg picks the symbol', classifyIntent('where is addTodo defined').arg === 'addTodo');
+    ok('route · importers arg picks the path', classifyIntent('what imports store.js').arg === 'store.js');
+    /* registry consistency — every reasoning instance is a complete entry */
+    ok('registry · entries complete (kind/ground/run)', INTENTS.every(function (it) {
+      return typeof it.kind === 'string' && it.kind && typeof it.ground === 'string' && typeof it.run === 'function'
+        && (it.route === null || typeof it.route === 'function') && Array.isArray(it.aliases);
+    }));
+    ok('registry · kinds unique', new Set(INTENTS.map(function (it) { return it.kind; })).size === INTENTS.length);
+    ok('registry · plain is the terminal fallback', INTENTS[INTENTS.length - 1].kind === 'plain');
     /* trace parser fallbacks */
     ok('trace · clean fence', extractTrace('a\n```meridian-trace\n{"steps":[{"action":"x"}]}\n```').degraded === null);
     ok('trace · ```json salvaged', extractTrace('a\n```json\n{"steps":[{"action":"x"}]}\n```').degraded === 'salvaged');

@@ -1,0 +1,402 @@
+import { sortedPaths, st } from './state.js';
+import { queryTerms } from './smart-context.js';
+import { dirOf, fileExt, getIndex } from './indexer.js';
+import { localSearchData } from './actions.js';
+import { fmtTok } from './helpers.js';
+/* ============ INTENT REGISTRY (DETERMINISTIC REASONING INSTANCES) ============
+   The single source of truth for every deterministic reasoning instance the
+   LOCAL engine knows. Each entry is one self-contained intent:
+     kind       — stable id used across router, dispatch and grounding
+     aliases    — command-grammar first words (`def x`, `refs y`, …)
+     ground     — evidence-kind label the grounding bridge attributes excerpts by
+     helpCmd    — the command's entry in the LOCAL help text ('' = no command)
+     needsModel — true only for intents that honestly require model reasoning
+     route(s, lo, idx) — natural-language matcher; returns {arg} or null.
+                  ARRAY ORDER IS THE ROUTING CASCADE — earlier entries win.
+     run(arg, q, idx)  — the investigation: real operations over the index,
+                  returning { steps, verdict, actions?, answer }. No fabrication.
+   Adding a reasoning instance = adding ONE entry here. DOM-free by design so
+   the registry is reusable from the grounding bridge and the self-tests.     */
+
+var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Evidence collection'];
+var CAP_MODEL = ['Architectural reasoning', 'Natural-language synthesis', 'Root-cause analysis', 'Refactoring recommendations'];
+
+function localEvidence(h) {
+  return { file: h.p, startLine: h.line, endLine: h.line, quote: String(h.text).trim().slice(0, 120), kind: 'evidence' };
+}
+function lineText(file, line) {
+  var f = st.files.get(file); if (!f) return '';
+  return (f.content.split('\n')[line - 1] || '').trim().slice(0, 120);
+}
+function evAt(file, line) { return { file: file, startLine: line, endLine: line, quote: lineText(file, line), kind: 'evidence' }; }
+
+/* resolve a natural-language argument to a loaded file path (basename-aware) */
+function resolveToFile(arg) {
+  if (!arg) return null;
+  if (st.files.has(arg)) return arg;
+  var base = arg.slice(arg.lastIndexOf('/') + 1).toLowerCase(), la = arg.toLowerCase();
+  var exact = null, contains = null;
+  st.files.forEach(function (f, p) {
+    var b = p.slice(p.lastIndexOf('/') + 1).toLowerCase();
+    if (b === base) { if (!exact) exact = p; }
+    else if (!contains && (b.indexOf(base) !== -1 || p.toLowerCase().indexOf(la) !== -1)) contains = p;
+  });
+  return exact || contains;
+}
+/* look a symbol up in the index: exact → last dotted segment → case-insensitive */
+function symLookup(name, idx) {
+  if (!name) return [];
+  if (idx.symbols.has(name)) return idx.symbols.get(name);
+  var last = name.split('.').pop();
+  if (last !== name && idx.symbols.has(last)) return idx.symbols.get(last);
+  var lc = name.toLowerCase(), out = [];
+  idx.symbols.forEach(function (arr, k) { if (k.toLowerCase() === lc) out = out.concat(arr); });
+  return out;
+}
+
+var STOP_INTENT = { where: 1, what: 1, which: 1, who: 1, does: 1, do: 1, is: 1, are: 1, the: 1, file: 1, files: 1, function: 1, functions: 1, method: 1, methods: 1, symbol: 1, symbols: 1, class: 1, classes: 1, defined: 1, definition: 1, declared: 1, reference: 1, references: 1, referenced: 1, import: 1, imports: 1, imported: 1, related: 1, project: 1, structure: 1, test: 1, tests: 1, entry: 1, point: 1, points: 1, recent: 1, recently: 1, show: 1, list: 1, find: 1, all: 1, call: 1, calls: 1, uses: 1, used: 1, depend: 1, depends: 1, this: 1, that: 1, for: 1, and: 1, with: 1 };
+/* pick the most identifier-like token from a question (for def/refs/symbols) */
+function pickSymbol(q, idx) {
+  var bt = q.match(/`([^`]+)`/); if (bt) return bt[1].trim();
+  var qq = q.match(/["“”']([^"“”']+)["“”']/); if (qq) return qq[1].trim();
+  var toks = q.match(/[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/g) || [];
+  if (idx) { for (var i = 0; i < toks.length; i++) { if (symLookup(toks[i], idx).length) return toks[i]; } }
+  var fancy = toks.filter(function (t) { return (/[A-Z]/.test(t) || t.indexOf('_') !== -1 || t.indexOf('.') !== -1 || /\d/.test(t)) && !STOP_INTENT[t.toLowerCase()]; });
+  if (fancy.length) return fancy.sort(function (a, b) { return b.length - a.length; })[0];
+  var terms = queryTerms(q); return terms.length ? terms[0] : '';
+}
+/* pick a path-ish token from a question (for imports/importers/related/dir) */
+function pickPathish(q) {
+  var bt = q.match(/`([^`]+)`/); if (bt) return bt[1].trim();
+  var qq = q.match(/["“”']([^"“”']+)["“”']/); if (qq) return qq[1].trim();
+  var withExt = q.match(/[\w./-]*[\w-]\.[A-Za-z]{1,6}\b/); if (withExt) return withExt[0];
+  var withSlash = q.match(/[\w.-]+\/[\w./-]+/); if (withSlash) return withSlash[0];
+  return pickSymbol(q);
+}
+
+var LOCAL_VERDICT = function () { return { local: true, text: 'KNOWN LOCALLY' }; };
+
+/* shared evidence-gathering used by plain + reason: term search → ranked files */
+function gatherTerrain(q, steps) {
+  var terms = queryTerms(q), perFile = {};
+  steps.push({ action: 'extract search terms', note: terms.length ? terms.join(', ') : 'none', evidence: [], status: 'done' });
+  terms.slice(0, 4).forEach(function (t) {
+    var r = localSearchData(t, 'text');
+    steps.push({ action: 'search “' + t + '”', note: r.hits.length ? r.hits.length + ' hit' + (r.hits.length === 1 ? '' : 's') : 'no matches', evidence: r.hits.slice(0, 4).map(localEvidence), status: 'done' });
+    r.hits.forEach(function (h) { (perFile[h.p] || (perFile[h.p] = { count: 0, first: h })).count++; });
+  });
+  var ranked = Object.keys(perFile).map(function (p) {
+    return { p: p, count: perFile[p].count, first: perFile[p].first, score: perFile[p].count * 10 + (st.files.has(p) ? st.files.get(p).base : 0) };
+  }).sort(function (a, b) { return b.score - a.score; }).slice(0, 8);
+  if (ranked.length) steps.push({ action: 'rank relevant files', note: ranked.length + ' file' + (ranked.length === 1 ? '' : 's') + ' · hits + importance', evidence: ranked.map(function (r) { return localEvidence(r.first); }), status: 'done' });
+  return { terms: terms, ranked: ranked };
+}
+
+/* data-level directory summary + recent, mirroring runDirSummary / runRecent */
+function localDirData(dirPath) {
+  var clean = dirPath.replace(/\/+$/, '');
+  var prefix = clean === '.' || clean === '' ? '' : clean + '/';
+  var items = [];
+  st.files.forEach(function (f, p) { if (!prefix || p.indexOf(prefix) === 0) items.push({ p: p, f: f }); });
+  if (!items.length) return { answer: 'No loaded files under “' + dirPath + '”.', steps: [{ n: 1, action: 'summarize ' + (prefix || './'), note: 'no files', evidence: [] }] };
+  var tok = 0;
+  items.forEach(function (it) { tok += it.f.tokens; });
+  var largest = items.slice().sort(function (a, b) { return b.f.tokens - a.f.tokens; }).slice(0, 5);
+  var ans = '`' + (prefix || './') + '` — ' + items.length + ' file' + (items.length === 1 ? '' : 's') + ' ≈' + fmtTok(tok) + ' tokens. Largest:\n\n'
+    + largest.map(function (it, i) { return (i + 1) + '. `' + it.p + '` ≈' + fmtTok(it.f.tokens); }).join('\n');
+  return { answer: ans, steps: [{
+    n: 1, action: 'summarize ' + (prefix || './'),
+    note: items.length + ' files ≈' + fmtTok(tok) + ' tokens',
+    evidence: largest.map(function (it) { return { file: it.p, startLine: 1, endLine: 1, quote: '' }; })
+  }] };
+}
+function localRecentData(countStr) {
+  var n = Math.min(Math.max(parseInt(countStr, 10) || 10, 1), 20);
+  var all = [];
+  st.files.forEach(function (f, p) { all.push({ p: p, m: f.mtime }); });
+  all.sort(function (a, b) { return b.m - a.m; });
+  var top = all.slice(0, n);
+  var ans = top.length
+    ? 'Most recently modified (from file mtimes):\n\n' + top.map(function (it, i) {
+        return (i + 1) + '. `' + it.p + '`' + (it.m ? ' · ' + new Date(it.m).toISOString().slice(0, 10) : '');
+      }).join('\n')
+    : 'No files loaded.';
+  return { answer: ans, steps: [{
+    n: 1, action: 'list recent files', note: top.length + ' file' + (top.length === 1 ? '' : 's'),
+    evidence: top.map(function (it) { return { file: it.p, startLine: 1, endLine: 1, quote: '' }; })
+  }] };
+}
+
+/* ---- The registry. Array order IS the natural-language routing cascade. ---- */
+var INTENTS = [
+
+  { kind: 'help', aliases: ['help'], ground: 'evidence', helpCmd: '', needsModel: false,
+    route: null,
+    run: function () {
+      return { steps: [{ action: 'list capabilities', note: 'local engine reference', evidence: [], status: 'done' }],
+        verdict: LOCAL_VERDICT(),
+        answer: '**Meridian LOCAL engine** — deterministic project intelligence, no AI, no network.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n' + LOCAL_HELP };
+    } },
+
+  { kind: 'entries', aliases: ['entries', 'entrypoints'], ground: 'entry-point', helpCmd: '`entries`', needsModel: false,
+    route: function (s, lo) { return /\b(entry ?points?|entrypoints?|main file|entry file)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      steps.push({ action: 'read entry-point classification', note: idx.entries.length + ' entry point' + (idx.entries.length === 1 ? '' : 's'), evidence: idx.entries.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: idx.entries.length ? 'Likely entry points (index/main/app/server/cli/core/lib):\n\n' + idx.entries.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') : 'No conventional entry-point filenames detected.' };
+    } },
+
+  { kind: 'recent', aliases: ['recent'], ground: 'recent-change', helpCmd: '`recent <n>`', needsModel: false,
+    route: function (s, lo) {
+      if (!/\b(recent(ly)?|latest|newest|last changed|what changed|changed recently)\b/.test(lo)) return null;
+      var num = lo.match(/\b(\d{1,2})\b/); return { arg: num ? num[1] : '10' };
+    },
+    run: function (arg) {
+      var rr = localRecentData(arg || '10'); rr.steps.forEach(function (step) { step.status = 'done'; });
+      return { steps: rr.steps, verdict: LOCAL_VERDICT(), answer: rr.answer };
+    } },
+
+  { kind: 'dir', aliases: ['dir'], ground: 'directory', helpCmd: '`dir <path>`', needsModel: false,
+    route: null,
+    run: function (arg) {
+      var dd = localDirData(arg || '.'); dd.steps.forEach(function (step) { step.status = 'done'; });
+      return { steps: dd.steps, verdict: LOCAL_VERDICT(), answer: dd.answer };
+    } },
+
+  { kind: 'search', aliases: ['search'], ground: 'match', helpCmd: '`search <text|regex>`', needsModel: false,
+    route: null,
+    run: function (arg) {
+      if (!arg) return { steps: [{ action: 'parse command', note: 'search needs a pattern', evidence: [], status: 'done' }], verdict: LOCAL_VERDICT(), answer: '`search` needs a pattern, e.g. `search cache_control`.' };
+      var steps = [];
+      var sr = localSearchData(arg, 'text');
+      steps.push({ action: 'search “' + arg + '”', note: sr.hits.length + ' hit' + (sr.hits.length === 1 ? '' : 's') + ' in ' + sr.filesHit + ' file' + (sr.filesHit === 1 ? '' : 's'), evidence: sr.hits.slice(0, 12).map(localEvidence), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(), answer: sr.hits.length ? 'Found ' + (sr.hits.length >= sr.cap ? sr.cap + '+' : sr.hits.length) + ' match' + (sr.hits.length === 1 ? '' : 'es') + ' for `' + arg + '`. Chips open each at its line.' : 'No matches for `' + arg + '`.' };
+    } },
+
+  { kind: 'structure', aliases: ['structure', 'overview'], ground: 'structure', helpCmd: '`structure`', needsModel: false,
+    route: function (s, lo) { return /\b(project structure|structure of|overview|directories|packages|project map|top-?level|layout|organi[sz]ation|how is .* organi[sz]ed|what.*directories)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var paths = sortedPaths(), dirCounts = {};
+      paths.forEach(function (p) { var d = dirOf(p) || '.'; dirCounts[d] = (dirCounts[d] || 0) + 1; });
+      var topDirs = Object.keys(dirCounts).sort(function (a, b) { return dirCounts[b] - dirCounts[a]; }).slice(0, 8);
+      var langs = Object.keys(idx.byExt).sort(function (a, b) { return idx.byExt[b] - idx.byExt[a]; }).slice(0, 6);
+      steps.push({ action: 'read the project index', note: idx.fileCount + ' files · ' + idx.packages.length + ' packages · ' + idx.symbolCount + ' symbols', evidence: idx.entries.slice(0, 4).map(function (p) { return evAt(p, 1); }), status: 'done' });
+      steps.push({ action: 'map directories & languages', note: topDirs.length + ' directories', evidence: idx.packages.slice(0, 4).map(function (pk) { return evAt(pk.manifest, 1); }), status: 'done' });
+      var sans = '**Project structure** — ' + idx.fileCount + ' files, ' + idx.symbolCount + ' symbols.\n\n'
+        + '**Packages:** ' + (idx.packages.length ? idx.packages.map(function (pk) { return '`' + (pk.name || pk.dir) + '`'; }).join(', ') : 'none detected (no build manifests)') + '\n'
+        + '**Entry points:** ' + (idx.entries.length ? idx.entries.map(function (p) { return '`' + p + '`'; }).join(', ') : 'none detected') + '\n'
+        + '**Tests:** ' + (idx.tests.length ? idx.tests.length + ' file' + (idx.tests.length === 1 ? '' : 's') : 'none detected') + '\n'
+        + '**Top directories:** ' + topDirs.map(function (d) { return '`' + d + '` (' + dirCounts[d] + ')'; }).join(', ') + '\n'
+        + '**Languages:** ' + langs.map(function (e) { return e + ' (' + idx.byExt[e] + ')'; }).join(', ');
+      return { steps: steps, verdict: LOCAL_VERDICT(), answer: sans };
+    } },
+
+  { kind: 'tests', aliases: ['tests'], ground: 'test', helpCmd: '`tests`', needsModel: false,
+    route: function (s, lo) { return /\btests?\b/.test(lo) && /\b(where|find|list|show|which|are|any)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      steps.push({ action: 'read test classification from the index', note: idx.tests.length + ' test file' + (idx.tests.length === 1 ? '' : 's'), evidence: idx.tests.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: idx.tests.length ? 'Detected ' + idx.tests.length + ' test file' + (idx.tests.length === 1 ? '' : 's') + ' (patterns: `.test.` `.spec.` `_test` `tests/` `__tests__`):\n\n' + idx.tests.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') : 'No test files detected by the standard patterns (`.test.` `.spec.` `_test` `tests/` `__tests__`). That is a real finding about this project, not a limitation.' };
+    } },
+
+  { kind: 'listType', aliases: [], ground: 'file', helpCmd: '', needsModel: false,
+    route: function (s, lo) { return /\b(list|show|all)\b/.test(lo) && /\b(files?)\b/.test(lo) && /\b([a-z]{1,6})\b\s+files?\b/.test(lo) ? { arg: s } : null; },
+    run: function (arg, q) {
+      var steps = [];
+      var em = q.toLowerCase().match(/\b(typescript|javascript|python|golang|go|rust|java|ruby|markdown|html|css|json|yaml|c\+\+|c#|[a-z]{1,6})\s+files?\b/);
+      var alias = { typescript: 'ts', javascript: 'js', python: 'py', golang: 'go', rust: 'rs', java: 'java', ruby: 'rb', markdown: 'md', 'c++': 'cpp', 'c#': 'cs' };
+      var want = em ? (alias[em[1]] || em[1]) : '';
+      var matched = sortedPaths().filter(function (p) { return fileExt(p) === want; });
+      steps.push({ action: 'filter files by extension “' + want + '”', note: matched.length + ' file' + (matched.length === 1 ? '' : 's'), evidence: matched.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(), answer: matched.length ? matched.length + ' `.' + want + '` file' + (matched.length === 1 ? '' : 's') + ':\n\n' + matched.slice(0, 25).map(function (p) { return '- `' + p + '`'; }).join('\n') : 'No `.' + want + '` files loaded.' };
+    } },
+
+  { kind: 'related', aliases: ['related'], ground: 'related', helpCmd: '`related`', needsModel: false,
+    route: function (s, lo) { return /\brelated\b|\bconnected to\b|\bassociated with\b|\bneighbou?rs of\b/.test(lo) ? { arg: pickPathish(s) } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var rf = resolveToFile(arg);
+      steps.push({ action: 'resolve “' + arg + '” to a file', note: rf || 'unresolved', evidence: [], status: 'done' });
+      var rel = {};
+      if (rf) {
+        (idx.importsByFile.get(rf) || []).forEach(function (x) { if (x.resolved) rel[x.resolved] = 'imports'; });
+        (idx.importedBy.get(rf) || []).forEach(function (x) { rel[x.file] = 'imported by'; });
+        var d = dirOf(rf), bn = rf.slice(rf.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '').toLowerCase();
+        st.files.forEach(function (f, p) {
+          if (p === rf) return;
+          if (dirOf(p) === d && !rel[p]) rel[p] = 'same directory';
+          else if (!rel[p] && bn.length > 2 && p.toLowerCase().indexOf(bn) !== -1) rel[p] = 'name match';
+        });
+      }
+      var relList = Object.keys(rel).slice(0, 20);
+      steps.push({ action: 'gather relationships (imports · importers · directory · name)', note: relList.length + ' related file' + (relList.length === 1 ? '' : 's'), evidence: relList.map(function (p) { return evAt(p, 1); }), status: 'done' });
+      var rans = !rf ? 'Could not resolve `' + arg + '` to a loaded file.'
+        : relList.length ? 'Files related to `' + rf + '`:\n\n' + relList.map(function (p) { return '- `' + p + '` — ' + rel[p]; }).join('\n')
+        : 'No related files found for `' + rf + '` (no import edges, no directory siblings, no name matches).';
+      return { steps: steps, verdict: LOCAL_VERDICT(), answer: rans };
+    } },
+
+  { kind: 'imports', aliases: ['imports'], ground: 'import', helpCmd: '`imports`', needsModel: false,
+    route: function (s, lo) { return /\bwhat does\b[\s\S]*\bimport\b|\bimports of\b|\bdependencies of\b|\bwhat.*\bdepend(s)? on\b/.test(lo) ? { arg: pickPathish(s) } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var tf2 = resolveToFile(arg);
+      var list = tf2 ? (idx.importsByFile.get(tf2) || []) : [];
+      var resolved = list.filter(function (x) { return x.resolved; }), external = list.filter(function (x) { return !x.resolved; });
+      steps.push({ action: 'resolve “' + arg + '” to a file', note: tf2 || 'unresolved', evidence: [], status: 'done' });
+      steps.push({ action: 'read import statements', note: list.length + ' import' + (list.length === 1 ? '' : 's') + ' · ' + resolved.length + ' internal, ' + external.length + ' external', evidence: list.slice(0, 12).map(function (x) { return evAt(tf2, x.line); }), status: 'done' });
+      var mans = !tf2 ? 'Could not resolve `' + arg + '` to a loaded file.'
+        : list.length ? '`' + tf2 + '` has ' + list.length + ' import' + (list.length === 1 ? '' : 's') + '.\n\n**Internal:** ' + (resolved.map(function (x) { return '`' + x.resolved + '`'; }).join(', ') || 'none') + '\n**External:** ' + (external.map(function (x) { return '`' + x.raw + '`'; }).join(', ') || 'none')
+        : 'No import statements found in `' + tf2 + '`.';
+      return { steps: steps, verdict: LOCAL_VERDICT(), answer: mans };
+    } },
+
+  { kind: 'importers', aliases: ['importers', 'importedby'], ground: 'importer', helpCmd: '`importers`', needsModel: false,
+    route: function (s, lo) { return /\b(imports?|importe(rs|d)?|depend(s|ents?|encies)?|who (imports|uses|depends)|used by|includes)\b/.test(lo) ? { arg: pickPathish(s) } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var tf = resolveToFile(arg);
+      var imps = tf ? (idx.importedBy.get(tf) || []) : [];
+      steps.push({ action: 'resolve “' + arg + '” to a file', note: tf || 'unresolved', evidence: [], status: 'done' });
+      steps.push({ action: 'read importer edges from the index', note: imps.length + ' importer' + (imps.length === 1 ? '' : 's'), evidence: imps.slice(0, 12).map(function (x) { return evAt(x.file, x.line); }), status: 'done' });
+      var ians = !tf ? 'Could not resolve `' + arg + '` to a loaded file.'
+        : imps.length ? '`' + tf + '` is imported by ' + imps.length + ' file' + (imps.length === 1 ? '' : 's') + ':\n\n' + imps.slice(0, 12).map(function (x) { return '- `' + x.file + '` line ' + x.line; }).join('\n')
+        : 'No loaded file imports `' + tf + '`. Either nothing depends on it, or the project uses a bundling/single-file style with no import statements between files (a real architectural fact, not a gap).';
+      return { steps: steps, verdict: LOCAL_VERDICT(), answer: ians };
+    } },
+
+  { kind: 'symbols', aliases: ['symbols'], ground: 'symbol', helpCmd: '`symbols`', needsModel: false,
+    route: function (s, lo, idx) { return /\b(symbols?|functions?|classes|methods)\b/.test(lo) && !/\b(where|defined|definition|reference|references)\b/.test(lo) ? { arg: pickSymbol(s, idx) } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      if (arg) {
+        var matches = [];
+        idx.symbols.forEach(function (defsArr, name) { if (name.toLowerCase().indexOf(arg.toLowerCase()) !== -1) matches.push({ name: name, def: defsArr[0], n: defsArr.length }); });
+        matches.sort(function (a, b) { return a.name.length - b.name.length; });
+        var top = matches.slice(0, 15);
+        steps.push({ action: 'search the symbol index for “' + arg + '”', note: matches.length + ' matching symbol' + (matches.length === 1 ? '' : 's'), evidence: top.map(function (mm) { return evAt(mm.def.file, mm.def.line); }), status: 'done' });
+        return { steps: steps, verdict: LOCAL_VERDICT(),
+          answer: top.length ? matches.length + ' symbol' + (matches.length === 1 ? '' : 's') + ' match `' + arg + '`:\n\n' + top.map(function (mm) { return '- `' + mm.name + '` (' + mm.def.kind + ') — `' + mm.def.file + '` line ' + mm.def.line + (mm.n > 1 ? ' (+' + (mm.n - 1) + ' more)' : ''); }).join('\n') : 'No indexed symbol matches `' + arg + '`.' };
+      }
+      var byFile = {};
+      idx.symbols.forEach(function (defsArr) { defsArr.forEach(function (d) { byFile[d.file] = (byFile[d.file] || 0) + 1; }); });
+      var topFiles = Object.keys(byFile).sort(function (a, b) { return byFile[b] - byFile[a]; }).slice(0, 8);
+      steps.push({ action: 'summarize the symbol index', note: idx.symbolCount + ' definitions · ' + idx.symbols.size + ' unique names', evidence: topFiles.map(function (p) { return evAt(p, 1); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: 'The index holds **' + idx.symbolCount + ' symbol definitions** (' + idx.symbols.size + ' unique names). Densest files:\n\n' + topFiles.map(function (p) { return '- `' + p + '` — ' + byFile[p] + ' symbols'; }).join('\n') + '\n\nAsk `symbols <name>` to find a specific one.' };
+    } },
+
+  { kind: 'refs', aliases: ['refs'], ground: 'reference', helpCmd: '`refs`', needsModel: false,
+    route: function (s, lo, idx) { return /\b(reference|references|referenced|callers?|call sites?|usages?|used by|who calls|what calls|uses of)\b/.test(lo) ? { arg: pickSymbol(s, idx) } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var r = localSearchData(arg, 'refs');
+      steps.push({ action: 'find references to “' + arg + '”', note: r.hits.length + ' hit' + (r.hits.length === 1 ? '' : 's') + ' in ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's'), evidence: r.hits.slice(0, 10).map(localEvidence), status: 'done' });
+      var d2 = symLookup(arg, idx);
+      if (d2.length) steps.push({ action: 'locate its definition', note: d2.length + ' definition' + (d2.length === 1 ? '' : 's'), evidence: d2.slice(0, 4).map(function (d) { return evAt(d.file, d.line); }), status: 'done' });
+      var actions = [{ kind: 'def', command: arg, why: 'jump to where ' + arg + ' is defined' }];
+      return { steps: steps, verdict: LOCAL_VERDICT(), actions: actions,
+        answer: r.hits.length ? '`' + arg + '` is referenced ' + (r.hits.length >= r.cap ? r.cap + '+' : r.hits.length) + ' time' + (r.hits.length === 1 ? '' : 's') + ' across ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's') + '. Chips open each at its line.' : 'No references to `' + arg + '` in the loaded files.' };
+    } },
+
+  { kind: 'def', aliases: ['def'], ground: 'definition', helpCmd: '`def`', needsModel: false,
+    route: function (s, lo, idx) { return /\b(where|location|find|definition|defined|declared|declaration)\b/.test(lo) ? { arg: pickSymbol(s, idx) } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var defs = symLookup(arg, idx);
+      steps.push({ action: 'look up “' + arg + '” in the symbol index', note: defs.length + ' definition' + (defs.length === 1 ? '' : 's'), evidence: defs.slice(0, 8).map(function (d) { return evAt(d.file, d.line); }), status: 'done' });
+      var refs = localSearchData(arg, 'refs');
+      steps.push({ action: 'scan for references', note: refs.hits.length + ' reference' + (refs.hits.length === 1 ? '' : 's'), evidence: refs.hits.slice(0, 6).map(localEvidence), status: 'done' });
+      var actions = [{ kind: 'refs', command: arg, why: 'list every reference to ' + arg }];
+      var ans = defs.length
+        ? '`' + arg + '` is defined in ' + defs.length + ' place' + (defs.length === 1 ? '' : 's') + ':\n\n' + defs.slice(0, 8).map(function (d) { return '- `' + d.file + '` line ' + d.line + ' (' + d.kind + ')'; }).join('\n') + '\n\nEvidence chips open each definition at its exact line.'
+        : 'No indexed definition named `' + arg + '`. It may be an external symbol, a dynamic name, or spelled differently. The reference scan above shows where the term appears.';
+      return { steps: steps, verdict: LOCAL_VERDICT(), actions: actions, answer: ans };
+    } },
+
+  { kind: 'reason', aliases: [], ground: 'evidence', helpCmd: '', needsModel: true,
+    route: function (s, lo, idx) { return /\b(why|how (do|does|is|should|can|would)|root cause|recommend|refactor|improve|architect(ure)?|risk|risks|should i|would you|best way|design|rationale|trade-?offs?|explain)\b/.test(lo) ? { arg: pickSymbol(s, idx) } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var t = gatherTerrain(q, steps);
+      var sym = arg && symLookup(arg, idx).length ? arg : (t.terms[0] || '');
+      if (sym) {
+        var sd = symLookup(sym, idx);
+        if (sd.length) steps.push({ action: 'locate “' + sym + '”', note: sd.length + ' definition' + (sd.length === 1 ? '' : 's'), evidence: sd.slice(0, 4).map(function (d) { return evAt(d.file, d.line); }), status: 'done' });
+      }
+      var actions = [];
+      if (sym) actions.push({ kind: 'def', command: sym, why: 'inspect where ' + sym + ' is defined' }, { kind: 'refs', command: sym, why: 'see everywhere ' + sym + ' is used' });
+      actions.push({ kind: 'recent', command: '10', why: 'check what changed recently' });
+      var top5 = t.ranked.slice(0, 5).map(function (r) { return '- `' + r.p + '`'; }).join('\n');
+      return {
+        steps: steps, actions: actions,
+        verdict: { local: false, text: 'REQUIRES MODEL REASONING' },
+        answer: 'This question asks for **interpretation** (root cause / recommendation / explanation) — that is where a model reasons, and Meridian will not fabricate it. What Meridian **can** tell you is the terrain: it gathered ' + (t.ranked.length) + ' relevant file' + (t.ranked.length === 1 ? '' : 's') + ' and ' + steps.reduce(function (a, s) { return a + (s.evidence ? s.evidence.length : 0); }, 0) + ' pieces of evidence.\n\n'
+          + (top5 ? 'Most relevant files:\n\n' + top5 + '\n\n' : '')
+          + 'Connect a model in settings to synthesize an answer — Meridian will send only this evidence, not the whole repo.'
+      };
+    } },
+
+  /* plain: deterministic ranked search; synthesis optional. Terminal fallback. */
+  { kind: 'plain', aliases: [], ground: 'evidence', helpCmd: '', needsModel: false,
+    route: function (s, lo, idx) { return { arg: pickSymbol(s, idx) }; },
+    run: function (arg, q) {
+      var steps = [];
+      var tp = gatherTerrain(q, steps);
+      if (!tp.terms.length) return { steps: steps, verdict: LOCAL_VERDICT(), answer: 'That question has no distinctive terms to search for. Name a symbol, filename, or keyword — or use a command.\n\n' + LOCAL_HELP };
+      var topSym = tp.terms[0];
+      var actions = [{ kind: 'def', command: topSym, why: 'where “' + topSym + '” is defined' }, { kind: 'refs', command: topSym, why: 'every reference to “' + topSym + '”' }, { kind: 'recent', command: '10', why: 'recently modified files' }];
+      return { steps: steps, verdict: LOCAL_VERDICT(), actions: actions,
+        answer: tp.ranked.length ? 'Deterministic search — the files below best match your words (match count, then importance). Open a chip to inspect, or ask `def`/`refs`. Interpreting *why* would benefit from a model.\n\n' + tp.ranked.slice(0, 5).map(function (r, i) { return (i + 1) + '. `' + r.p + '` — ' + r.count + ' match' + (r.count === 1 ? '' : 'es'); }).join('\n') : 'None of your terms appear in the loaded files. Try different wording or check what is selected in CONTEXT.' };
+    } }
+];
+
+/* derived lookups — built once from the registry */
+var BY_KIND = {};
+INTENTS.forEach(function (it) { BY_KIND[it.kind] = it; });
+var ALIAS_TO_KIND = {};
+INTENTS.forEach(function (it) { (it.aliases || []).forEach(function (a) { ALIAS_TO_KIND[a] = it.kind; }); });
+var CMD_RE = new RegExp('^\\s*(' + Object.keys(ALIAS_TO_KIND).join('|') + ')\\b\\s*([\\s\\S]*)$', 'i');
+var LOCAL_HELP = 'Ask in plain language ("where is X defined", "what references X", "what imports X", '
+  + '"files related to app.js", "project structure", "where are the tests", "entry points", "what changed recently") '
+  + 'or use a command: ' + INTENTS.filter(function (it) { return it.helpCmd; }).map(function (it) { return it.helpCmd; }).join(', ')
+  + '. Interpretation ("why…", "how should I…") needs a model — '
+  + 'connect one in settings and Meridian sends only the relevant evidence, never the whole repo.';
+
+/* ---- Intent router: deterministic kinds vs. reasoning vs. plain fallback ---- */
+function classifyIntent(q) {
+  var s = q.trim(), lo = s.toLowerCase(), idx = st.files.size ? getIndex() : null;
+  var cmd = s.match(CMD_RE);
+  if (cmd) {
+    var k = ALIAS_TO_KIND[cmd[1].toLowerCase()];
+    return { kind: k, arg: cmd[2].trim(), deterministic: true, needsModel: false };
+  }
+  for (var i = 0; i < INTENTS.length; i++) {
+    var it = INTENTS[i];
+    if (!it.route) continue;
+    var m = it.route(s, lo, idx);
+    if (m) return { kind: it.kind, arg: m.arg || '', deterministic: !it.needsModel, needsModel: !!it.needsModel };
+  }
+  /* unreachable — 'plain' is a catch-all — kept as a hard fallback */
+  return { kind: 'plain', arg: pickSymbol(s, idx), deterministic: true, needsModel: false };
+}
+
+/* ---- Investigation engine: real operations over the index, collecting evidence.
+   Returns { steps, verdict:{local,text}, actions, answer }. No fabricated work. ---- */
+function runInvestigation(q, intent) {
+  var idx = getIndex();
+  var entry = BY_KIND[intent.kind] || BY_KIND.plain;
+  return entry.run(intent.arg, q, idx, intent);
+}
+
+/* grounding label map for prompt.js — kind → evidence-kind, from the registry */
+function groundKinds() {
+  var out = {};
+  INTENTS.forEach(function (it) { out[it.kind] = it.ground || 'evidence'; });
+  return out;
+}
+
+export { CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, classifyIntent, evAt, groundKinds, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };
