@@ -23,7 +23,15 @@ function selfTestFixture() {
     'pkg/util.py': "def helper():\n    return 1",
     'gopkg/server.go': 'package main\nimport (\n  "fmt"\n)\nfunc NewServer() {}\nfunc (s *Server) Start() error { fmt.Println("x"); return nil }',
     'rustcrate/lib.rs': 'pub fn compute(x: i32) -> i32 { x }\npub struct Engine {}\nmod parser;',
-    'rustcrate/parser.rs': 'pub fn parse() {}'
+    'rustcrate/parser.rs': 'pub fn parse() {}',
+    /* niche-intent terrain: an import cycle, a broken relative import, an orphan
+       carrying a TODO tag + env read, and a symbol name defined twice */
+    'cyc/a.js': "import { b } from './b.js';\nexport function a() { return b(); }",
+    'cyc/b.js': "import { a } from './a.js';\nexport function b() { return a(); }",
+    'src/brokenimp.js': "import { gone } from './missing-file';\nexport const BROKEN_DEMO = 1;",
+    'src/orphanish.js': '// TODO: wire this module up\nexport function orphanHelper() { return process.env.DEMO_FLAG; }',
+    'src/dupea.js': 'export function dupeSym() { return 1; }',
+    'src/dupeb.js': 'export function dupeSym() { return 2; }'
   };
 }
 /* async ingest cases — drive the REAL ingestFile with synthetic files against
@@ -119,7 +127,30 @@ function runSelfTests() {
       ['symbols', 'symbols'],
       ['help', 'help'],
       ['why is the store slow', 'reason'],
-      ['summarize everything about it', 'plain']
+      ['summarize everything about it', 'plain'],
+      /* niche intents — command + NL forms, including the cascade-collision pins */
+      ['cycles', 'cycles'],
+      ['are there circular dependencies', 'cycles'],   /* must beat importers' depend- regex */
+      ['orphans', 'orphans'],
+      ['show unused files', 'orphans'],                /* must beat listType's <word> files trap */
+      ['dead code', 'orphans'],
+      ['broken imports', 'broken'],                    /* must beat importers' import- regex */
+      ['exports src/store.js', 'exports'],
+      ['what does store.js export', 'exports'],
+      ['todos', 'todos'],
+      ['list the fixmes', 'todos'],
+      ['env', 'env'],
+      ['which environment variables are used', 'env'],
+      ['hubs', 'hubs'],
+      ['most imported files', 'hubs'],                 /* must beat importers' imported- regex */
+      ['hotspots', 'hotspots'],
+      ['largest files', 'hotspots'],
+      ['untested', 'untested'],
+      ['files without tests', 'untested'],             /* must beat the tests intent */
+      ['dupes', 'dupes'],
+      ['duplicate symbols', 'dupes'],                  /* must beat the symbols intent */
+      ['path src/index.js src/store.js', 'path'],
+      ['dependency path from index.js to store.js', 'path']
     ];
     ROUTES.forEach(function (rc) {
       var got = classifyIntent(rc[0]) || {};
@@ -135,6 +166,41 @@ function runSelfTests() {
     }));
     ok('registry · kinds unique', new Set(INTENTS.map(function (it) { return it.kind; })).size === INTENTS.length);
     ok('registry · plain is the terminal fallback', INTENTS[INTENTS.length - 1].kind === 'plain');
+    /* index extensions — exports, todos, env vars, per-file symbol counts */
+    ok('index · exports JS declaration', (idx.exportsByFile.get('src/aliased.ts') || []).some(function (e) { return e.name === 'ALIASED'; }));
+    ok('index · exports CommonJS braces', (idx.exportsByFile.get('src/store.js') || []).some(function (e) { return e.name === 'listTodos'; }));
+    ok('index · exports Rust pub', (idx.exportsByFile.get('rustcrate/lib.rs') || []).some(function (e) { return e.name === 'compute'; }));
+    ok('index · exports Go uppercase initial', (idx.exportsByFile.get('gopkg/server.go') || []).some(function (e) { return e.name === 'NewServer'; }));
+    ok('index · TODO tag recorded', idx.todos.some(function (t) { return t.file === 'src/orphanish.js' && t.tag === 'TODO'; }));
+    ok('index · env var read recorded', (idx.envVars.get('DEMO_FLAG') || []).length === 1);
+    ok('index · symCountByFile counts store.js', (idx.symCountByFile['src/store.js'] || 0) >= 3, String(idx.symCountByFile['src/store.js']));
+    /* niche investigations — run the real engine over the fixture terrain */
+    function inv(qq) { return runInvestigation(qq, classifyIntent(qq)); }
+    var cyc = inv('cycles');
+    ok('intent · cycles finds the a↔b cycle', /cyc\/a\.js/.test(cyc.answer) && /cyc\/b\.js/.test(cyc.answer) && cyc.verdict.local === true);
+    var orp = inv('orphans');
+    ok('intent · orphans flags never-imported code', orp.answer.indexOf('src/orphanish.js') !== -1);
+    ok('intent · orphans excludes imported files', orp.answer.indexOf('cyc/a.js') === -1);
+    var brk = inv('broken');
+    ok('intent · broken finds the unresolved relative import', brk.answer.indexOf('./missing-file') !== -1);
+    var exp1 = inv('exports src/store.js');
+    ok('intent · exports reads module.exports names', /addTodo/.test(exp1.answer) && /removeTodo/.test(exp1.answer));
+    var exp2 = inv('exports pkg/util.py');
+    ok('intent · exports Python surface fallback', /helper/.test(exp2.answer));
+    var tds = inv('todos');
+    ok('intent · todos lists the tagged line', tds.answer.indexOf('src/orphanish.js') !== -1 && /TODO/.test(tds.answer));
+    var env1 = inv('env');
+    ok('intent · env finds DEMO_FLAG and PORT', /DEMO_FLAG/.test(env1.answer) && /`PORT`/.test(env1.answer));
+    var hb = inv('hubs');
+    ok('intent · hubs ranks the most-imported files', hb.answer.indexOf('src/store.js') !== -1 && hb.answer.indexOf('src/config.js') !== -1);
+    var hs = inv('hotspots');
+    ok('intent · hotspots ranks code files with metrics', /`src\//.test(hs.answer) && /importer/.test(hs.answer));
+    var ut = inv('files without tests');
+    ok('intent · untested flags util.js but not store.js', ut.answer.indexOf('src/util.js') !== -1 && ut.answer.indexOf('src/store.js') === -1);
+    var dp = inv('dupes');
+    ok('intent · dupes finds dupeSym in both files', dp.answer.indexOf('dupeSym') !== -1 && /dupea/.test(dp.answer) && /dupeb/.test(dp.answer));
+    var pt = inv('path src/index.js src/store.js');
+    ok('intent · path walks index → server → store', pt.answer.indexOf('src/index.js') !== -1 && pt.answer.indexOf('src/server.js') !== -1 && pt.answer.indexOf('src/store.js') !== -1);
     /* trace parser fallbacks */
     ok('trace · clean fence', extractTrace('a\n```meridian-trace\n{"steps":[{"action":"x"}]}\n```').degraded === null);
     ok('trace · ```json salvaged', extractTrace('a\n```json\n{"steps":[{"action":"x"}]}\n```').degraded === 'salvaged');

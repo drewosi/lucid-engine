@@ -18,7 +18,7 @@ import { fmtTok } from './helpers.js';
    Adding a reasoning instance = adding ONE entry here. DOM-free by design so
    the registry is reusable from the grounding bridge and the self-tests.     */
 
-var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Evidence collection'];
+var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Dependency graph (cycles · hubs · orphans · broken imports · paths)', 'Code health (TODOs · env vars · duplicates · hotspots)', 'Exports & coverage gaps', 'Evidence collection'];
 var CAP_MODEL = ['Architectural reasoning', 'Natural-language synthesis', 'Root-cause analysis', 'Refactoring recommendations'];
 
 function localEvidence(h) {
@@ -127,6 +127,75 @@ function localRecentData(countStr) {
   }] };
 }
 
+/* ---- graph + classification helpers for the niche reasoning instances.
+   All computed on demand from the already-built index — nothing stored,
+   nothing re-parsed. Iterative traversals only (no recursion depth risk). ---- */
+var CODE_LANGS = { js: 1, ts: 1, python: 1, go: 1, rust: 1, java: 1, ruby: 1, php: 1, c: 1, cpp: 1, 'c#': 1, swift: 1, kotlin: 1, scala: 1, elixir: 1, lua: 1, svelte: 1, vue: 1 };
+function isCodeFile(p) { var f = st.files.get(p); return !!(f && CODE_LANGS[f.lang || '']); }
+function classifiedSet(idx) {
+  var s = {};
+  idx.entries.concat(idx.tests, idx.configs, idx.docs).forEach(function (p) { s[p] = 1; });
+  return s;
+}
+/* iterative 3-color DFS over resolved import edges; returns up to cap cycles,
+   each with the node ring and the import line that closes it */
+function findCycles(idx, cap) {
+  var adj = new Map();
+  idx.importsByFile.forEach(function (list, f) {
+    var t = [], seen = {};
+    list.forEach(function (x) { if (x.resolved && x.resolved !== f && !seen[x.resolved]) { seen[x.resolved] = 1; t.push({ to: x.resolved, line: x.line }); } });
+    adj.set(f, t);
+  });
+  var color = new Map(), cycles = [];
+  adj.forEach(function (_, start) {
+    if (color.get(start) || cycles.length >= cap) return;
+    var stack = [{ node: start, i: 0 }], path = [start], onPath = {};
+    onPath[start] = 1; color.set(start, 1);
+    while (stack.length && cycles.length < cap) {
+      var top = stack[stack.length - 1];
+      var edges = adj.get(top.node) || [];
+      if (top.i < edges.length) {
+        var e = edges[top.i++];
+        if (onPath[e.to]) cycles.push({ nodes: path.slice(path.indexOf(e.to)).concat([e.to]), from: top.node, line: e.line });
+        else if (!color.get(e.to)) { color.set(e.to, 1); onPath[e.to] = 1; path.push(e.to); stack.push({ node: e.to, i: 0 }); }
+      } else {
+        color.set(top.node, 2); delete onPath[top.node]; path.pop(); stack.pop();
+      }
+    }
+  });
+  return cycles;
+}
+/* BFS shortest chain from `from` to `to` over resolved import edges */
+function bfsPath(idx, from, to) {
+  var prev = new Map(); prev.set(from, null);
+  var queue = [from], qi = 0;
+  while (qi < queue.length) {
+    var n = queue[qi++];
+    if (n === to) break;
+    (idx.importsByFile.get(n) || []).forEach(function (x) {
+      if (x.resolved && !prev.has(x.resolved)) { prev.set(x.resolved, n); queue.push(x.resolved); }
+    });
+  }
+  if (!prev.has(to)) return null;
+  var chain = [], cur = to;
+  while (cur !== null) { chain.unshift(cur); cur = prev.get(cur); }
+  return chain;
+}
+/* the import line that realizes the edge a → b, for hop-level evidence */
+function edgeLine(idx, a, b) {
+  var list = idx.importsByFile.get(a) || [];
+  for (var i = 0; i < list.length; i++) if (list[i].resolved === b) return list[i].line;
+  return 1;
+}
+/* strip test decorations from a basename so store.test.js covers store.js */
+function baseStem(p) {
+  return p.slice(p.lastIndexOf('/') + 1).toLowerCase().replace(/\.[^.]+$/, '');
+}
+function testStem(p) {
+  return baseStem(p).replace(/^test[_-]?/, '').replace(/[._-]?(test|spec)s?$/, '');
+}
+function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+
 /* ---- The registry. Array order IS the natural-language routing cascade. ---- */
 var INTENTS = [
 
@@ -193,6 +262,35 @@ var INTENTS = [
       return { steps: steps, verdict: LOCAL_VERDICT(), answer: sans };
     } },
 
+  /* before `tests`: "files without tests" must not be answered with the test list */
+  { kind: 'untested', aliases: ['untested'], ground: 'coverage-gap', helpCmd: '`untested`', needsModel: false,
+    route: function (s, lo) { return /\b(untested|without tests?|missing tests?|coverage gaps?|lack(s|ing)? tests?|no tests? for)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      if (!idx.tests.length) {
+        steps.push({ action: 'read test classification from the index', note: '0 test files', evidence: [], status: 'done' });
+        return { steps: steps, verdict: LOCAL_VERDICT(),
+          answer: 'No test files detected by the standard patterns (`.test.` `.spec.` `_test` `tests/` `__tests__`) — every code file is a coverage gap. That is a real finding about this project, not a limitation.' };
+      }
+      var stems = {}, testedByImport = {}, skip = {};
+      idx.tests.forEach(function (t) {
+        stems[testStem(t)] = 1; skip[t] = 1;
+        (idx.importsByFile.get(t) || []).forEach(function (x) { if (x.resolved) testedByImport[x.resolved] = 1; });
+      });
+      idx.configs.concat(idx.docs).forEach(function (p) { skip[p] = 1; });
+      var gaps = [];
+      sortedPaths().forEach(function (p) {
+        if (skip[p] || !isCodeFile(p)) return;
+        if (stems[baseStem(p)] || testedByImport[p]) return;
+        gaps.push(p);
+      });
+      steps.push({ action: 'match test files to sources (name stems + what tests import)', note: plural(idx.tests.length, 'test file') + ' · ' + plural(gaps.length, 'uncovered code file'), evidence: gaps.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: gaps.length
+          ? plural(gaps.length, 'code file') + ' with no matching test (no shared name stem, not imported by any test file):\n\n' + gaps.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') + '\n\nMatched by test-file name stems and test imports — integration tests that exercise code indirectly are not traced.'
+          : 'Every loaded code file is matched by a test name stem or imported by a test file.' };
+    } },
+
   { kind: 'tests', aliases: ['tests'], ground: 'test', helpCmd: '`tests`', needsModel: false,
     route: function (s, lo) { return /\btests?\b/.test(lo) && /\b(where|find|list|show|which|are|any)\b/.test(lo) ? { arg: '' } : null; },
     run: function (arg, q, idx) {
@@ -200,6 +298,193 @@ var INTENTS = [
       steps.push({ action: 'read test classification from the index', note: idx.tests.length + ' test file' + (idx.tests.length === 1 ? '' : 's'), evidence: idx.tests.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: idx.tests.length ? 'Detected ' + idx.tests.length + ' test file' + (idx.tests.length === 1 ? '' : 's') + ' (patterns: `.test.` `.spec.` `_test` `tests/` `__tests__`):\n\n' + idx.tests.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') : 'No test files detected by the standard patterns (`.test.` `.spec.` `_test` `tests/` `__tests__`). That is a real finding about this project, not a limitation.' };
+    } },
+
+  /* before `importers`: "circular dependencies" would otherwise match its depend- regex */
+  { kind: 'cycles', aliases: ['cycles'], ground: 'import-cycle', helpCmd: '`cycles`', needsModel: false,
+    route: function (s, lo) { return /\b(circular|cycles?|cyclic)\b/.test(lo) && /\b(import|imports|depend|depends|dependency|dependencies)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var cycles = findCycles(idx, 10);
+      steps.push({ action: 'trace cycles over resolved import edges', note: cycles.length ? plural(cycles.length, 'cycle') + (cycles.length >= 10 ? ' (capped at 10)' : '') : 'no cycles', evidence: cycles.slice(0, 10).map(function (c) { return evAt(c.from, c.line); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: cycles.length
+          ? 'Found ' + plural(cycles.length, 'import cycle') + (cycles.length >= 10 ? ' (search capped at 10)' : '') + ':\n\n' + cycles.slice(0, 10).map(function (c) { return '- ' + c.nodes.map(function (n) { return '`' + n + '`'; }).join(' → '); }).join('\n') + '\n\nChips open the import statement that closes each cycle. Static resolved edges only — dynamic loading is not traced.'
+          : 'No circular imports among the ' + plural(idx.importCount, 'indexed import') + ' — the resolved dependency graph is acyclic.' };
+    } },
+
+  /* before `listType`: "unused files" would otherwise be read as a list-by-type query */
+  { kind: 'orphans', aliases: ['orphans', 'dead'], ground: 'orphan', helpCmd: '`orphans`', needsModel: false,
+    route: function (s, lo) { return /\b(orphan(ed)?s?|dead (files?|code)|unused files?|never imported|unreferenced files?)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var skip = classifiedSet(idx), orphans = [];
+      sortedPaths().forEach(function (p) {
+        if (skip[p] || !isCodeFile(p)) return;
+        if ((idx.importedBy.get(p) || []).length) return;
+        orphans.push(p);
+      });
+      steps.push({ action: 'scan importer edges for unreferenced code files', note: plural(orphans.length, 'candidate'), evidence: orphans.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: orphans.length
+          ? plural(orphans.length, 'code file') + ' ' + (orphans.length === 1 ? 'is' : 'are') + ' never imported by any loaded file (and not classified as entry point, test, config, or doc):\n\n' + orphans.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') + '\n\nStatic import edges only — files loaded dynamically, from HTML, or by a bundler config can appear here without being dead.'
+          : 'Every loaded code file is either imported somewhere or classified as an entry point, test, config, or doc.' };
+    } },
+
+  { kind: 'broken', aliases: ['broken', 'unresolved'], ground: 'broken-import', helpCmd: '`broken`', needsModel: false,
+    route: function (s, lo) { return /\b(broken|unresolved|missing|dangling)\b[\s\S]*\bimports?\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var broken = [];
+      idx.importsByFile.forEach(function (list, f) {
+        list.forEach(function (x) { if (!x.resolved && (x.raw.charAt(0) === '.' || x.raw.charAt(0) === '/')) broken.push({ file: f, raw: x.raw, line: x.line }); });
+      });
+      steps.push({ action: 'scan relative imports that resolve to no loaded file', note: plural(broken.length, 'unresolved relative import'), evidence: broken.slice(0, 12).map(function (b) { return evAt(b.file, b.line); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: broken.length
+          ? plural(broken.length, 'relative import') + ' resolve' + (broken.length === 1 ? 's' : '') + ' to no loaded file:\n\n' + broken.slice(0, 20).map(function (b) { return '- `' + b.file + '` line ' + b.line + ' → `' + b.raw + '`'; }).join('\n') + '\n\nEither the target is genuinely missing, or it was not loaded (check ignore filters). Bare specifiers (npm/stdlib packages) are treated as external, not broken.'
+          : 'Every relative import resolves to a loaded file. Bare module specifiers (packages, stdlib) are treated as external by design.' };
+    } },
+
+  /* before `importers`: "most imported files" would otherwise match its import- regex */
+  { kind: 'hubs', aliases: ['hubs'], ground: 'hub', helpCmd: '`hubs`', needsModel: false,
+    route: function (s, lo) { return /\b(most (imported|depended[- ]on|used)|central files?|hubs?|fan-?in)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var ranked = [];
+      idx.importedBy.forEach(function (arr, p) { if (arr.length) ranked.push({ p: p, n: arr.length }); });
+      ranked.sort(function (a, b) { return b.n - a.n || (a.p < b.p ? -1 : 1); });
+      var top = ranked.slice(0, 10);
+      steps.push({ action: 'rank files by importer fan-in', note: plural(ranked.length, 'imported file') + ' · top ' + top.length, evidence: top.map(function (r) { return evAt(r.p, 1); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: top.length
+          ? 'Most-imported files (fan-in — the load-bearing walls of this project):\n\n' + top.map(function (r, i) { return (i + 1) + '. `' + r.p + '` — imported by ' + plural(r.n, 'file'); }).join('\n')
+          : 'No file is imported by another loaded file — either a single-file project or a bundling style with no static imports.' };
+    } },
+
+  /* before `importers`: "import path/chain" would otherwise match its import- regex */
+  { kind: 'path', aliases: ['path', 'chain'], ground: 'dependency-path', helpCmd: '`path <a> <b>`', needsModel: false,
+    route: function (s, lo) { return /\b(dependency|import) (path|chain)\b|\b(path|chain) (from|between)\b/.test(lo) ? { arg: s } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var toks = String(arg || q).match(/[\w./-]*[\w-]\.[A-Za-z]{1,6}\b|[\w.-]+\/[\w./-]+/g) || [];
+      var a = toks.length > 1 ? resolveToFile(toks[0]) : null, b = toks.length > 1 ? resolveToFile(toks[1]) : null;
+      steps.push({ action: 'resolve the two endpoints', note: (a || '?') + ' → ' + (b || '?'), evidence: [], status: 'done' });
+      if (!a || !b || a === b) {
+        return { steps: steps, verdict: LOCAL_VERDICT(), answer: '`path` needs two loaded files, e.g. `path src/index.js src/store.js`.' };
+      }
+      var chain = bfsPath(idx, a, b), reversed = false;
+      if (!chain) { chain = bfsPath(idx, b, a); reversed = !!chain; }
+      var evs = [];
+      if (chain) for (var i = 0; i < chain.length - 1; i++) evs.push(evAt(chain[i], edgeLine(idx, chain[i], chain[i + 1])));
+      steps.push({ action: 'breadth-first search over resolved import edges', note: chain ? plural(chain.length - 1, 'hop') + (reversed ? ' (reverse direction)' : '') : 'no path in either direction', evidence: evs, status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: chain
+          ? 'Shortest import chain' + (reversed ? ' (found in the reverse direction, `' + b + '` → `' + a + '`)' : '') + ':\n\n' + chain.map(function (n) { return '`' + n + '`'; }).join(' → ') + '\n\nChips open each hop\'s import statement.'
+          : 'No static import path connects `' + a + '` and `' + b + '` in either direction. They may be linked at runtime (DI, dynamic import, config) — the index only traces static edges.' };
+    } },
+
+  { kind: 'exports', aliases: ['exports'], ground: 'export', helpCmd: '`exports <file>`', needsModel: false,
+    route: function (s, lo) { return /\bwhat does\b[\s\S]*\bexports?\b|\bexports? (of|from)\b|\bpublic (api|surface) of\b/.test(lo) ? { arg: pickPathish(s) } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      if (!arg) return { steps: [{ action: 'parse command', note: 'exports needs a file', evidence: [], status: 'done' }], verdict: LOCAL_VERDICT(), answer: '`exports` needs a file, e.g. `exports src/store.js`.' };
+      var tf = resolveToFile(arg);
+      steps.push({ action: 'resolve “' + arg + '” to a file', note: tf || 'unresolved', evidence: [], status: 'done' });
+      if (!tf) return { steps: steps, verdict: LOCAL_VERDICT(), answer: 'Could not resolve `' + arg + '` to a loaded file.' };
+      var list = idx.exportsByFile.get(tf) || [];
+      if (!list.length && (st.files.get(tf) || {}).lang === 'python') {
+        /* Python has no export keyword — its module-level definitions are the surface */
+        var pub = [];
+        idx.symbols.forEach(function (defsArr, name) {
+          if (name.charAt(0) === '_') return;
+          defsArr.forEach(function (d) { if (d.file === tf && pub.length < 15) pub.push({ name: name, line: d.line, kind: d.kind }); });
+        });
+        pub.sort(function (x, y) { return x.line - y.line; });
+        steps.push({ action: 'read module-level definitions (Python public surface)', note: plural(pub.length, 'definition'), evidence: pub.slice(0, 12).map(function (x) { return evAt(tf, x.line); }), status: 'done' });
+        return { steps: steps, verdict: LOCAL_VERDICT(),
+          answer: pub.length
+            ? '`' + tf + '` (Python — no export keyword) has ' + plural(pub.length, 'module-level definition') + ' as its public surface (underscore-prefixed names excluded):\n\n' + pub.map(function (x) { return '- `' + x.name + '` (' + x.kind + ') — line ' + x.line; }).join('\n')
+            : 'No module-level definitions found in `' + tf + '`.' };
+      }
+      steps.push({ action: 'read exported symbols from the index', note: plural(list.length, 'export'), evidence: list.slice(0, 12).map(function (x) { return evAt(tf, x.line); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: list.length
+          ? '`' + tf + '` exports ' + plural(list.length, 'symbol') + ':\n\n' + list.slice(0, 20).map(function (x) { return '- `' + x.name + '` (' + x.kind + ') — line ' + x.line; }).join('\n')
+          : 'No exports recorded for `' + tf + '`. Tracking covers JS/TS (`export`, `module.exports`), Rust (`pub`), and Go (uppercase initials) — or the file genuinely exports nothing.' };
+    } },
+
+  /* before `listType`/`structure` regexes see them: size/complexity questions */
+  { kind: 'hotspots', aliases: ['hotspots', 'largest'], ground: 'hotspot', helpCmd: '`hotspots`', needsModel: false,
+    route: function (s, lo) { return /\b(largest|biggest|hotspots?|most complex|densest)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var rows = [];
+      sortedPaths().forEach(function (p) {
+        if (!isCodeFile(p)) return;
+        var f = st.files.get(p);
+        var symN = idx.symCountByFile[p] || 0, fanIn = (idx.importedBy.get(p) || []).length;
+        rows.push({ p: p, tok: f.tokens, symN: symN, fanIn: fanIn, score: f.tokens + symN * 40 + fanIn * 200 });
+      });
+      rows.sort(function (a, b) { return b.score - a.score; });
+      var top = rows.slice(0, 8);
+      steps.push({ action: 'rank code files by size · symbol density · fan-in', note: plural(rows.length, 'code file') + ' scored', evidence: top.map(function (r) { return evAt(r.p, 1); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: top.length
+          ? 'Hotspots — the files where change is most expensive (size + symbol density + fan-in):\n\n' + top.map(function (r, i) { return (i + 1) + '. `' + r.p + '` — ≈' + fmtTok(r.tok) + ' tokens · ' + plural(r.symN, 'symbol') + ' · ' + plural(r.fanIn, 'importer'); }).join('\n')
+          : 'No code files loaded to rank.' };
+    } },
+
+  { kind: 'todos', aliases: ['todos'], ground: 'todo', helpCmd: '`todos`', needsModel: false,
+    route: function (s, lo) { return /\b(todos?|fixmes?|hacks?|tech(nical)? debt)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var byTag = {};
+      idx.todos.forEach(function (t) { byTag[t.tag] = (byTag[t.tag] || 0) + 1; });
+      var tagNote = Object.keys(byTag).map(function (t) { return t + ' ' + byTag[t]; }).join(' · ');
+      steps.push({ action: 'read TODO/FIXME/HACK/XXX tags from the index', note: idx.todos.length ? plural(idx.todos.length, 'tag') + (idx.todos.length >= 500 ? ' (capped)' : '') + ' · ' + tagNote : 'none found', evidence: idx.todos.slice(0, 12).map(function (t) { return evAt(t.file, t.line); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: idx.todos.length
+          ? plural(idx.todos.length, 'debt tag') + ' (' + tagNote + '):\n\n' + idx.todos.slice(0, 15).map(function (t) { return '- `' + t.file + '` line ' + t.line + ' — **' + t.tag + '**'; }).join('\n') + '\n\nChips open each tag at its line.'
+          : 'No TODO / FIXME / HACK / XXX tags in the loaded files. Either the debt is paid, or it is not written down.' };
+    } },
+
+  /* before `refs`/`def`: "where are env vars used" would otherwise match their regexes */
+  { kind: 'env', aliases: ['env'], ground: 'env-var', helpCmd: '`env`', needsModel: false,
+    route: function (s, lo) { return /\benv(ironment)? ?var(iable)?s?\b|\bprocess\.env\b|\bos\.environ\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var names = [];
+      idx.envVars.forEach(function (refs, name) { names.push({ name: name, refs: refs }); });
+      names.sort(function (a, b) { return b.refs.length - a.refs.length || (a.name < b.name ? -1 : 1); });
+      steps.push({ action: 'read environment-variable reads from the index', note: plural(names.length, 'variable'), evidence: names.slice(0, 12).map(function (n) { return evAt(n.refs[0].file, n.refs[0].line); }), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: names.length
+          ? plural(names.length, 'environment variable') + ' read by the code — the project\'s implicit configuration surface:\n\n' + names.slice(0, 20).map(function (n) { return '- `' + n.name + '` — ' + plural(n.refs.length, 'read') + ', first at `' + n.refs[0].file + '` line ' + n.refs[0].line; }).join('\n')
+          : 'No environment-variable reads detected (patterns: `process.env`, `import.meta.env`, `os.environ`/`getenv`, `os.Getenv`, `env::var`, `ENV[…]`).' };
+    } },
+
+  /* before `symbols`: "duplicate symbols" would otherwise match its symbol- regex */
+  { kind: 'dupes', aliases: ['dupes', 'duplicates'], ground: 'duplicate-symbol', helpCmd: '`dupes`', needsModel: false,
+    route: function (s, lo) { return /\b(duplicate|colliding|shadow(ed|ing)?)\b[\s\S]*\b(symbols?|names?|definitions?|functions?|classes)\b/.test(lo) ? { arg: '' } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var dupes = [];
+      idx.symbols.forEach(function (defsArr, name) {
+        if (name.length < 4) return;
+        var perFile = {};
+        defsArr.forEach(function (d) { if (!perFile[d.file]) perFile[d.file] = d; });
+        var files = Object.keys(perFile);
+        if (files.length > 1) dupes.push({ name: name, defs: files.map(function (f) { return perFile[f]; }) });
+      });
+      dupes.sort(function (a, b) { return b.defs.length - a.defs.length || (a.name < b.name ? -1 : 1); });
+      var top = dupes.slice(0, 15), evs = [];
+      top.forEach(function (d) { d.defs.slice(0, 2).forEach(function (x) { if (evs.length < 12) evs.push(evAt(x.file, x.line)); }); });
+      steps.push({ action: 'scan the symbol index for names defined in multiple files', note: plural(dupes.length, 'duplicated name'), evidence: evs, status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: dupes.length
+          ? plural(dupes.length, 'symbol name') + ' (≥4 chars) defined in more than one file — collision and confusion candidates:\n\n' + top.map(function (d) { return '- `' + d.name + '` — ' + d.defs.map(function (x) { return '`' + x.file + '` line ' + x.line; }).join(', '); }).join('\n')
+          : 'No symbol name (≥4 chars) is defined in more than one file.' };
     } },
 
   { kind: 'listType', aliases: [], ground: 'file', helpCmd: '', needsModel: false,

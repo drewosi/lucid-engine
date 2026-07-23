@@ -35,6 +35,15 @@ var IMPORT_RES = [
   /^\s*import\s+([\w.]+)/                                       /* py: import m */
 ];
 var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.rb', '.php', '.java', '.vue', '.svelte'];
+/* export-shaped lines the definition regexes don't cover: JS/TS named re-exports
+   and CommonJS. Declaration exports (export function x / pub fn / Go capitals)
+   are detected off the already-matched definition instead — no second pass. */
+var EXPORT_BRACES_RE = /^\s*(?:export\s*\{([^}]+)\}|module\.exports\s*=\s*\{([^}]+)\})/;
+var EXPORT_ASSIGN_RE = /^\s*(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=/;
+/* code-health scans, same single pass */
+var TODO_RE = /\b(TODO|FIXME|HACK|XXX)\b/;
+var ENV_RE = /\bprocess\.env\.([A-Z_][A-Z0-9_]*)|\bprocess\.env\[['"]([A-Z_][A-Z0-9_]*)['"]\]|\bimport\.meta\.env\.([A-Z_][A-Z0-9_]*)|\bos\.environ(?:\.get)?\s*[([]\s*['"]([A-Z_][A-Z0-9_]*)['"]|\bos\.getenv\(\s*['"]([A-Z_][A-Z0-9_]*)['"]|\bos\.Getenv\(\s*"([A-Z_][A-Z0-9_]*)"|\benv::var\(\s*"([A-Z_][A-Z0-9_]*)"|\bENV\[['"]([A-Z_][A-Z0-9_]*)['"]\]/;
+var TODO_CAP = 500, ENV_NAME_CAP = 200, ENV_REF_CAP = 50, EXPORT_FILE_CAP = 100;
 /* language id by extension (+ shebang for extensionless scripts) — powers the
    index-size stat and lets the LOCAL engine phrase results by language */
 var LANG_BY_EXT = { js: 'js', jsx: 'js', mjs: 'js', cjs: 'js', ts: 'ts', tsx: 'ts', py: 'python', go: 'go', rs: 'rust',
@@ -148,6 +157,10 @@ function buildIndex() {
   var symbols = new Map();      /* name -> [{file, line, kind}] */
   var importsByFile = new Map(); /* file -> [{raw, resolved, line}] */
   var importedBy = new Map();    /* resolvedFile -> [{file, line}] */
+  var exportsByFile = new Map(); /* file -> [{name, line, kind}] */
+  var todos = [];                /* [{file, line, tag, text}] */
+  var envVars = new Map();       /* NAME -> [{file, line}] */
+  var symCountByFile = {};       /* file -> definition count */
   var entries = [], tests = [], configs = [], docs = [], byExt = {}, langs = {};
   var paths = sortedPaths(), symbolCount = 0, importCount = 0;
   buildResolvers(paths);
@@ -158,6 +171,10 @@ function buildIndex() {
     (importsByFile.get(file) || (importsByFile.set(file, []), importsByFile.get(file))).push({ raw: raw, resolved: resolved, line: line });
     if (resolved) (importedBy.get(resolved) || (importedBy.set(resolved, []), importedBy.get(resolved))).push({ file: file, line: line });
     importCount++;
+  }
+  function recordExport(file, name, line, kind) {
+    var arr = exportsByFile.get(file) || (exportsByFile.set(file, []), exportsByFile.get(file));
+    if (arr.length < EXPORT_FILE_CAP) arr.push({ name: name, line: line, kind: kind });
   }
 
   paths.forEach(function (p, pi) {
@@ -198,7 +215,39 @@ function buildIndex() {
       }
       if (sym && sym.length > 1) {
         var arr = symbols.get(sym) || (symbols.set(sym, []), symbols.get(sym));
-        if (arr.length < 200) { arr.push({ file: p, line: i + 1, kind: kind }); symbolCount++; }
+        if (arr.length < 200) { arr.push({ file: p, line: i + 1, kind: kind }); symbolCount++; symCountByFile[p] = (symCountByFile[p] || 0) + 1; }
+        /* declaration exports, off the definition just matched: JS/TS `export …`,
+           Rust `pub …`, Go's uppercase-initial convention */
+        if (/^\s*export\b/.test(ln)) recordExport(p, sym, i + 1, kind);
+        else if (ext === 'rs' && /^\s*pub\b/.test(ln)) recordExport(p, sym, i + 1, kind);
+        else if (isGo && /^[A-Z]/.test(sym)) recordExport(p, sym, i + 1, kind);
+      }
+
+      /* non-declaration export forms: export { a, b as c }, module.exports = {…}, exports.x = */
+      var eb = EXPORT_BRACES_RE.exec(ln);
+      if (eb) {
+        (eb[1] || eb[2]).split(',').forEach(function (piece) {
+          var nm = piece.trim().split(/\s+as\s+/).pop().split(':')[0].trim();
+          if (/^[A-Za-z_$][\w$]*$/.test(nm)) recordExport(p, nm, i + 1, 'named');
+        });
+      } else {
+        var ea = EXPORT_ASSIGN_RE.exec(ln);
+        if (ea) recordExport(p, ea[1], i + 1, 'commonjs');
+        else if (!sym && /^\s*export\s+default\b/.test(ln)) recordExport(p, 'default', i + 1, 'default');
+      }
+
+      /* code-health: TODO-style tags and environment-variable reads */
+      if (todos.length < TODO_CAP) {
+        var tm = TODO_RE.exec(ln);
+        if (tm) todos.push({ file: p, line: i + 1, tag: tm[1], text: ln.trim().slice(0, 120) });
+      }
+      var em = ENV_RE.exec(ln);
+      if (em) {
+        var envName = em[1] || em[2] || em[3] || em[4] || em[5] || em[6] || em[7] || em[8];
+        if (envName && (envVars.has(envName) || envVars.size < ENV_NAME_CAP)) {
+          var evs = envVars.get(envName) || (envVars.set(envName, []), envVars.get(envName));
+          if (evs.length < ENV_REF_CAP) evs.push({ file: p, line: i + 1 });
+        }
       }
 
       for (var r = 0; r < IMPORT_RES.length; r++) {
@@ -211,6 +260,7 @@ function buildIndex() {
   return {
     fileCount: paths.length, symbols: symbols, symbolCount: symbolCount, importCount: importCount,
     importsByFile: importsByFile, importedBy: importedBy,
+    exportsByFile: exportsByFile, todos: todos, envVars: envVars, symCountByFile: symCountByFile,
     entries: entries, tests: tests, configs: configs, docs: docs,
     byExt: byExt, langs: langs, packages: detectPackages(paths)
   };
