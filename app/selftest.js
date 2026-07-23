@@ -31,7 +31,26 @@ function selfTestFixture() {
     'src/brokenimp.js': "import { gone } from './missing-file';\nexport const BROKEN_DEMO = 1;",
     'src/orphanish.js': '// TODO: wire this module up\nexport function orphanHelper() { return process.env.DEMO_FLAG; }',
     'src/dupea.js': 'export function dupeSym() { return 1; }',
-    'src/dupeb.js': 'export function dupeSym() { return 2; }'
+    'src/dupeb.js': 'export function dupeSym() { return 2; }',
+    /* Java: Maven layout, plain + static import, methods, filename-convention test */
+    'javapkg/src/main/java/com/acme/App.java':
+      'package com.acme;\nimport com.acme.util.Strings;\nimport static com.acme.util.Strings.upper;\npublic class App {\n  public static void main(String[] args) { }\n  private int count() { return 1; }\n}',
+    'javapkg/src/main/java/com/acme/util/Strings.java':
+      'package com.acme.util;\npublic final class Strings {\n  public static String upper(String s) { return s; }\n}',
+    'javapkg/src/main/java/com/acme/util/StringsTest.java':
+      'package com.acme.util;\npublic class StringsTest {\n  public void testUpper() { }\n}',
+    /* Ruby: require_relative + external require + module/class/self-def/attr */
+    'rbapp/lib/widget.rb':
+      "require_relative 'widget/helper'\nrequire 'json'\nmodule Widget\n  class Frame\n    attr_reader :size\n    def render\n    end\n  end\nend",
+    'rbapp/lib/widget/helper.rb':
+      'module Widget\n  def self.helper_fn\n    1\n  end\nend',
+    /* C#: braced + file-scoped namespaces, using directive vs using statement */
+    'csapp/Program.cs':
+      'using System;\nusing Acme.Services;\n\nnamespace Acme {\n  internal sealed class Program {\n    public static void Main(string[] args) {\n      using (var g = new Greeter()) { }\n    }\n  }\n}',
+    'csapp/Services/Greeter.cs':
+      'namespace Acme.Services;\npublic class Greeter {\n  public string Greet(string name) => name;\n  public int Count { get; set; }\n}',
+    'csapp/GreeterTests.cs':
+      'namespace Acme.Tests;\npublic class GreeterTests {\n  public void GreetWorks() { }\n}'
   };
 }
 /* async ingest cases — drive the REAL ingestFile with synthetic files against
@@ -97,7 +116,28 @@ function runSelfTests() {
     ok('imports · Python relative from .util', (idx.importsByFile.get('pkg/app.py') || []).some(function (e) { return e.resolved === 'pkg/util.py'; }));
     ok('imports · Go block import recorded', (idx.importsByFile.get('gopkg/server.go') || []).some(function (e) { return e.raw === 'fmt'; }));
     ok('imports · Rust mod parser resolves', (idx.importsByFile.get('rustcrate/lib.rs') || []).some(function (e) { return e.resolved === 'rustcrate/parser.rs'; }));
-    ok('index · languages counted', idx.langs && Object.keys(idx.langs).length >= 4, Object.keys(idx.langs || {}).join(','));
+    ok('index · languages counted', idx.langs && Object.keys(idx.langs).length >= 7, Object.keys(idx.langs || {}).join(','));
+    /* Java / Ruby / C# depth */
+    var JAPP = 'javapkg/src/main/java/com/acme/App.java', JSTR = 'javapkg/src/main/java/com/acme/util/Strings.java';
+    ok('java · class + method symbols', idx.symbols.has('App') && (idx.symbols.get('count') || []).some(function (d) { return d.file === JAPP && d.kind === 'method'; }));
+    ok('java · static method symbol', (idx.symbols.get('upper') || []).some(function (d) { return d.file === JSTR && d.kind === 'method'; }));
+    ok('java · import resolves via Maven root', (idx.importsByFile.get(JAPP) || []).filter(function (e) { return e.resolved === JSTR; }).length === 2, 'plain + static rows');
+    ok('java · public members exported', (idx.exportsByFile.get(JSTR) || []).some(function (e) { return e.name === 'upper'; }));
+    ok('ruby · module/class/def symbols', idx.symbols.has('Widget') && idx.symbols.has('Frame') && idx.symbols.has('render'));
+    ok('ruby · def self.x captures the name', (idx.symbols.get('helper_fn') || []).some(function (d) { return d.file === 'rbapp/lib/widget/helper.rb'; }));
+    ok('ruby · attr_reader recorded', (idx.symbols.get('size') || []).some(function (d) { return d.kind === 'attr'; }));
+    ok('ruby · require_relative resolves', (idx.importsByFile.get('rbapp/lib/widget.rb') || []).some(function (e) { return e.resolved === 'rbapp/lib/widget/helper.rb'; }));
+    ok('ruby · bare require stays external', (idx.importsByFile.get('rbapp/lib/widget.rb') || []).some(function (e) { return e.raw === 'json' && e.resolved === null; }));
+    ok('c# · internal sealed class symbol', (idx.symbols.get('Program') || []).some(function (d) { return d.file === 'csapp/Program.cs'; }));
+    ok('c# · method + property symbols', (idx.symbols.get('Greet') || []).some(function (d) { return d.kind === 'method'; }) && (idx.symbols.get('Count') || []).some(function (d) { return d.kind === 'property'; }));
+    ok('c# · using resolves via namespace map', (idx.importsByFile.get('csapp/Program.cs') || []).some(function (e) { return e.raw === 'Acme.Services' && e.resolved === 'csapp/Services/Greeter.cs'; }));
+    ok('c# · using System stays external', (idx.importsByFile.get('csapp/Program.cs') || []).some(function (e) { return e.raw === 'System' && e.resolved === null; }));
+    ok('c# · using-statement not an import', !(idx.importsByFile.get('csapp/Program.cs') || []).some(function (e) { return e.raw === 'var' || e.raw === 'g'; }));
+    ok('c# · public members exported, internal not', (idx.exportsByFile.get('csapp/Services/Greeter.cs') || []).some(function (e) { return e.name === 'Greet'; })
+      && (idx.exportsByFile.get('csapp/Services/Greeter.cs') || []).some(function (e) { return e.name === 'Count'; })
+      && !(idx.exportsByFile.get('csapp/Program.cs') || []).some(function (e) { return e.name === 'Program'; }));
+    ok('classify · Java/C# test filenames detected', idx.tests.indexOf('javapkg/src/main/java/com/acme/util/StringsTest.java') !== -1 && idx.tests.indexOf('csapp/GreeterTests.cs') !== -1);
+    ok('classify · Program.cs is an entry point', idx.entries.indexOf('csapp/Program.cs') !== -1);
     ok('index · importCount > 0', (idx.importCount || 0) > 0, String(idx.importCount));
     /* packer respects budget and never emits a line number past a file's length */
     var packed = packSmartContext('where is API_BASE_URL defined', 4000);
@@ -187,6 +227,8 @@ function runSelfTests() {
     ok('intent · exports reads module.exports names', /addTodo/.test(exp1.answer) && /removeTodo/.test(exp1.answer));
     var exp2 = inv('exports pkg/util.py');
     ok('intent · exports Python surface fallback', /helper/.test(exp2.answer));
+    var exp3 = inv('exports rbapp/lib/widget/helper.rb');
+    ok('intent · exports Ruby surface fallback', /helper_fn/.test(exp3.answer));
     var tds = inv('todos');
     ok('intent · todos lists the tagged line', tds.answer.indexOf('src/orphanish.js') !== -1 && /TODO/.test(tds.answer));
     var env1 = inv('env');

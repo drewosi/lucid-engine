@@ -27,12 +27,12 @@ var GROUND_EXCERPT_PAD  = 6;      /* lines of context padded around a single-lin
 
 var SRC_EXT = { ts: 9, tsx: 9, js: 9, jsx: 9, mjs: 9, cjs: 9, py: 9, go: 9, rs: 9, java: 8, rb: 8, php: 8, c: 8, h: 8, cc: 8, cpp: 8, hpp: 8, cs: 8, swift: 8, kt: 8, scala: 8, svelte: 9, vue: 9, html: 7, css: 6, scss: 6, less: 6, sql: 7, sh: 7, bash: 7, zsh: 7, md: 8, mdx: 8, rst: 7, txt: 5, json: 5, yml: 6, yaml: 6, toml: 6, xml: 4, ini: 5, cfg: 5, env: 5, graphql: 7, proto: 7, tf: 6, lua: 7, ex: 8, exs: 8, erl: 7, ml: 7, hs: 7, zig: 8, dart: 8, r: 7, jl: 7 };
 var CONFIG_NAMES = /^(package\.json|tsconfig[^\/]*\.json|jsconfig\.json|pyproject\.toml|setup\.(py|cfg)|pipfile|go\.(mod|sum)|cargo\.toml|gemfile|mix\.exs|makefile|justfile|dockerfile|docker-compose\.ya?ml|\.env\.example|vite\.config\.[jt]s|webpack\.config\.[jt]s|next\.config\.[jt]s|rollup\.config\.[jt]s|requirements\.txt|composer\.json|build\.gradle(\.kts)?|pom\.xml|[^\/]+\.csproj|[^\/]+\.sln|cmakelists\.txt)$/i;
-var ENTRY_NAMES = /^(index|main|__main__|app|server|cli|core|__init__|mod|lib)\.[a-z]+$/i;
+var ENTRY_NAMES = /^(index|main|__main__|app|server|cli|core|__init__|mod|lib|program|application)\.[a-z]+$/i;
 var README_NAMES = /^readme(\.|$)/i;
 var LOWVALUE_PATH = /(\.min\.|\.lock$|-lock\.|\.snap$|\.map$|\.d\.ts$|\bfixtures?\b|\b__snapshots__\b|\bmigrations\b|\bgenerated\b)/i;
 /* test detection across ecosystems: JS/TS .test/.spec, Go/py _test., Ruby _spec.,
-   Python test_*.py prefix, and tests/ or spec/ directories */
-var TEST_PATH = /(\.test\.|\.spec\.|_test\.|_spec\.|\/test_[^\/]*\.py$|\btests?\/|\bspec\/|\b__tests__\b)/i;
+   Python test_*.py prefix, tests/ or spec/ directories, Java FooTest / C# FooTests */
+var TEST_PATH = /(\.test\.|\.spec\.|_test\.|_spec\.|\/test_[^\/]*\.py$|\btests?\/|\bspec\/|\b__tests__\b|tests?\.(java|cs)$)/i;
 
 /* language-aware token estimate — code tokenizes denser than prose, so one
    chars-per-token divisor per family beats a flat /4 */
@@ -203,7 +203,7 @@ function packSmartContext(q, budgetTokens) {
 /* PROJECT MAP — full shape of the project in few tokens; cached until context changes */
 
 /* monorepo awareness: a "package" is any directory holding a build manifest */
-var MANIFEST_RE = /^(package\.json|cargo\.toml|pyproject\.toml|go\.mod|composer\.json|build\.gradle(\.kts)?|pom\.xml|gemfile|mix\.exs)$/i;
+var MANIFEST_RE = /^(package\.json|cargo\.toml|pyproject\.toml|go\.mod|composer\.json|build\.gradle(\.kts)?|pom\.xml|gemfile|mix\.exs|[^\/]+\.csproj)$/i;
 function detectPackages(paths) {
   var byDir = {};
   paths.forEach(function (p) {
@@ -218,6 +218,7 @@ function detectPackages(paths) {
       else if (/go\.mod$/i.test(name)) { m = f.content.match(/^module\s+(\S+)/m); if (m) label = m[1]; }
       else if (/pom\.xml$/i.test(name)) { m = f.content.match(/<artifactId>([^<]+)<\/artifactId>/); if (m) label = m[1]; }
       else if (/mix\.exs$/i.test(name)) { m = f.content.match(/app:\s*:(\w+)/); if (m) label = m[1]; }
+      else if (/\.csproj$/i.test(name)) { label = name.replace(/\.csproj$/i, ''); }
     }
     byDir[dir] = { dir: dir, manifest: p, name: label };
   });

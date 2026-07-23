@@ -13,8 +13,18 @@ st.indexDirty = true; st.projectIndex = null;
 
 /* definition-shaped lines across common languages — captures the declared name.
    Practical regex, not a parser: covers declarations and `NAME = function|class|(=>)`. */
-/* declarations across JS/TS, Python, Go (top-level func), Rust (pub/mod), Java-ish */
-var DEF_DECL_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:pub(?:\([^)]*\))?\s+|public\s+|private\s+|protected\s+|static\s+|abstract\s+|final\s+)*(?:async\s+)?(function\*?|class|interface|type|struct|enum|trait|impl|def|fn|func|module|mod|const|let|var|sub|proc)\s+([A-Za-z_$][\w$]*)/;
+/* declarations across JS/TS, Python, Go (top-level func), Rust (pub/mod), Java, C#, Ruby */
+var DEF_DECL_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:pub(?:\([^)]*\))?\s+|public\s+|private\s+|protected\s+|internal\s+|static\s+|abstract\s+|final\s+|sealed\s+|partial\s+)*(?:async\s+)?(function\*?|class|interface|type|struct|enum|trait|impl|def|fn|func|module|mod|const|let|var|sub|proc|record)\s+([A-Za-z_$][\w$]*)/;
+/* Java/C# method declarations: ≥1 modifier keeps call statements/`if (`/`return (` out;
+   `=` excluded from the type-token class keeps field initializers out; `new` is
+   deliberately not a modifier. Gated to .java/.cs files. */
+var DEF_CJ_METHOD_RE = /^\s*(?:(?:public|private|protected|internal|static|final|abstract|sealed|override|virtual|async|partial|synchronized|native)\s+)+(?:[\w$.<>\[\],?]+\s+)*([A-Za-z_$][\w$]*)\s*\(/;
+/* C# properties: `public int Count { get; set; }` — the `{ get|set|init` tail is the gate */
+var DEF_CS_PROP_RE = /^\s*(?:(?:public|private|protected|internal|static|virtual|override|abstract|sealed|required)\s+)+(?:[\w$.<>\[\],?]+\s+)*([A-Za-z_$][\w$]*)\s*\{\s*(?:get|set|init)\b/;
+/* Ruby attribute declarations are the class's public surface */
+var DEF_RB_ATTR_RE = /^\s*attr_(?:accessor|reader|writer)\s+(:\w+(?:\s*,\s*:\w+)*)/;
+/* C# namespace declarations (braced and file-scoped) — recorded for using-resolution */
+var CS_NAMESPACE_RE = /^\s*namespace\s+([\w.]+)/;
 var DEF_ASSIGN_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:const|let|var|public|private|protected|static|readonly)?\s*([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s+)?(?:function\*?\b|\([^()]*\)\s*(?::[^={]+)?=>|class\b|\([^)]*\)\s*\{)/;
 var DEF_GO_METHOD_RE = /^\s*func\s*\([^)]*\)\s*([A-Za-z_]\w*)/;       /* Go receiver methods: func (r *R) M() */
 var DEF_PY_ASSIGN_RE = /^([A-Za-z_]\w*)\s*(?::[^=\n]+)?=(?!=)\s*\S/;  /* Python module-level NAME = … (no indent, not ==) */
@@ -24,17 +34,23 @@ function assignKind(ln) {
   if (/\bfunction\b/.test(ln)) return 'function';
   return 'const';
 }
+/* import-shaped lines. `lang: null` applies to every file; otherwise the entry only
+   runs when the file's detected language matches — gating stops the Python `import`
+   rule from mangling Java lines and keeps C#'s `using` away from C/C++. */
 var IMPORT_RES = [
-  /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/,                      /* dynamic import('m') — check before static */
-  /\bimport\s+(?:[\w${},*\s]+\s+from\s+)?['"]([^'"]+)['"]/,     /* import x from 'm' | import 'm' */
-  /\bexport\s+(?:[\w${},*\s]+)\s+from\s+['"]([^'"]+)['"]/,      /* export … from 'm' */
-  /\brequire\(\s*['"]([^'"]+)['"]\s*\)/,                        /* require('m') */
-  /^\s*(?:pub\s+)?use\s+([A-Za-z_][\w:]*)/,                     /* rust: use crate::a::b */
-  /^\s*(?:pub\s+)?mod\s+([A-Za-z_]\w*)\s*;/,                    /* rust: mod foo; */
-  /^\s*from\s+([.\w]+)\s+import\b/,                             /* py: from m import … (incl. relative) */
-  /^\s*import\s+([\w.]+)/                                       /* py: import m */
+  { re: /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/, lang: null },                      /* dynamic import('m') — check before static */
+  { re: /\bimport\s+(?:[\w${},*\s]+\s+from\s+)?['"]([^'"]+)['"]/, lang: null },     /* import x from 'm' | import 'm' */
+  { re: /\bexport\s+(?:[\w${},*\s]+)\s+from\s+['"]([^'"]+)['"]/, lang: null },      /* export … from 'm' */
+  { re: /\brequire\(\s*['"]([^'"]+)['"]\s*\)/, lang: null },                        /* require('m') */
+  { re: /^\s*(?:pub\s+)?use\s+([A-Za-z_][\w:]*)/, lang: { rust: 1, php: 1 } },      /* rust: use crate::a::b (php `use` kept as before) */
+  { re: /^\s*(?:pub\s+)?mod\s+([A-Za-z_]\w*)\s*;/, lang: { rust: 1 } },             /* rust: mod foo; */
+  { re: /^\s*require(?:_relative)?\s+['"]([^'"]+)['"]/, lang: { ruby: 1 } },        /* ruby: require 'x' | require_relative 'x' */
+  { re: /^\s*(?:global\s+)?using\s+(?:static\s+)?(?:\w+\s*=\s*)?([A-Za-z_][\w.]*)\s*;/, lang: { 'c#': 1 } }, /* c#: using Ns; — shape excludes using-statements */
+  { re: /^\s*import\s+(?:static\s+)?([\w.]+?)(?:\.\*)?\s*;/, lang: { java: 1 } },   /* java: import a.b.C; | import static a.b.C.m; | a.b.* */
+  { re: /^\s*from\s+([.\w]+)\s+import\b/, lang: { python: 1 } },                    /* py: from m import … (incl. relative) */
+  { re: /^\s*import\s+([\w.]+)/, lang: { python: 1 } }                              /* py: import m */
 ];
-var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.rb', '.php', '.java', '.vue', '.svelte'];
+var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.rb', '.php', '.java', '.cs', '.vue', '.svelte'];
 /* export-shaped lines the definition regexes don't cover: JS/TS named re-exports
    and CommonJS. Declaration exports (export function x / pub fn / Go capitals)
    are detected off the already-matched definition instead — no second pass. */
@@ -124,6 +140,31 @@ function resolveImport(fromFile, mod) {
     }
     var pr = resolveCand(mod.replace(/\./g, '/')); if (pr) return pr;
   }
+  /* Java dotted imports: com.foo.Bar under a source root aligned off the importer's
+     own path, then repo root and Maven conventions; `import static a.b.C.m` retries
+     with the member segment dropped. */
+  if (ext === 'java' && mod.indexOf('.') !== -1 && mod.indexOf('/') === -1) {
+    var jsegs = mod.split('.');
+    var jroots = [], jdir = dirOf(fromFile) + '/';
+    var jcut = jdir.lastIndexOf('/' + jsegs[0] + '/');
+    if (jcut !== -1) jroots.push(jdir.slice(0, jcut + 1));
+    jroots.push('', 'src/main/java/', 'src/test/java/', 'src/');
+    for (var jr = 0; jr < jroots.length; jr++) {
+      var jc = resolveCand(jroots[jr] + jsegs.join('/'));
+      if (!jc && jsegs.length > 1) jc = resolveCand(jroots[jr] + jsegs.slice(0, -1).join('/'));
+      if (jc && jc !== fromFile) return jc;
+    }
+    return null;
+  }
+  /* Ruby: require_relative resolves beside the importer; bare require tries the
+     repo root and a root-level lib/ (deeper lib dirs are not searched — disclosed). */
+  if (ext === 'rb' && mod.charAt(0) !== '.' && mod.charAt(0) !== '/') {
+    var rb1 = resolveCand(joinPath(dirOf(fromFile), mod));
+    if (rb1 && rb1 !== fromFile) return rb1;
+    var rb2 = resolveCand(mod) || resolveCand(joinPath('lib', mod));
+    if (rb2 && rb2 !== fromFile) return rb2;
+    return null;
+  }
   if (mod.charAt(0) === '.' || mod.charAt(0) === '/') {
     var base = mod.charAt(0) === '/' ? '' : dirOf(fromFile);
     return resolveCand(joinPath(base, mod.charAt(0) === '/' ? mod.slice(1) : mod));
@@ -162,6 +203,7 @@ function buildIndex() {
   var envVars = new Map();       /* NAME -> [{file, line}] */
   var symCountByFile = {};       /* file -> definition count */
   var entries = [], tests = [], configs = [], docs = [], byExt = {}, langs = {};
+  var csNamespaces = {}, csNsCount = 0; /* C# namespace -> first declaring file */
   var paths = sortedPaths(), symbolCount = 0, importCount = 0;
   buildResolvers(paths);
   var big = paths.length > 1500;
@@ -207,8 +249,17 @@ function buildIndex() {
       }
 
       var md = DEF_DECL_RE.exec(ln), sym = null, kind = null;
-      if (md) { kind = md[1]; sym = md[2]; }
+      if (md) {
+        kind = md[1]; sym = md[2];
+        /* Ruby class methods: `def self.helper` captures `self` — take the real name */
+        if (ext === 'rb' && sym === 'self') { var mrs = ln.match(/\bdef\s+self\.([A-Za-z_]\w*)/); sym = mrs ? mrs[1] : null; }
+      }
       else if (isGo) { var mgo = DEF_GO_METHOD_RE.exec(ln); if (mgo) { kind = 'method'; sym = mgo[1]; } }
+      else if (ext === 'java' || ext === 'cs') {
+        var mcj = DEF_CJ_METHOD_RE.exec(ln);
+        if (mcj) { kind = 'method'; sym = mcj[1]; }
+        else if (ext === 'cs') { var mcp = DEF_CS_PROP_RE.exec(ln); if (mcp) { kind = 'property'; sym = mcp[1]; } }
+      }
       if (!sym) {
         if (ext === 'py') { var mp = DEF_PY_ASSIGN_RE.exec(ln); if (mp) { kind = 'const'; sym = mp[1]; } }
         else { var ma = DEF_ASSIGN_RE.exec(ln); if (ma) { kind = assignKind(ln); sym = ma[1]; } }
@@ -217,10 +268,27 @@ function buildIndex() {
         var arr = symbols.get(sym) || (symbols.set(sym, []), symbols.get(sym));
         if (arr.length < 200) { arr.push({ file: p, line: i + 1, kind: kind }); symbolCount++; symCountByFile[p] = (symCountByFile[p] || 0) + 1; }
         /* declaration exports, off the definition just matched: JS/TS `export …`,
-           Rust `pub …`, Go's uppercase-initial convention */
+           Rust `pub …`, Go's uppercase-initial convention, Java/C# `public` */
         if (/^\s*export\b/.test(ln)) recordExport(p, sym, i + 1, kind);
         else if (ext === 'rs' && /^\s*pub\b/.test(ln)) recordExport(p, sym, i + 1, kind);
         else if (isGo && /^[A-Z]/.test(sym)) recordExport(p, sym, i + 1, kind);
+        else if ((ext === 'java' || ext === 'cs') && /^\s*public\b/.test(ln)) recordExport(p, sym, i + 1, kind);
+      }
+      /* Ruby attr declarations: each :name is a public accessor */
+      if (ext === 'rb') {
+        var mra = DEF_RB_ATTR_RE.exec(ln);
+        if (mra) mra[1].split(',').forEach(function (piece) {
+          var an = piece.trim().replace(/^:/, '');
+          if (an.length > 1) {
+            var aArr = symbols.get(an) || (symbols.set(an, []), symbols.get(an));
+            if (aArr.length < 200) { aArr.push({ file: p, line: i + 1, kind: 'attr' }); symbolCount++; symCountByFile[p] = (symCountByFile[p] || 0) + 1; }
+          }
+        });
+      }
+      /* C# namespace declarations feed using-directive resolution (first file wins) */
+      if (ext === 'cs' && csNsCount < 500) {
+        var mns = CS_NAMESPACE_RE.exec(ln);
+        if (mns && !csNamespaces[mns[1]]) { csNamespaces[mns[1]] = p; csNsCount++; }
       }
 
       /* non-declaration export forms: export { a, b as c }, module.exports = {…}, exports.x = */
@@ -251,10 +319,26 @@ function buildIndex() {
       }
 
       for (var r = 0; r < IMPORT_RES.length; r++) {
-        var im = IMPORT_RES[r].exec(ln);
+        if (IMPORT_RES[r].lang && !IMPORT_RES[r].lang[lang]) continue;
+        var im = IMPORT_RES[r].re.exec(ln);
         if (im) { recordImport(p, im[1], i + 1); break; }
       }
     }
+  });
+
+  /* C# fixup: `using Acme.Services;` can't resolve until every namespace is seen —
+     patch still-null .cs imports to the namespace's representative (first) file.
+     `using Static.Ns.Type` retries with the type segment dropped. */
+  importsByFile.forEach(function (list, file) {
+    if (fileExt(file) !== 'cs') return;
+    list.forEach(function (e) {
+      if (e.resolved !== null) return;
+      var hit = csNamespaces[e.raw] || csNamespaces[e.raw.replace(/\.[A-Za-z_]\w*$/, '')];
+      if (hit && hit !== file) {
+        e.resolved = hit;
+        (importedBy.get(hit) || (importedBy.set(hit, []), importedBy.get(hit))).push({ file: file, line: e.line });
+      }
+    });
   });
 
   return {

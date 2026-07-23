@@ -298,7 +298,7 @@ var INTENTS = [
       steps.push({ action: 'match test files to sources (name stems + what tests import)', note: plural(idx.tests.length, 'test file') + ' · ' + plural(gaps.length, 'uncovered code file'), evidence: gaps.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: gaps.length
-          ? plural(gaps.length, 'code file') + ' with no matching test (no shared name stem, not imported by any test file):\n\n' + gaps.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') + '\n\nMatched by test-file name stems and test imports — integration tests that exercise code indirectly are not traced.'
+          ? plural(gaps.length, 'code file') + ' with no matching test (no shared name stem, not imported by any test file):\n\n' + gaps.slice(0, 40).map(function (p) { return '- `' + p + '`'; }).join('\n') + '\n\nMatched by test-file name stems and test imports — integration tests that exercise code indirectly are not traced.'
           : 'Every loaded code file is matched by a test name stem or imported by a test file.' };
     } },
 
@@ -399,18 +399,19 @@ var INTENTS = [
       steps.push({ action: 'resolve “' + arg + '” to a file', note: tf || 'unresolved', evidence: [], status: 'done' });
       if (!tf) return { steps: steps, verdict: LOCAL_VERDICT(), answer: 'Could not resolve `' + arg + '` to a loaded file.' };
       var list = idx.exportsByFile.get(tf) || [];
-      if (!list.length && (st.files.get(tf) || {}).lang === 'python') {
-        /* Python has no export keyword — its module-level definitions are the surface */
+      var tfLang = (st.files.get(tf) || {}).lang;
+      if (!list.length && (tfLang === 'python' || tfLang === 'ruby')) {
+        /* Python/Ruby have no export keyword — module-level definitions are the surface */
         var pub = [];
         idx.symbols.forEach(function (defsArr, name) {
           if (name.charAt(0) === '_') return;
           defsArr.forEach(function (d) { if (d.file === tf && pub.length < 15) pub.push({ name: name, line: d.line, kind: d.kind }); });
         });
         pub.sort(function (x, y) { return x.line - y.line; });
-        steps.push({ action: 'read module-level definitions (Python public surface)', note: plural(pub.length, 'definition'), evidence: pub.slice(0, 12).map(function (x) { return evAt(tf, x.line); }), status: 'done' });
+        steps.push({ action: 'read module-level definitions (no export keyword)', note: plural(pub.length, 'definition'), evidence: pub.slice(0, 12).map(function (x) { return evAt(tf, x.line); }), status: 'done' });
         return { steps: steps, verdict: LOCAL_VERDICT(),
           answer: pub.length
-            ? '`' + tf + '` (Python — no export keyword) has ' + plural(pub.length, 'module-level definition') + ' as its public surface (underscore-prefixed names excluded):\n\n' + pub.map(function (x) { return '- `' + x.name + '` (' + x.kind + ') — line ' + x.line; }).join('\n')
+            ? '`' + tf + '` (' + (tfLang === 'python' ? 'Python' : 'Ruby') + ' — no export keyword) has ' + plural(pub.length, 'module-level definition') + ' as its public surface (underscore-prefixed names excluded):\n\n' + pub.map(function (x) { return '- `' + x.name + '` (' + x.kind + ') — line ' + x.line; }).join('\n')
             : 'No module-level definitions found in `' + tf + '`.' };
       }
       steps.push({ action: 'read exported symbols from the index', note: plural(list.length, 'export'), evidence: list.slice(0, 12).map(function (x) { return evAt(tf, x.line); }), status: 'done' });
