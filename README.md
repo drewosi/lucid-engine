@@ -82,10 +82,11 @@ Honest-labeling rule, upgraded: everything simulated or unbuilt says so on the s
 
 ## Engine internals — languages, limits, security, self-tests
 
-*(MERIDIAN Engine v0.2-hardened)*
+*(MERIDIAN Engine v0.3)*
 
 ### Recent improvements
 
+- **v0.3 — audit pass** *(new)* — tight-by-default `connect-src` + a frame-buster, a streaming concurrency guard, trace-salvage fallbacks that no longer mangle answers *quoting* the trace format, un-silenced read errors (a `read-error` skip reason in `[ REVIEW SKIPPED ]`), rAF-batched streaming repaints with stick-to-bottom scrolling, a windowed evidence viewer that highlights the cited quote, an aggregate ~300MB ingest cap, REPLACE/ADD choice when loading a folder over a loaded project, pre-send checks that count history + instructions, and a self-test suite grown to 47 checks covering the stream adapters and ingest filters.
 - **Resilient trace parsing** — the `meridian-trace` block is recovered even when the model uses ` ```json `, drops the fence, adds trailing commas, or gets cut off mid-JSON. When no trace can be recovered the answer degrades honestly to a `RAW RESPONSE` / `TRACE TRUNCATED` state with a one-click **`[ RE-GROUND & RETRY ]`** (re-runs the local investigation and re-asks with a stricter instruction). A **Force Strict Trace** setting opts noncompliant models into stricter prompting.
 - **Multi-language indexing** — symbol and import extraction now covers **Python, Go, Rust** alongside deepened JS/TS (dynamic `import()`, tsconfig `paths` aliases, monorepo workspace resolution). See the matrix below.
 - **Faster on large repos** — the symbol/import index no longer rebuilds when you toggle file selection (it depends on content, not selection), the file cap is raised to **8,000**, and token estimates blend a token-regex count for small files with the per-language char divisor for large ones.
