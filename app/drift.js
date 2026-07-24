@@ -10,8 +10,9 @@ import { getIndex } from './indexer.js';
    disclosed in every drift answer. This is session-over-session comparison,
    not continuous monitoring; the copy everywhere says so.                    */
 
-st.driftSig = null;   /* project signature whose baseline this session holds */
-st.driftPrev = null;  /* the snapshot that existed when this project was first loaded this session */
+st.driftSig = null;     /* project signature whose baseline this session holds */
+st.driftPrev = null;    /* the snapshot that existed when this project was first loaded this session */
+st.driftPending = false; /* true while the last session's snapshot is still being read from IndexedDB */
 
 var ddb = null;
 function driftOpen() {
@@ -56,7 +57,7 @@ function projectSig() {
 
 /* compact metadata fingerprint: path → [tokens, symbolCount] plus totals */
 function makeFingerprint(idx) {
-  var files = {};
+  var files = Object.create(null); /* keyed by project paths — no prototype collisions */
   st.files.forEach(function (f, p) { files[p] = [f.tokens, idx.symCountByFile[p] || 0]; });
   return { sig: projectSig(), ts: Date.now(), fileCount: idx.fileCount, symbolCount: idx.symbolCount, importCount: idx.importCount, files: files };
 }
@@ -70,8 +71,10 @@ function recordSession() {
   var sig = projectSig(), cur;
   try { cur = makeFingerprint(getIndex()); } catch (e) { return; }
   if (st.driftSig !== sig) {
-    st.driftSig = sig; st.driftPrev = null;
-    driftGet(sig).then(function (rec) { st.driftPrev = rec || null; return driftPut(cur); }).catch(function () {});
+    st.driftSig = sig; st.driftPrev = null; st.driftPending = true;
+    driftGet(sig)
+      .then(function (rec) { st.driftPrev = rec || null; st.driftPending = false; return driftPut(cur); })
+      .catch(function () { st.driftPending = false; });
   } else {
     driftPut(cur).catch(function () {});
   }

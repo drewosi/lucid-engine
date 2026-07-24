@@ -1,8 +1,11 @@
-/* MERIDIAN Engine v0.5 — v0.4's deterministic reasoning pass plus the
-   instruments pass: Signal Extraction (ranked top-findings digest) and Drift
-   Watch (session-over-session index drift, metadata only) are real, Kotlin/
-   Swift/PHP join the indexed languages, and the self-test suite grows to 174
-   checks, run in CI on every push.
+/* MERIDIAN Engine v0.6 — the audit-pass-2 close: the ingest caps actually fire
+   (bounded 32-wide read pool + reviewable over-cap skips), the command grammar
+   no longer hijacks prose questions (per-alias argument gate + trailing-why →
+   reason), SMART-mode grounding is sent even with nothing checked, SSE handles
+   CRLF + unterminated tails, search is bounded and honest about it, project-
+   supplied keys can't collide with Object.prototype, and Tailwind's CDN is gone
+   — script-src is 'self', zero third-party requests. (F6, the legal
+   placeholders, is deliberately left open.)
 
    Entry point. Modules own their functions and wiring; this file fixes the one
    thing that must stay global: the order things initialize in. The init*() calls

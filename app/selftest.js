@@ -5,8 +5,10 @@ import { SAMPLE_PROJECT } from './demo.js';
 import { classifyIntent } from './local.js';
 import { INTENTS, runInvestigation } from './intents.js';
 import { extractTrace } from './trace.js';
-import { httpErrorText, parseStreamEvent } from './chat.js';
-import { ingestFile } from './ingest.js';
+import { httpErrorText, parseStreamEvent, splitSseEvents } from './chat.js';
+import { __setCapsForTest, ingestFile, runIngestPool } from './ingest.js';
+import { localSearchData } from './actions.js';
+import { buildContextBlocks } from './prompt.js';
 import { app, esc, rememberFocus, returnFocus, toast, trap } from './helpers.js';
 /* ============ SELF-TESTS (DEV · EXPERIMENTAL) ============
    Loads a scratch multi-language fixture into a swapped-in files map, runs the
@@ -84,7 +86,12 @@ function selfTestFixture() {
     'phpapp/src/Models/User.php': '<?php\nnamespace App\\Models;\nclass User {\n  public function name() { return "u"; }\n}',
     'phpapp/src/Service.php': '<?php\nnamespace App;\nuse App\\Models\\User;\nuse Symfony\\Component\\Console;\nrequire \'legacy.php\';\nclass Service { }\nfunction boot() { }',
     'phpapp/src/legacy.php': '<?php\nfunction legacy_fn() { }',
-    'phpapp/tests/ServiceTest.php': '<?php\nclass ServiceTest { }'
+    'phpapp/tests/ServiceTest.php': '<?php\nclass ServiceTest { }',
+    /* long-line disclosure (F10): the import hides on a >400-char line the
+       indexer skips — the file must be counted, and can appear orphaned */
+    'src/minified.js': "import { addTodo } from './store.js';" + new Array(420).join(' ') + 'var mini=1;\nexport function todoCall() { todo(1); }',
+    /* prototype-key hardening (F12): extension + dir named like Object.prototype members */
+    'constructor/x.constructor': 'plain text in a hostile path\ncache control notes\ncache-control header'
   };
 }
 /* async ingest cases — drive the REAL ingestFile with synthetic files against
@@ -116,6 +123,31 @@ function ingestCases(ok) {
     ok('ingest · read failure → read-error skip', !st.files.has('ghost.txt') && st.skipped.readerr === 1
       && st.skippedFiles.some(function (s) { return s.path === 'ghost.txt' && s.reason === 'read-error'; }));
     ok('ingest · totalBytes tracks loaded text', st.totalBytes === 'hello BOM'.length + 'tiny'.length, String(st.totalBytes));
+    /* bounded ingest pool (audit F1) — the caps must fire WITHIN one batch, the
+       exact case the prior Promise.all fan-out could never enforce. Caps are
+       lowered via the dev hook and restored by the harness's restore(). */
+    var capFiles = st.files.size + 2;
+    __setCapsForTest({ maxFiles: capFiles });
+    var overBase = st.skipped.over;
+    var items = [];
+    for (var i = 0; i < 6; i++) (function (n) {
+      items.push({ path: 'pool/f' + n + '.txt', getFile: function () { return Promise.resolve(new File(['pool' + n], 'f' + n + '.txt')); } });
+    })(i);
+    return runIngestPool(items, 2).then(function () {
+      ok('ingest · pool enforces the file cap mid-batch', st.files.size === capFiles, st.files.size + ' vs cap ' + capFiles);
+      ok('ingest · over-cap counted + reviewable', st.skipped.over - overBase === 4
+        && st.skippedFiles.some(function (s) { return s.reason === 'over-cap'; }), 'over Δ=' + (st.skipped.over - overBase));
+      __setCapsForTest({ maxFiles: 8000, maxTotal: st.totalBytes + 3 });
+      var memBase = st.skipped.memcap;
+      return runIngestPool([
+        { path: 'pool/m0.txt', getFile: function () { return Promise.resolve(new File(['abcdefgh'], 'm0.txt')); } },
+        { path: 'pool/m1.txt', getFile: function () { return Promise.resolve(new File(['abcdefgh'], 'm1.txt')); } }
+      ], 1).then(function () {
+        ok('ingest · memory cap fires mid-batch + reviewable', st.skipped.memcap - memBase === 1
+          && st.files.has('pool/m0.txt') && !st.files.has('pool/m1.txt')
+          && st.skippedFiles.some(function (s) { return s.reason === 'mem-cap'; }), 'memcap Δ=' + (st.skipped.memcap - memBase));
+      });
+    });
   });
 }
 function runSelfTests() {
@@ -123,13 +155,16 @@ function runSelfTests() {
   function ok(name, cond, extra) { results.push({ name: name, pass: !!cond, extra: extra || '' }); }
   var savedFiles = st.files, savedIndex = st.projectIndex, savedDirty = st.indexDirty;
   var savedSkipped = st.skipped, savedSkipList = st.skippedFiles, savedBytes = st.totalBytes;
-  var savedDriftSig = st.driftSig, savedDriftPrev = st.driftPrev;
+  var savedDriftSig = st.driftSig, savedDriftPrev = st.driftPrev, savedDriftPending = st.driftPending;
+  var savedCaps = __setCapsForTest({}); /* read-only snapshot — cap tests lower them, restore() puts them back */
   function restore() {
     st.files = savedFiles; st.projectIndex = savedIndex; st.indexDirty = savedDirty;
     st.skipped = savedSkipped; st.skippedFiles = savedSkipList; st.totalBytes = savedBytes;
-    st.driftSig = savedDriftSig; st.driftPrev = savedDriftPrev;
+    st.driftSig = savedDriftSig; st.driftPrev = savedDriftPrev; st.driftPending = savedDriftPending;
+    __setCapsForTest(savedCaps);
   }
   try {
+    st.driftPending = false;
     st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
     st.skippedFiles = [];
     st.totalBytes = 0;
@@ -275,7 +310,22 @@ function runSelfTests() {
       ['where is signalHandler defined', 'def'],
       /* drift — must beat recent's what-changed regex */
       ['drift', 'drift'],
-      ['what changed since last session', 'drift']
+      ['what changed since last session', 'drift'],
+      /* command-grammar gate (audit F2) — prose that merely STARTS with a command
+         alias must fall through to the NL cascade, never swallow the sentence as
+         an argument. A trailing "why?" is interpretation → reason, always. */
+      ['Help me understand the auth flow', 'reason'],
+      ['Tests are failing after the refactor, why?', 'reason'],   /* trailing-why beats the tests route */
+      ['Search performance is terrible, how do I fix it?', 'reason'],
+      ['Dead simple question: why is login slow', 'reason'],
+      ['Path forward for the auth rewrite?', 'plain'],            /* no interpretation marker — honest deterministic search */
+      ['Imports are slow, why?', 'reason'],                       /* trailing-why beats the importers route */
+      ['Related work on this?', 'plain'],
+      ['Recent regressions in checkout?', 'recent'],
+      ['Structure of payments confuses me, why?', 'reason'],      /* trailing-why beats the structure route */
+      ['Exports keep breaking', 'plain'],                         /* two prose tokens — the gate declines */
+      ['search "cache control"', 'search'],                       /* quoted arg = the literal escape hatch */
+      ['why do we have circular imports', 'cycles']               /* leading why stays with the cascade */
     ];
     ROUTES.forEach(function (rc) {
       var got = classifyIntent(rc[0]) || {};
@@ -284,6 +334,10 @@ function runSelfTests() {
     ok('route · reason needs a model', classifyIntent('why is the store slow').needsModel === true);
     ok('route · def arg picks the symbol', classifyIntent('where is addTodo defined').arg === 'addTodo');
     ok('route · importers arg picks the path', classifyIntent('what imports store.js').arg === 'store.js');
+    var qs = classifyIntent('search "cache control"');
+    ok('route · quoted search arg unwrapped + literal', qs.arg === 'cache control' && qs.literal === true, qs.arg);
+    ok('route · path keeps two tokens', classifyIntent('path src/index.js src/store.js').arg === 'src/index.js src/store.js');
+    ok('route · trailing-why is not deterministic', classifyIntent('Imports are slow, why?').needsModel === true);
     /* registry consistency — every reasoning instance is a complete entry */
     ok('registry · entries complete (kind/ground/run)', INTENTS.every(function (it) {
       return typeof it.kind === 'string' && it.kind && typeof it.ground === 'string' && typeof it.run === 'function'
@@ -299,6 +353,14 @@ function runSelfTests() {
     ok('index · TODO tag recorded', idx.todos.some(function (t) { return t.file === 'src/orphanish.js' && t.tag === 'TODO'; }));
     ok('index · env var read recorded', (idx.envVars.get('DEMO_FLAG') || []).length === 1);
     ok('index · symCountByFile counts store.js', (idx.symCountByFile['src/store.js'] || 0) >= 3, String(idx.symCountByFile['src/store.js']));
+    /* long-line skip disclosure (audit F10) */
+    ok('index · >400-char lines counted per file', idx.longLineCount >= 1 && (idx.longLinesByFile['src/minified.js'] || 0) >= 1, 'total=' + idx.longLineCount);
+    ok('index · long line NOT scanned for imports', !(idx.importsByFile.get('src/minified.js') || []).some(function (e) { return e.raw === './store.js'; }));
+    /* prototype-key hardening (audit F12) — project-supplied names must never
+       collide with Object.prototype members */
+    ok('hardening · index maps are null-prototype', Object.getPrototypeOf(idx.byExt) === null && Object.getPrototypeOf(idx.symCountByFile) === null && Object.getPrototypeOf(idx.langs) === null);
+    ok('hardening · detectLang survives a constructor ext', typeof detectLang('x.constructor', '') === 'string');
+    ok('hardening · byExt counts the constructor ext as data', typeof idx.byExt.constructor !== 'function' && idx.byExt['constructor'] === 1, String(idx.byExt['constructor']));
     /* niche investigations — run the real engine over the fixture terrain */
     function inv(qq) { return runInvestigation(qq, classifyIntent(qq)); }
     var cyc = inv('cycles');
@@ -306,6 +368,8 @@ function runSelfTests() {
     var orp = inv('orphans');
     ok('intent · orphans flags never-imported code', orp.answer.indexOf('src/orphanish.js') !== -1);
     ok('intent · orphans excludes imported files', orp.answer.indexOf('cyc/a.js') === -1);
+    ok('intent · orphans discloses skipped long lines', /over 400 chars/.test(orp.answer));
+    ok('intent · structure survives a constructor directory', /Project structure/.test(inv('structure').answer));
     var brk = inv('broken');
     ok('intent · broken finds the unresolved relative import', brk.answer.indexOf('./missing-file') !== -1);
     var exp1 = inv('exports src/store.js');
@@ -332,7 +396,34 @@ function runSelfTests() {
     ok('intent · signals leads with the broken-import CRITICAL', /CRITICAL/.test(sg.answer) && /broken relative import/.test(sg.answer) && /`broken`/.test(sg.answer));
     ok('intent · signals includes the cycle finding', /import cycle/.test(sg.answer) && /`cycles`/.test(sg.answer));
     ok('intent · signals caps at five, verdict local', sg.steps.length <= 5 && sg.verdict.local === true);
-    /* drift — baseline case, then a synthetic previous snapshot */
+    /* bounded search (audit F5) — invalid patterns are flagged, quoted queries
+       match literally, and the scan aborts honestly instead of hanging the tab */
+    var sInv = localSearchData('todo(', 'text');
+    ok('search · invalid regex flagged + literal fallback', sInv.invalidPattern === true && sInv.hits.some(function (h) { return h.p === 'src/minified.js'; }), sInv.hits.length + ' hits');
+    var sLit = localSearchData('"cache control"', 'text');
+    ok('search · quoted query matches literally', sLit.literal === true && sLit.invalidPattern === false
+      && sLit.hits.some(function (h) { return /cache control notes/.test(h.text); })
+      && !sLit.hits.some(function (h) { return /cache-control header/.test(h.text); }), sLit.hits.length + ' hits');
+    st.files.set('scan/huge.txt', stEntry('scan/huge.txt', new Array(400050).join('x\n')));
+    var sCap = localSearchData('zzz_nothing_matches_this', 'text');
+    ok('search · scan aborts at the line cap', sCap.aborted === true && sCap.hits.length === 0, 'scanned=' + sCap.scanned);
+    st.files.delete('scan/huge.txt');
+    /* SMART-mode grounding with nothing checked (audit F3) — what the FOUND
+       panel shows must be what the model receives */
+    (function () {
+      var mSaved = { ctxMode: st.ctxMode, groundMode: st.groundMode, mapCache: st.mapCache, mapDirty: st.mapDirty };
+      st.ctxMode = 'smart'; st.groundMode = true; st.mapDirty = true;
+      st.files.forEach(function (f) { f.checked = false; });
+      var cbb = buildContextBlocks('where is addTodo defined');
+      ok('smart-ctx · grounding survives empty selection', !!cbb.ground && cbb.blocks.length === 1 && /GROUNDED \d+ EV/.test(cbb.note || ''),
+        cbb.ground ? cbb.blocks.length + ' blocks · ' + (cbb.note || 'no note') : 'no ground');
+      st.files.forEach(function (f) { f.checked = true; });
+      st.ctxMode = mSaved.ctxMode; st.groundMode = mSaved.groundMode; st.mapCache = mSaved.mapCache; st.mapDirty = mSaved.mapDirty;
+    })();
+    /* drift — pending window, baseline case, then a synthetic previous snapshot */
+    st.driftPending = true;
+    ok('intent · drift pending window is honest', /Still reading/.test(inv('drift').answer));
+    st.driftPending = false;
     st.driftPrev = null;
     ok('intent · drift baseline message on first run', /Baseline recorded/.test(inv('drift').answer));
     st.driftPrev = { sig: 'scratch', ts: 0, fileCount: 2, symbolCount: 3, importCount: 0,
@@ -372,6 +463,13 @@ function runSelfTests() {
     var sc = parseStreamEvent({ usage: { prompt_tokens: 5, completion_tokens: 6 } }, false);
     ok('sse · openai usage', !!sc.usage && sc.usage.in === 5 && sc.usage.out === 6);
     ok('sse · openai error event', parseStreamEvent({ error: { message: 'bad' } }, false).errorMsg === 'bad');
+    /* SSE buffer splitting (audit F4) — CRLF endpoints and unterminated tails */
+    var spA = splitSseEvents('data: a\n\ndata: b\n\ndata: c');
+    ok('sse · LF split keeps the tail', spA.events.length === 2 && spA.rest === 'data: c');
+    var spB = splitSseEvents('data: a\r\n\r\ndata: b\r\n\r\n');
+    ok('sse · CRLF separators split', spB.events.length === 2 && spB.rest === '');
+    var spC = splitSseEvents('data: a\n\r\ndata: b');
+    ok('sse · mixed separators split', spC.events.length === 1 && spC.rest === 'data: b');
     /* HTTP error taxonomy */
     ok('http · 401 key rejected', httpErrorText(401, '').indexOf('KEY REJECTED') === 0);
     ok('http · 429 uses retry-after', httpErrorText(429, '', '12').indexOf('retry in 12s') !== -1);

@@ -27,11 +27,17 @@ function resNote(resEl, txt) {
 }
 
 /* one engine behind search / def / refs — all in-memory, nothing touches disk.
-   localSearchData is DOM-free so the LOCAL ENGINE provider can reuse it. */
-function localSearchData(query, mode, filterGlob) {
+   localSearchData is DOM-free so the LOCAL ENGINE provider can reuse it.
+   Bounded: the scan stops at MAX_SCAN_LINES lines or SCAN_TIME_MS elapsed, and
+   says so in the returned flags — user- and model-supplied patterns run on the
+   main thread, so an unbounded scan would hang the tab. (A single catastrophic
+   regex .test() on one line still cannot be preempted — documented limitation.) */
+var MAX_SCAN_LINES = 400000, SCAN_TIME_MS = 2000;
+function localSearchData(query, mode, filterGlob, opts) {
   var fRe = null;
   if (filterGlob) { try { fRe = actGlobToRe(filterGlob); } catch (e) {} }
-  var re = null, lq = query.toLowerCase();
+  var literal = !!(opts && opts.literal), invalidPattern = false;
+  var re = null;
   var sym = query.replace(/[^\w$.]/g, '').replace(/^.*\./, ''); /* last segment of a dotted symbol */
   var symEsc = sym.replace(/\$/g, '\\$');
   if (mode === 'def' && sym) {
@@ -41,14 +47,23 @@ function localSearchData(query, mode, filterGlob) {
   } else if (mode === 'refs' && sym) {
     re = new RegExp('\\b' + symEsc + '\\b');
   } else {
-    try { re = new RegExp(query, 'i'); } catch (e) { re = null; }
+    /* quoted query = literal search (the escape hatch for spaces + metachars) */
+    var qm = !literal && (query.match(/^"([^"]*)"$/) || query.match(/^'([^']*)'$/));
+    if (qm) { literal = true; query = qm[1]; }
+    if (!literal) {
+      try { re = new RegExp(query, 'i'); } catch (e) { re = null; invalidPattern = true; }
+    }
   }
+  var lq = query.toLowerCase();
   var cap = mode === 'refs' ? 40 : 30, hits = [], filesHit = 0;
+  var scanned = 0, aborted = false, timedOut = false, t0 = Date.now();
   st.files.forEach(function (f, p) {
-    if (hits.length >= cap) return;
+    if (hits.length >= cap || aborted || timedOut) return;
     if (fRe && !fRe.test(p)) return;
     var lines = f.content.split('\n'), had = false;
     for (var i = 0; i < lines.length && hits.length < cap; i++) {
+      if (++scanned > MAX_SCAN_LINES) { aborted = true; break; }
+      if ((scanned & 1023) === 0 && Date.now() - t0 > SCAN_TIME_MS) { timedOut = true; break; }
       var hit = re ? re.test(lines[i]) : lines[i].toLowerCase().indexOf(lq) !== -1;
       if (!hit) continue;
       had = true;
@@ -56,7 +71,15 @@ function localSearchData(query, mode, filterGlob) {
     }
     if (had) filesHit++;
   });
-  return { hits: hits, filesHit: filesHit, cap: cap };
+  return { hits: hits, filesHit: filesHit, cap: cap, scanned: scanned,
+           aborted: aborted, timedOut: timedOut, invalidPattern: invalidPattern, literal: literal };
+}
+/* honest one-liner for a bounded/degraded scan — '' when the scan was complete */
+function searchLimitNote(r) {
+  if (r.aborted) return 'search stopped after ' + Math.round(MAX_SCAN_LINES / 1000) + 'K lines — results may be incomplete; narrow the pattern or add a path filter';
+  if (r.timedOut) return 'search stopped after ' + (SCAN_TIME_MS / 1000) + 's — results may be incomplete; narrow the pattern or add a path filter';
+  if (r.invalidPattern) return 'not a valid regex — matched as literal text instead';
+  return '';
 }
 function runLocalSearch(query, resEl, mode, filterGlob) {
   resEl.innerHTML = '';
@@ -64,6 +87,8 @@ function runLocalSearch(query, resEl, mode, filterGlob) {
   r.hits.forEach(function (h) { evChip(resEl, h.p + ':' + h.line, h.p, h.line); });
   if (!r.hits.length) resNote(resEl, '// no matches in loaded files' + (filterGlob ? ' under filter ' + filterGlob : ''));
   else resNote(resEl, '// ' + (r.hits.length >= r.cap ? r.cap + '+ ' : r.hits.length + ' ') + (mode === 'def' ? 'definition-shaped ' : '') + 'match' + (r.hits.length === 1 ? '' : 'es') + ' in ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's') + ' — click a chip to inspect');
+  var lim = searchLimitNote(r);
+  if (lim) resNote(resEl, '// ' + lim);
 }
 
 /* local directory summary — file count, tokens, largest, newest */
@@ -174,4 +199,4 @@ function renderActions(bd, actions) {
   bd.appendChild(card);
 }
 
-export { localSearchData, renderActions };
+export { localSearchData, renderActions, searchLimitNote };

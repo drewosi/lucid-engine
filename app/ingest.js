@@ -62,8 +62,11 @@ function sniffEncoding(v) {
    the encoding sniff still applies — true binaries are never ingested */
 function ingestFile(file, path, force) {
   path = (path || file.name).replace(/^\.?\//, '');
-  if (st.files.size >= MAX_FILES) { st.skipped.over++; return Promise.resolve(); }
-  if (st.totalBytes >= MAX_TOTAL) { st.skipped.memcap++; return Promise.resolve(); }
+  /* cap guards — recorded in the review modal, not just counted. The file-count
+     cap yields to force (a hand-picked [ INCLUDE ] is deliberate); the memory
+     cap is hard even under force — it exists to keep the tab alive. */
+  if (!force && st.files.size >= MAX_FILES) { st.skipped.over++; recordSkip(path, 'over-cap', file.size, file); return Promise.resolve(); }
+  if (st.totalBytes >= MAX_TOTAL) { st.skipped.memcap++; recordSkip(path, 'mem-cap', file.size, file); return Promise.resolve(); }
   if (!force && ignoredPath(path)) { st.skipped.dirs++; return Promise.resolve(); }
   if (!force && matchesIgnore(path)) { st.skipped.user++; recordSkip(path, 'ignore-pattern', file.size, file); return Promise.resolve(); }
   if (!force && BIN_EXT.test(path)) { st.skipped.binary++; recordSkip(path, 'binary-ext', file.size, file); return Promise.resolve(); }
@@ -75,6 +78,12 @@ function ingestFile(file, path, force) {
     try { text = new TextDecoder(enc, { fatal: false }).decode(buf); }
     catch (e) { text = new TextDecoder('utf-8', { fatal: false }).decode(buf); }
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); /* strip a leading BOM */
+    /* re-check both caps after the async read — with a bounded pool the entry
+       guards can be up to one pool-width stale; this keeps enforcement exact */
+    if (!st.files.has(path)) {
+      if (!force && st.files.size >= MAX_FILES) { st.skipped.over++; recordSkip(path, 'over-cap', file.size, file); return; }
+      if (st.totalBytes >= MAX_TOTAL) { st.skipped.memcap++; recordSkip(path, 'mem-cap', file.size, file); return; }
+    }
     if (st.files.has(path)) st.totalBytes -= st.files.get(path).content.length; /* re-ingest replaces, not double-counts */
     st.totalBytes += text.length;
     st.files.set(path, {
@@ -95,10 +104,44 @@ function ingestFile(file, path, force) {
   });
 }
 
-function walkEntry(entry, prefix) {
+/* ---- bounded ingest pool ----
+   Every folder load runs through here. Fanning ingestFile out with a bare
+   Promise.all(list.map(...)) evaluates all the cap guards synchronously —
+   before a single arrayBuffer() resolves — so MAX_FILES / MAX_TOTAL could
+   never fire on a first load, and every file in the folder was read at once.
+   The pool keeps at most INGEST_POOL_WIDTH reads in flight, so the guards see
+   near-current counters and peak memory stays bounded.
+   items: [{ path, getFile(): Promise<File> }] — descriptors, no reads yet. */
+var INGEST_POOL_WIDTH = 32;
+function runIngestPool(items, width) {
+  var i = 0;
+  function lane() {
+    if (i >= items.length) return Promise.resolve();
+    var it = items[i++];
+    return it.getFile()
+      .then(function (f) { return ingestFile(f, it.path); })
+      .catch(function (e) {
+        /* getFile() itself failed (permissions, file vanished mid-walk) */
+        console.warn('meridian: could not read', it.path, e);
+        st.skipped.readerr++;
+        recordSkip(it.path, 'read-error', 0, null);
+      })
+      .then(lane);
+  }
+  var lanes = [];
+  for (var k = 0; k < Math.min(width || INGEST_POOL_WIDTH, items.length); k++) lanes.push(lane());
+  return Promise.all(lanes);
+}
+
+/* walk a webkitGetAsEntry tree collecting descriptors — directory enumeration
+   is cheap metadata I/O; the expensive file reads happen later, in the pool */
+function collectEntry(entry, prefix, out) {
   return new Promise(function (resolve) {
     if (entry.isFile) {
-      entry.file(function (f) { ingestFile(f, prefix + entry.name).then(resolve); }, function () { resolve(); });
+      out.push({ path: prefix + entry.name, getFile: function () {
+        return new Promise(function (res, rej) { entry.file(res, rej); });
+      } });
+      resolve();
     } else if (entry.isDirectory) {
       if (IGNORE_DIRS.indexOf(entry.name.toLowerCase()) !== -1 || (entry.name.charAt(0) === '.' && entry.name !== '.github')) { st.skipped.dirs++; resolve(); return; }
       var reader = entry.createReader(), all = [];
@@ -107,7 +150,7 @@ function walkEntry(entry, prefix) {
           /* Chrome returns ≤100 entries per call — keep reading until empty */
           if (batch.length) { all = all.concat(Array.prototype.slice.call(batch)); read(); }
           else {
-            Promise.all(all.map(function (e2) { return walkEntry(e2, prefix + entry.name + '/'); })).then(resolve);
+            Promise.all(all.map(function (e2) { return collectEntry(e2, prefix + entry.name + '/', out); })).then(resolve);
           }
         }, function () { resolve(); });
       })();
@@ -168,7 +211,9 @@ function pickHandler(input) {
   st.lastDirHandle = null;
   beginBatch();
   var list = Array.prototype.slice.call(input.files || []);
-  Promise.all(list.map(function (f) { return ingestFile(f, f.webkitRelativePath || f.name); })).then(afterIngest);
+  runIngestPool(list.map(function (f) {
+    return { path: f.webkitRelativePath || f.name, getFile: function () { return Promise.resolve(f); } };
+  })).then(afterIngest);
   input.value = '';
 }
 /* full unload — shared by the [ CLEAR ] control and the REPLACE ingest path */
@@ -318,11 +363,11 @@ function renderBudget() {
 
 /* ---- skipped-file review + include-back ---- */
 var skipveil = $('skipveil'), untrapSkip = null;
-var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE', 'read-error': 'READ ERROR — COULD NOT LOAD' };
+var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE', 'read-error': 'READ ERROR — COULD NOT LOAD', 'over-cap': 'OVER THE ' + MAX_FILES + '-FILE CAP', 'mem-cap': 'OVER THE MEMORY CAP' };
 function openSkipReview() {
   var list = $('skiplist');
   list.innerHTML = '';
-  var order = ['oversized', 'ignore-pattern', 'binary-ext', 'binary-content', 'read-error'];
+  var order = ['oversized', 'ignore-pattern', 'binary-ext', 'binary-content', 'read-error', 'over-cap', 'mem-cap'];
   var groups = {};
   st.skippedFiles.forEach(function (s) { (groups[s.reason] = groups[s.reason] || []).push(s); });
   $('skipsum').textContent = '// ' + st.skippedFiles.length + ' file' + (st.skippedFiles.length === 1 ? '' : 's') + ' recorded'
@@ -360,7 +405,9 @@ function openSkipReview() {
               toast('“' + s.path + '” included in context.');
             } else {
               inc.disabled = false;
-              toast('Could not include — the file content reads as binary.');
+              toast(st.totalBytes >= MAX_TOTAL
+                ? 'Could not include — the ~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB memory cap is reached. Clear or replace the project first.'
+                : 'Could not include — the file content reads as binary.');
             }
           });
         });
@@ -567,7 +614,16 @@ function suggestIgnore() {
   $('ignorein').focus();
   toast(add.length + ' pattern' + (add.length === 1 ? '' : 's') + ' suggested — review, then Apply.', { label: '[ APPLY ]', fn: function () { $('saveignore').click(); } });
 }
-export { IGNORE_DIRS, afterIngest, closePreview, closeSkipReview, getIgnoreText, ingestFile, maybeAutoSmart, openPreview, openSkipReview, prevveil, recordSkip, renderBudget, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
+/* DEV ONLY — self-tests lower the ingest caps to exercise the guard paths;
+   returns the previous values so the caller can restore. Never called by app code. */
+function __setCapsForTest(o) {
+  var prev = { maxFiles: MAX_FILES, maxTotal: MAX_TOTAL };
+  if (o && o.maxFiles) MAX_FILES = o.maxFiles;
+  if (o && o.maxTotal) MAX_TOTAL = o.maxTotal;
+  return prev;
+}
+
+export { IGNORE_DIRS, __setCapsForTest, afterIngest, closePreview, closeSkipReview, getIgnoreText, ingestFile, maybeAutoSmart, openPreview, openSkipReview, prevveil, recordSkip, renderBudget, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
 
 export function initIngest() {
   st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
@@ -593,9 +649,12 @@ export function initIngest() {
     function run(replace) {
       if (replace) clearContext();
       beginBatch();
-      var jobs = entries.map(function (en) { return walkEntry(en, ''); })
-        .concat(files.map(function (f) { return ingestFile(f, null); }));
-      Promise.all(jobs).then(afterIngest);
+      /* collect the whole tree first (cheap), then read through the bounded pool */
+      var pool = [];
+      files.forEach(function (f) { pool.push({ path: f.name, getFile: function () { return Promise.resolve(f); } }); });
+      Promise.all(entries.map(function (en) { return collectEntry(en, '', pool); }))
+        .then(function () { return runIngestPool(pool); })
+        .then(afterIngest);
     }
     /* a whole folder dropped onto an already-loaded project is ambiguous — ask
        instead of silently merging (dismissing the toast = no-op; loose-file

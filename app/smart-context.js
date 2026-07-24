@@ -25,7 +25,9 @@ var GROUND_MAX_TOK      = 18000;  /* hard cap on the entire grounding pack */
 var GROUND_MAX_CITES    = 40;     /* citation-only lines for evidence past the excerpt cap */
 var GROUND_EXCERPT_PAD  = 6;      /* lines of context padded around a single-line hit */
 
-var SRC_EXT = { ts: 9, tsx: 9, js: 9, jsx: 9, mjs: 9, cjs: 9, py: 9, go: 9, rs: 9, java: 8, rb: 8, php: 8, c: 8, h: 8, cc: 8, cpp: 8, hpp: 8, cs: 8, swift: 8, kt: 8, scala: 8, svelte: 9, vue: 9, html: 7, css: 6, scss: 6, less: 6, sql: 7, sh: 7, bash: 7, zsh: 7, md: 8, mdx: 8, rst: 7, txt: 5, json: 5, yml: 6, yaml: 6, toml: 6, xml: 4, ini: 5, cfg: 5, env: 5, graphql: 7, proto: 7, tf: 6, lua: 7, ex: 8, exs: 8, erl: 7, ml: 7, hs: 7, zig: 8, dart: 8, r: 7, jl: 7 };
+/* null-prototype: keyed by project-supplied extensions — a file named
+   `x.constructor` must miss cleanly, not return an inherited function */
+var SRC_EXT = Object.assign(Object.create(null), { ts: 9, tsx: 9, js: 9, jsx: 9, mjs: 9, cjs: 9, py: 9, go: 9, rs: 9, java: 8, rb: 8, php: 8, c: 8, h: 8, cc: 8, cpp: 8, hpp: 8, cs: 8, swift: 8, kt: 8, scala: 8, svelte: 9, vue: 9, html: 7, css: 6, scss: 6, less: 6, sql: 7, sh: 7, bash: 7, zsh: 7, md: 8, mdx: 8, rst: 7, txt: 5, json: 5, yml: 6, yaml: 6, toml: 6, xml: 4, ini: 5, cfg: 5, env: 5, graphql: 7, proto: 7, tf: 6, lua: 7, ex: 8, exs: 8, erl: 7, ml: 7, hs: 7, zig: 8, dart: 8, r: 7, jl: 7 });
 var CONFIG_NAMES = /^(package\.json|tsconfig[^\/]*\.json|jsconfig\.json|pyproject\.toml|setup\.(py|cfg)|pipfile|go\.(mod|sum)|cargo\.toml|gemfile|mix\.exs|makefile|justfile|dockerfile|docker-compose\.ya?ml|\.env\.example|vite\.config\.[jt]s|webpack\.config\.[jt]s|next\.config\.[jt]s|rollup\.config\.[jt]s|requirements\.txt|composer\.json|build\.gradle(\.kts)?|pom\.xml|[^\/]+\.csproj|[^\/]+\.sln|cmakelists\.txt)$/i;
 var ENTRY_NAMES = /^(index|main|__main__|app|server|cli|core|__init__|mod|lib|program|application)\.[a-z]+$/i;
 var README_NAMES = /^readme(\.|$)/i;
@@ -36,10 +38,10 @@ var TEST_PATH = /(\.test\.|\.spec\.|_test\.|_spec\.|\/test_[^\/]*\.py$|\btests?\
 
 /* language-aware token estimate — code tokenizes denser than prose, so one
    chars-per-token divisor per family beats a flat /4 */
-var TOK_DIV = { js: 3.2, jsx: 3.2, ts: 3.2, tsx: 3.2, mjs: 3.2, cjs: 3.2, java: 3.2, c: 3.2, h: 3.2, cc: 3.2, cpp: 3.2, hpp: 3.2, cs: 3.2, rs: 3.2, swift: 3.2, kt: 3.2, scala: 3.2,
+var TOK_DIV = Object.assign(Object.create(null), { js: 3.2, jsx: 3.2, ts: 3.2, tsx: 3.2, mjs: 3.2, cjs: 3.2, java: 3.2, c: 3.2, h: 3.2, cc: 3.2, cpp: 3.2, hpp: 3.2, cs: 3.2, rs: 3.2, swift: 3.2, kt: 3.2, scala: 3.2,
                 py: 3.5, go: 3.5, rb: 3.5, php: 3.5, sh: 3.5, bash: 3.5, lua: 3.5, ex: 3.5, exs: 3.5,
                 json: 3.0, yml: 3.0, yaml: 3.0, toml: 3.0, xml: 3.0, html: 3.0, css: 3.0, scss: 3.0, less: 3.0, svg: 3.0,
-                md: 4.0, mdx: 4.0, txt: 4.0, rst: 4.0 };
+                md: 4.0, mdx: 4.0, txt: 4.0, rst: 4.0 });
 function tokDiv(path) {
   if (path) {
     var nm = path.slice(path.lastIndexOf('/') + 1);

@@ -78,7 +78,7 @@ function buildInvestigationContext(q, intent, inv) {
   var idx = null; try { idx = getIndex(); } catch (e) { idx = null; }
 
   /* evidence — flatten inv.steps[].evidence, dedup by file:startLine, label by step */
-  var evidence = [], seen = {};
+  var evidence = [], seen = Object.create(null);
   (inv.steps || []).forEach(function (step) {
     var kind = GROUND_KIND[intent.kind] || 'evidence';
     var act = (step.action || '').toLowerCase();
@@ -119,7 +119,7 @@ function buildInvestigationContext(q, intent, inv) {
      reusing the same relation logic the `related` investigation uses */
   var relatedFiles = [];
   if (idx && evidence[0]) {
-    var rf = evidence[0].file, rel = {};
+    var rf = evidence[0].file, rel = Object.create(null);
     (idx.importsByFile.get(rf) || []).forEach(function (x) { if (x.resolved) rel[x.resolved] = 'imports'; });
     (idx.importedBy.get(rf) || []).forEach(function (x) { rel[x.file] = 'imported by'; });
     var d = dirOf(rf), bn = rf.slice(rf.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '').toLowerCase();
@@ -240,7 +240,12 @@ function buildContextBlocks(q) {
     return { blocks: fblocks, note: invBlock ? ('GROUNDED ' + invBlock.count + ' EV') : null, ground: invBlock };
   }
   var map = buildProjectMap();
-  if (!map) return { blocks: [], note: null, ground: invBlock };
+  if (!map) {
+    /* no file checked ≠ no grounding: the FOUND panel renders from `ground`, so the
+       model must receive the same block — an empty send under a FOUND chip would lie */
+    return { blocks: invBlock ? [{ type: 'text', text: invBlock.text }] : [],
+             note: invBlock ? ('GROUNDED ' + invBlock.count + ' EV') : null, ground: invBlock };
+  }
   /* grounding is counted against the one budget so grounding + selected files stay bounded */
   var packed = packSmartContext(q, Math.max(4000, getBudget() - groundTok));
   /* cache the stable map block; grounding + packed subset vary per question */

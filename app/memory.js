@@ -1,5 +1,5 @@
 import { st } from './state.js';
-import { IGNORE_DIRS, afterIngest, getIgnoreText, ingestFile, recordSkip, setCtxMode, setIgnoreText, syncBudgetState } from './ingest.js';
+import { IGNORE_DIRS, afterIngest, getIgnoreText, runIngestPool, setCtxMode, setIgnoreText, syncBudgetState } from './ingest.js';
 import { $, fmtTok, lsDel, lsGet, lsSet, setStatus, toast } from './helpers.js';
 import { LS } from './config.js';
 /* ============ PROJECT MEMORY (IndexedDB) ============
@@ -54,29 +54,28 @@ function idbDel(name) {
   });
 }
 
-/* re-read a directory handle's contents (File System Access API, Chromium) */
-function walkHandle(dir, prefix) {
+/* re-read a directory handle's contents (File System Access API, Chromium).
+   Collect descriptors first (enumeration is cheap), then read through the
+   bounded pool — the same shape as the dropzone walk, so the ingest caps
+   stay honest here too. getFile() failures are recorded by the pool. */
+function collectHandle(dir, prefix, out) {
   if (!dir.values) return Promise.resolve();
   return (async function () {
     var jobs = [];
     for await (const entry of dir.values()) {
       if (entry.kind === 'file') {
-        jobs.push((function (path) {
-          return entry.getFile().then(function (f) { return ingestFile(f, path); }).catch(function (e) {
-            /* getFile() failure (permissions, file vanished) is NOT binary —
-               record it so the review modal shows it */
-            console.warn('meridian: could not read', path, e);
-            st.skipped.readerr++;
-            recordSkip(path, 'read-error', 0, null);
-          });
-        })(prefix + entry.name));
+        out.push({ path: prefix + entry.name, getFile: function () { return entry.getFile(); } });
       } else if (entry.kind === 'directory') {
         if (IGNORE_DIRS.indexOf(entry.name.toLowerCase()) !== -1 || (entry.name.charAt(0) === '.' && entry.name !== '.github')) { st.skipped.dirs++; continue; }
-        jobs.push(walkHandle(entry, prefix + entry.name + '/'));
+        jobs.push(collectHandle(entry, prefix + entry.name + '/', out));
       }
     }
     return Promise.all(jobs);
   })();
+}
+function walkHandle(dir, prefix) {
+  var items = [];
+  return collectHandle(dir, prefix, items).then(function () { return runIngestPool(items); });
 }
 
 function guessProjectName() {

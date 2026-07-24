@@ -7,16 +7,14 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <!-- Pragmatic CSP for a static app on GitHub Pages (no HTTP headers available).
-     Scripts are same-origin files plus exactly one third-party origin: Tailwind's
-     Play CDN, which supplies styling utilities only (its config lives in the
-     same-origin app/tw-config.js — no 'unsafe-inline' in script-src). style-src
-     keeps 'unsafe-inline' for the inline style= attributes and the <style> element
-     Tailwind injects; the real hardening is object/base lockdown plus a tight
-     connect-src: only the two known provider hosts and localhost model servers.
-     API keys live in localStorage, so fetch() must not be able to reach
-     arbitrary origins. Remote custom endpoints therefore require self-hosting
-     with your endpoint's origin added to connect-src below. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://api.anthropic.com https://api.openai.com http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'">
+     Scripts are same-origin files only — zero third-party origins. style-src
+     keeps 'unsafe-inline' for the inline style= attributes; the real hardening
+     is object/base lockdown plus a tight connect-src: only the two known
+     provider hosts and localhost model servers. API keys live in localStorage,
+     so fetch() must not be able to reach arbitrary origins. Remote custom
+     endpoints therefore require self-hosting with your endpoint's origin added
+     to connect-src below. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://api.anthropic.com https://api.openai.com http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'">
 <title>MERIDIAN — Workbench</title>
 <meta name="description" content="The Meridian workbench. Load a project into your browser's memory, ask questions, and get answers with inspectable evidence traces. Runs entirely in your browser with your own API key — or the no-API local engine.">
 <link rel="canonical" href="https://drewosi.github.io/lucid-engine/app.html">
@@ -25,11 +23,6 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://drewosi.github.io/lucid-engine/app.html">
 <link rel="stylesheet" href="app/app.css">
-<!-- Tailwind Play CDN — utility classes only. All load-bearing design lives in
-     app/app.css (DESIGN-DNA v1.2 tokens); if this script is blocked or offline,
-     the workbench remains fully functional. Config: app/tw-config.js. -->
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="app/tw-config.js"></script>
 </head>
 <body>
 <div id="app" data-mode="dark">
@@ -210,7 +203,7 @@
     </div>
     <div id="keystate" aria-live="polite"></div>
     <p class="note">// stored in this browser's localStorage only, per provider. it is sent to exactly one place: the selected provider's API endpoint, with your requests. we never see it — there is no server on our side to see it with.</p>
-    <p class="note">// recommended: create a key in a dedicated workspace with a monthly spend limit. any script running on a page can read its own origin's localStorage — this page loads one third-party script (tailwind css styling utilities, from cdn.tailwindcss.com; it receives no files, questions, or keys from us), so keeping the blast radius small is still good practice.</p>
+    <p class="note">// recommended: create a key in a dedicated workspace with a monthly spend limit. any script running on a page can read its own origin's localStorage — this page loads zero third-party scripts, but keeping the blast radius small is still good practice.</p>
     <button class="btn-quiet" type="button" id="clearkey">[ CLEAR KEY ]</button>
     </div>
 
@@ -262,7 +255,7 @@
       <div class="k mono">MERIDIAN // BEFORE YOU BEGIN</div>
       <h2 id="fr-title">A real instrument, in free beta.</h2>
       <ul>
-        <li><b>It runs entirely in your browser.</b> We operate no servers. Your files, questions, and key are never sent to us. (Styling utilities load from Tailwind's CDN — that request carries none of your data.)</li>
+        <li><b>It runs entirely in your browser.</b> We operate no servers. Your files, questions, and key are never sent to us — the page loads no third-party scripts at all.</li>
         <li><b>Bring your own API key.</b> Anthropic by default; OpenAI or a custom OpenAI-compatible endpoint in settings. Requests go directly from this browser to the provider under <b>your</b> account — usage is billed by the provider to you, at their rates. Prefer no API at all? The <b>LOCAL</b> engine answers by deterministic search over your loaded files — no key, no AI, zero network.</li>
         <li><b>Your key stays local.</b> It is stored in this browser's localStorage and sent only to the selected provider's API endpoint. Use a spend-limited key.</li>
         <li><b>AI output can be wrong.</b> Answers and traces are machine-generated and may be inaccurate or incomplete. They are not professional advice. Verify before you rely on them.</li>

@@ -72,10 +72,12 @@ var ENV_RE = /\bprocess\.env\.([A-Z_][A-Z0-9_]*)|\bprocess\.env\[['"]([A-Z_][A-Z
 var TODO_CAP = 500, ENV_NAME_CAP = 200, ENV_REF_CAP = 50, EXPORT_FILE_CAP = 100;
 /* language id by extension (+ shebang for extensionless scripts) — powers the
    index-size stat and lets the LOCAL engine phrase results by language */
-var LANG_BY_EXT = { js: 'js', jsx: 'js', mjs: 'js', cjs: 'js', ts: 'ts', tsx: 'ts', py: 'python', go: 'go', rs: 'rust',
+/* null-prototype: extensions are project-supplied keys — a file named `x.constructor`
+   must miss, not return Object.prototype.constructor */
+var LANG_BY_EXT = Object.assign(Object.create(null), { js: 'js', jsx: 'js', mjs: 'js', cjs: 'js', ts: 'ts', tsx: 'ts', py: 'python', go: 'go', rs: 'rust',
   java: 'java', rb: 'ruby', php: 'php', c: 'c', h: 'c', cc: 'cpp', cpp: 'cpp', hpp: 'cpp', cs: 'c#', swift: 'swift',
   kt: 'kotlin', scala: 'scala', ex: 'elixir', exs: 'elixir', lua: 'lua', sh: 'shell', bash: 'shell', zsh: 'shell',
-  svelte: 'svelte', vue: 'vue', html: 'html', css: 'css', scss: 'css', md: 'markdown', json: 'json', yml: 'yaml', yaml: 'yaml', toml: 'toml' };
+  svelte: 'svelte', vue: 'vue', html: 'html', css: 'css', scss: 'css', md: 'markdown', json: 'json', yml: 'yaml', yaml: 'yaml', toml: 'toml' });
 function detectLang(path, content) {
   var ex = fileExt(path);
   if (LANG_BY_EXT[ex]) return LANG_BY_EXT[ex];
@@ -370,9 +372,11 @@ function buildIndex() {
   var exportsByFile = new Map(); /* file -> [{name, line, kind}] */
   var todos = [];                /* [{file, line, tag, text}] */
   var envVars = new Map();       /* NAME -> [{file, line}] */
-  var symCountByFile = {};       /* file -> definition count */
-  var entries = [], tests = [], configs = [], docs = [], byExt = {}, langs = {};
-  var csNamespaces = {}, csNsCount = 0; /* C# namespace -> first declaring file */
+  /* null-prototype maps: keys are project-supplied (paths, extensions, namespaces) */
+  var symCountByFile = Object.create(null); /* file -> definition count */
+  var entries = [], tests = [], configs = [], docs = [], byExt = Object.create(null), langs = Object.create(null);
+  var csNamespaces = Object.create(null), csNsCount = 0; /* C# namespace -> first declaring file */
+  var longLinesByFile = Object.create(null), longLineCount = 0; /* >400-char lines the scanner skipped */
   var paths = sortedPaths(), symbolCount = 0, importCount = 0;
   buildResolvers(paths);
   var big = paths.length > 1500;
@@ -404,7 +408,10 @@ function buildIndex() {
     var lines = f.content.split('\n');
     for (var i = 0; i < lines.length; i++) {
       var ln = lines[i];
-      if (ln.length > 400) continue; /* skip minified/one-liners */
+      if (ln.length > 400) { /* skip minified/one-liners — but count, so answers can disclose */
+        longLineCount++; longLinesByFile[p] = (longLinesByFile[p] || 0) + 1;
+        continue;
+      }
 
       /* Go import blocks: import ( "a"\n "b" ) — stateful, plus single-line form */
       if (isGo) {
@@ -518,7 +525,8 @@ function buildIndex() {
     importsByFile: importsByFile, importedBy: importedBy,
     exportsByFile: exportsByFile, todos: todos, envVars: envVars, symCountByFile: symCountByFile,
     entries: entries, tests: tests, configs: configs, docs: docs,
-    byExt: byExt, langs: langs, packages: detectPackages(paths)
+    byExt: byExt, langs: langs, packages: detectPackages(paths),
+    longLinesByFile: longLinesByFile, longLineCount: longLineCount
   };
 }
 

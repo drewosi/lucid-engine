@@ -115,12 +115,20 @@ function parseStreamEvent(p, anthro) {
   return out;
 }
 
+/* Split an SSE buffer on blank lines — LF or CRLF (custom OpenAI-compatible
+   endpoints behind proxies emit \r\n\r\n). Pure — shared with the self-tests.
+   `rest` is the trailing, possibly incomplete event kept for the next chunk. */
+function splitSseEvents(buf) {
+  var parts = buf.split(/\r?\n\r?\n/);
+  return { events: parts.slice(0, -1), rest: parts[parts.length - 1] };
+}
+
 function ask(q, key, opts) {
   opts = opts || {};
   /* concurrency guard — a stale [ RETRY ] / [ RE-GROUND & RETRY ] click while an
      answer is streaming would race two streams over one aborter and one flag */
   if (st.streaming) { toast('One answer at a time — stop the current stream first.'); return; }
-  addUserMsg(q);
+  if (!opts.reask) addUserMsg(q); /* retries re-enter ask(); the question is already on screen */
   var msgEl = addAiMsg();
   var txtEl = msgEl.querySelector('.txt');
   var raw = '', fenceIdx = -1, waitShown = false;
@@ -229,33 +237,42 @@ function ask(q, key, opts) {
     if (!res.body) { var nb = new Error('no stream'); nb.streamMsg = 'the response had no readable body stream'; throw nb; }
     var reader = res.body.getReader(), dec = new TextDecoder(), buf = '';
     var stopReason = null, badEvents = 0;
+    function handleSseEvent(evt) {
+      var data = null;
+      evt.split(/\r?\n/).forEach(function (line) {
+        if (line.indexOf('data:') === 0) data = line.slice(5).trim();
+      });
+      if (!data || data === '[DONE]') return;
+      var p;
+      try { p = JSON.parse(data); } catch (e) {
+        if (++badEvents === 3) { var mw = document.createElement('div'); mw.className = 'errline'; mw.textContent = '// some stream data could not be parsed — the answer may be incomplete'; msgEl.querySelector('.bd').appendChild(mw); }
+        return;
+      }
+      var eff = parseStreamEvent(p, anthro);
+      if (eff.errorMsg) { var se = new Error('stream error'); se.streamMsg = eff.errorMsg; throw se; }
+      if (eff.usage) {
+        st.spent.in += eff.usage.in; st.spent.out += eff.usage.out;
+        st.spent.cacheW += eff.usage.cacheW; st.spent.cacheR += eff.usage.cacheR;
+        renderCost();
+      }
+      if (eff.text) { raw += eff.text; paint(false); }
+      if (eff.stopReason) stopReason = eff.stopReason;
+    }
     function pump() {
       return reader.read().then(function (r) {
-        if (r.done) return finish();
+        if (r.done) {
+          /* flush the decoder, then drain any final event the server closed
+             without a trailing blank line — previously discarded wholesale */
+          buf += dec.decode();
+          var tail = splitSseEvents(buf);
+          tail.events.forEach(handleSseEvent);
+          if (tail.rest.trim()) handleSseEvent(tail.rest);
+          return finish();
+        }
         buf += dec.decode(r.value, { stream: true });
-        var events = buf.split('\n\n');
-        buf = events.pop();
-        events.forEach(function (evt) {
-          var data = null;
-          evt.split('\n').forEach(function (line) {
-            if (line.indexOf('data:') === 0) data = line.slice(5).trim();
-          });
-          if (!data || data === '[DONE]') return;
-          var p;
-          try { p = JSON.parse(data); } catch (e) {
-            if (++badEvents === 3) { var mw = document.createElement('div'); mw.className = 'errline'; mw.textContent = '// some stream data could not be parsed — the answer may be incomplete'; msgEl.querySelector('.bd').appendChild(mw); }
-            return;
-          }
-          var eff = parseStreamEvent(p, anthro);
-          if (eff.errorMsg) { var se = new Error('stream error'); se.streamMsg = eff.errorMsg; throw se; }
-          if (eff.usage) {
-            st.spent.in += eff.usage.in; st.spent.out += eff.usage.out;
-            st.spent.cacheW += eff.usage.cacheW; st.spent.cacheR += eff.usage.cacheR;
-            renderCost();
-          }
-          if (eff.text) { raw += eff.text; paint(false); }
-          if (eff.stopReason) stopReason = eff.stopReason;
-        });
+        var s = splitSseEvents(buf);
+        buf = s.rest;
+        s.events.forEach(handleSseEvent);
         return pump();
       });
     }
@@ -267,7 +284,7 @@ function ask(q, key, opts) {
       var canRetry = !parsed.trace && parsed.answer && parsed.answer !== '(empty)';
       renderTrace(msgEl, parsed.trace, {
         degraded: parsed.degraded,
-        retry: canRetry ? function () { ask(q, key, { strict: true }); } : null
+        retry: canRetry ? function () { ask(q, key, { strict: true, reask: true }); } : null
       });
       if (stopReason === 'max_tokens') {
         var n = document.createElement('div');
@@ -326,7 +343,7 @@ function ask(q, key, opts) {
       var rrow = document.createElement('div'); rrow.className = 'reground-row';
       var rb = document.createElement('button'); rb.type = 'button'; rb.className = 'btn-quiet acc'; rb.textContent = '[ RETRY ]';
       rb.title = 'Re-send this question';
-      rb.addEventListener('click', function () { rb.disabled = true; ask(q, key, opts); });
+      rb.addEventListener('click', function () { rb.disabled = true; opts.reask = true; ask(q, key, opts); });
       rrow.appendChild(rb); msgEl.querySelector('.bd').appendChild(rrow);
     }
     scrollEnd();
@@ -336,7 +353,7 @@ function ask(q, key, opts) {
     promptEl.focus();
   });
 }
-export { httpErrorText, parseStreamEvent, promptEl, resetCost };
+export { httpErrorText, parseStreamEvent, promptEl, resetCost, splitSseEvents };
 
 export function initChat() {
   st.spent = { in: 0, out: 0, cacheW: 0, cacheR: 0 };

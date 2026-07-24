@@ -1,7 +1,7 @@
 import { sortedPaths, st } from './state.js';
 import { queryTerms } from './smart-context.js';
 import { dirOf, fileExt, getIndex } from './indexer.js';
-import { localSearchData } from './actions.js';
+import { localSearchData, searchLimitNote } from './actions.js';
 import { makeFingerprint, projectSig } from './drift.js';
 import { fmtTok } from './helpers.js';
 /* ============ INTENT REGISTRY (DETERMINISTIC REASONING INSTANCES) ============
@@ -55,7 +55,9 @@ function symLookup(name, idx) {
   return out;
 }
 
-var STOP_INTENT = { where: 1, what: 1, which: 1, who: 1, does: 1, do: 1, is: 1, are: 1, the: 1, file: 1, files: 1, function: 1, functions: 1, method: 1, methods: 1, symbol: 1, symbols: 1, class: 1, classes: 1, defined: 1, definition: 1, declared: 1, reference: 1, references: 1, referenced: 1, import: 1, imports: 1, imported: 1, related: 1, project: 1, structure: 1, test: 1, tests: 1, entry: 1, point: 1, points: 1, recent: 1, recently: 1, show: 1, list: 1, find: 1, all: 1, call: 1, calls: 1, uses: 1, used: 1, depend: 1, depends: 1, this: 1, that: 1, for: 1, and: 1, with: 1 };
+/* null-prototype: looked up with project-supplied tokens — a token named
+   `constructor` must not be treated as a stop word */
+var STOP_INTENT = Object.assign(Object.create(null), { where: 1, what: 1, which: 1, who: 1, does: 1, do: 1, is: 1, are: 1, the: 1, file: 1, files: 1, function: 1, functions: 1, method: 1, methods: 1, symbol: 1, symbols: 1, class: 1, classes: 1, defined: 1, definition: 1, declared: 1, reference: 1, references: 1, referenced: 1, import: 1, imports: 1, imported: 1, related: 1, project: 1, structure: 1, test: 1, tests: 1, entry: 1, point: 1, points: 1, recent: 1, recently: 1, show: 1, list: 1, find: 1, all: 1, call: 1, calls: 1, uses: 1, used: 1, depend: 1, depends: 1, this: 1, that: 1, for: 1, and: 1, with: 1 });
 /* pick the most identifier-like token from a question (for def/refs/symbols) */
 function pickSymbol(q, idx) {
   var bt = q.match(/`([^`]+)`/); if (bt) return bt[1].trim();
@@ -77,9 +79,17 @@ function pickPathish(q) {
 
 var LOCAL_VERDICT = function () { return { local: true, text: 'KNOWN LOCALLY' }; };
 
+/* honest-labeling note for graph answers: the indexer skips >400-char lines, so
+   import edges on them are invisible — orphans/broken must say so, not imply certainty */
+function longLineNote(idx) {
+  if (!idx.longLineCount) return '';
+  return '\n\nNote: ' + plural(idx.longLineCount, 'line') + ' over 400 chars in ' + plural(Object.keys(idx.longLinesByFile).length, 'file')
+    + ' were not indexed (minified/one-line content) — imports on those lines are invisible, so such files can appear orphaned or their targets unresolved.';
+}
+
 /* shared evidence-gathering used by plain + reason: term search → ranked files */
 function gatherTerrain(q, steps) {
-  var terms = queryTerms(q), perFile = {};
+  var terms = queryTerms(q), perFile = Object.create(null);
   steps.push({ action: 'extract search terms', note: terms.length ? terms.join(', ') : 'none', evidence: [], status: 'done' });
   terms.slice(0, 4).forEach(function (t) {
     var r = localSearchData(t, 'text');
@@ -131,10 +141,10 @@ function localRecentData(countStr) {
 /* ---- graph + classification helpers for the niche reasoning instances.
    All computed on demand from the already-built index — nothing stored,
    nothing re-parsed. Iterative traversals only (no recursion depth risk). ---- */
-var CODE_LANGS = { js: 1, ts: 1, python: 1, go: 1, rust: 1, java: 1, ruby: 1, php: 1, c: 1, cpp: 1, 'c#': 1, swift: 1, kotlin: 1, scala: 1, elixir: 1, lua: 1, svelte: 1, vue: 1 };
+var CODE_LANGS = Object.assign(Object.create(null), { js: 1, ts: 1, python: 1, go: 1, rust: 1, java: 1, ruby: 1, php: 1, c: 1, cpp: 1, 'c#': 1, swift: 1, kotlin: 1, scala: 1, elixir: 1, lua: 1, svelte: 1, vue: 1 });
 function isCodeFile(p) { var f = st.files.get(p); return !!(f && CODE_LANGS[f.lang || '']); }
 function classifiedSet(idx) {
-  var s = {};
+  var s = Object.create(null);
   idx.entries.concat(idx.tests, idx.configs, idx.docs).forEach(function (p) { s[p] = 1; });
   return s;
 }
@@ -148,7 +158,7 @@ function listBroken(idx) {
 }
 /* code files with no matching test — shared by the untested investigation and signals */
 function listUntestedGaps(idx) {
-  var stems = {}, testedByImport = {}, skip = {};
+  var stems = Object.create(null), testedByImport = Object.create(null), skip = Object.create(null);
   idx.tests.forEach(function (t) {
     stems[testStem(t)] = 1; skip[t] = 1;
     (idx.importsByFile.get(t) || []).forEach(function (x) { if (x.resolved) testedByImport[x.resolved] = 1; });
@@ -185,7 +195,7 @@ function computeSignals(idx) {
   var broken = listBroken(idx);
   if (broken.length) out.push({ severity: 5, count: broken.length, title: plural(broken.length, 'broken relative import') + ' — likely real breakage, or files not loaded', evidence: evAt(broken[0].file, broken[0].line), drill: 'broken' });
   var cycles = findCycles(idx, 10);
-  if (cycles.length) out.push({ severity: 4, count: cycles.length, title: plural(cycles.length, 'import cycle') + ' in the dependency graph', evidence: evAt(cycles[0].from, cycles[0].line), drill: 'cycles' });
+  if (cycles.length) out.push({ severity: 4, count: cycles.length, title: plural(cycles.length, 'import cycle') + (cycles.length >= 10 ? ' (search capped at 10 — more may exist)' : '') + ' in the dependency graph', evidence: evAt(cycles[0].from, cycles[0].line), drill: 'cycles' });
   var hubGaps = listUntestedGaps(idx).filter(function (p) { return (idx.importedBy.get(p) || []).length >= 3; });
   if (hubGaps.length) {
     hubGaps.sort(function (a, b) { return (idx.importedBy.get(b) || []).length - (idx.importedBy.get(a) || []).length; });
@@ -194,14 +204,14 @@ function computeSignals(idx) {
   var dupeNames = [];
   idx.symbols.forEach(function (defsArr, name) {
     if (name.length < 4) return;
-    var files = {};
+    var files = Object.create(null);
     defsArr.forEach(function (d) { files[d.file] = 1; });
     if (Object.keys(files).length > 1) dupeNames.push({ name: name, def: defsArr[0] });
   });
   if (dupeNames.length >= 3) out.push({ severity: 2, count: dupeNames.length, title: plural(dupeNames.length, 'symbol name') + ' defined in more than one file', evidence: evAt(dupeNames[0].def.file, dupeNames[0].def.line), drill: 'dupes' });
   var orphans = listOrphans(idx);
   if (orphans.length) out.push({ severity: 2, count: orphans.length, title: plural(orphans.length, 'code file') + ' never imported — possible dead weight', evidence: evAt(orphans[0], 1), drill: 'orphans' });
-  var byFileTodo = {}, maxOneFile = 0;
+  var byFileTodo = Object.create(null), maxOneFile = 0;
   idx.todos.forEach(function (t) { byFileTodo[t.file] = (byFileTodo[t.file] || 0) + 1; if (byFileTodo[t.file] > maxOneFile) maxOneFile = byFileTodo[t.file]; });
   if (idx.todos.length >= 10 || maxOneFile >= 5) out.push({ severity: 2, count: idx.todos.length, title: plural(idx.todos.length, 'debt tag') + (maxOneFile >= 5 ? ' — one file carries ' + maxOneFile : ' across the project'), evidence: evAt(idx.todos[0].file, idx.todos[0].line), drill: 'todos' });
   out.sort(function (a, b) { return b.severity - a.severity || b.count - a.count; });
@@ -215,14 +225,14 @@ function computeSignals(idx) {
 function findCycles(idx, cap) {
   var adj = new Map();
   idx.importsByFile.forEach(function (list, f) {
-    var t = [], seen = {};
+    var t = [], seen = Object.create(null);
     list.forEach(function (x) { if (x.resolved && x.resolved !== f && !seen[x.resolved]) { seen[x.resolved] = 1; t.push({ to: x.resolved, line: x.line }); } });
     adj.set(f, t);
   });
   var color = new Map(), cycles = [];
   adj.forEach(function (_, start) {
     if (color.get(start) || cycles.length >= cap) return;
-    var stack = [{ node: start, i: 0 }], path = [start], onPath = {};
+    var stack = [{ node: start, i: 0 }], path = [start], onPath = Object.create(null);
     onPath[start] = 1; color.set(start, 1);
     while (stack.length && cycles.length < cap) {
       var top = stack[stack.length - 1];
@@ -296,6 +306,11 @@ var INTENTS = [
     route: function (s, lo) { return /\b(drift(ed)?|what changed since (my |the |your )?last (session|time)|since (my |the )?last session)\b/.test(lo) ? { arg: '' } : null; },
     run: function (arg, q, idx) {
       var steps = [], sig = projectSig();
+      if (st.driftPending) {
+        steps.push({ action: 'read the last session\'s snapshot', note: 'still loading from IndexedDB', evidence: [], status: 'done' });
+        return { steps: steps, verdict: LOCAL_VERDICT(),
+          answer: 'Still reading the last session\'s snapshot from disk — ask `drift` again in a moment.' };
+      }
       if (!st.driftPrev) {
         steps.push({ action: 'record drift baseline', note: 'paths + counts only, never contents', evidence: [], status: 'done' });
         return { steps: steps, verdict: LOCAL_VERDICT(),
@@ -303,13 +318,15 @@ var INTENTS = [
       }
       var prev = st.driftPrev, cur = makeFingerprint(idx);
       var added = [], removed = [], reshaped = [];
+      /* prev comes back from IndexedDB as a normal-prototype clone — guard key reads */
+      var prevHas = function (p) { return Object.prototype.hasOwnProperty.call(prev.files, p); };
       Object.keys(cur.files).forEach(function (p) {
-        var a = prev.files[p], b = cur.files[p];
+        var a = prevHas(p) ? prev.files[p] : null, b = cur.files[p];
         if (!a) { added.push(p); return; }
         var tokD = b[0] - a[0], symD = b[1] - a[1];
         if (symD !== 0 || Math.abs(tokD) >= Math.max(30, a[0] * 0.1)) reshaped.push({ p: p, tokD: tokD, symD: symD, mag: Math.abs(tokD) + 40 * Math.abs(symD) });
       });
-      Object.keys(prev.files).forEach(function (p) { if (!cur.files[p]) removed.push(p); });
+      Object.keys(prev.files).forEach(function (p) { if (prevHas(p) && !cur.files[p]) removed.push(p); });
       reshaped.sort(function (x, y) { return y.mag - x.mag; });
       var topR = reshaped.slice(0, 15);
       steps.push({ action: 'compare the index against the last session\'s snapshot', note: plural(added.length, 'new file') + ' · ' + plural(removed.length, 'removed file') + ' · ' + plural(reshaped.length, 'reshaped file'),
@@ -348,19 +365,22 @@ var INTENTS = [
 
   { kind: 'search', aliases: ['search'], ground: 'match', helpCmd: '`search <text|regex>`', needsModel: false,
     route: null,
-    run: function (arg) {
-      if (!arg) return { steps: [{ action: 'parse command', note: 'search needs a pattern', evidence: [], status: 'done' }], verdict: LOCAL_VERDICT(), answer: '`search` needs a pattern, e.g. `search cache_control`.' };
+    run: function (arg, q, idx, intent) {
+      if (!arg) return { steps: [{ action: 'parse command', note: 'search needs a pattern', evidence: [], status: 'done' }], verdict: LOCAL_VERDICT(), answer: '`search` needs a pattern, e.g. `search cache_control` — quote it (`search "foo bar"`) to match literally.' };
       var steps = [];
-      var sr = localSearchData(arg, 'text');
-      steps.push({ action: 'search “' + arg + '”', note: sr.hits.length + ' hit' + (sr.hits.length === 1 ? '' : 's') + ' in ' + sr.filesHit + ' file' + (sr.filesHit === 1 ? '' : 's'), evidence: sr.hits.slice(0, 12).map(localEvidence), status: 'done' });
-      return { steps: steps, verdict: LOCAL_VERDICT(), answer: sr.hits.length ? 'Found ' + (sr.hits.length >= sr.cap ? sr.cap + '+' : sr.hits.length) + ' match' + (sr.hits.length === 1 ? '' : 'es') + ' for `' + arg + '`. Chips open each at its line.' : 'No matches for `' + arg + '`.' };
+      var sr = localSearchData(arg, 'text', null, { literal: !!(intent && intent.literal) });
+      var lim = searchLimitNote(sr);
+      steps.push({ action: 'search “' + arg + '”', note: sr.hits.length + ' hit' + (sr.hits.length === 1 ? '' : 's') + ' in ' + sr.filesHit + ' file' + (sr.filesHit === 1 ? '' : 's') + (lim ? ' · ' + lim : ''), evidence: sr.hits.slice(0, 12).map(localEvidence), status: 'done' });
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: (sr.hits.length ? 'Found ' + (sr.hits.length >= sr.cap ? sr.cap + '+' : sr.hits.length) + ' match' + (sr.hits.length === 1 ? '' : 'es') + ' for `' + arg + '`. Chips open each at its line.' : 'No matches for `' + arg + '`.')
+          + (lim ? '\n\nNote: ' + lim + '.' : '') };
     } },
 
   { kind: 'structure', aliases: ['structure', 'overview'], ground: 'structure', helpCmd: '`structure`', needsModel: false,
     route: function (s, lo) { return /\b(project structure|structure of|overview|directories|packages|project map|top-?level|layout|organi[sz]ation|how is .* organi[sz]ed|what.*directories)\b/.test(lo) ? { arg: '' } : null; },
     run: function (arg, q, idx) {
       var steps = [];
-      var paths = sortedPaths(), dirCounts = {};
+      var paths = sortedPaths(), dirCounts = Object.create(null);
       paths.forEach(function (p) { var d = dirOf(p) || '.'; dirCounts[d] = (dirCounts[d] || 0) + 1; });
       var topDirs = Object.keys(dirCounts).sort(function (a, b) { return dirCounts[b] - dirCounts[a]; }).slice(0, 8);
       var langs = Object.keys(idx.byExt).sort(function (a, b) { return idx.byExt[b] - idx.byExt[a]; }).slice(0, 6);
@@ -440,9 +460,9 @@ var INTENTS = [
       var orphans = listOrphans(idx);
       steps.push({ action: 'scan importer edges for unreferenced code files', note: plural(orphans.length, 'candidate'), evidence: orphans.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
-        answer: orphans.length
+        answer: (orphans.length
           ? plural(orphans.length, 'code file') + ' ' + (orphans.length === 1 ? 'is' : 'are') + ' never imported by any loaded file (and not classified as entry point, test, config, or doc):\n\n' + orphans.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') + '\n\nStatic import edges only — files loaded dynamically, from HTML, or by a bundler config can appear here without being dead.'
-          : 'Every loaded code file is either imported somewhere or classified as an entry point, test, config, or doc.' };
+          : 'Every loaded code file is either imported somewhere or classified as an entry point, test, config, or doc.') + longLineNote(idx) };
     } },
 
   { kind: 'broken', aliases: ['broken', 'unresolved'], ground: 'broken-import', helpCmd: '`broken`', needsModel: false,
@@ -452,9 +472,9 @@ var INTENTS = [
       var broken = listBroken(idx);
       steps.push({ action: 'scan relative imports that resolve to no loaded file', note: plural(broken.length, 'unresolved relative import'), evidence: broken.slice(0, 12).map(function (b) { return evAt(b.file, b.line); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
-        answer: broken.length
+        answer: (broken.length
           ? plural(broken.length, 'relative import') + ' resolve' + (broken.length === 1 ? 's' : '') + ' to no loaded file:\n\n' + broken.slice(0, 20).map(function (b) { return '- `' + b.file + '` line ' + b.line + ' → `' + b.raw + '`'; }).join('\n') + '\n\nEither the target is genuinely missing, or it was not loaded (check ignore filters). Bare specifiers (npm/stdlib packages) are treated as external, not broken.'
-          : 'Every relative import resolves to a loaded file. Bare module specifiers (packages, stdlib) are treated as external by design.' };
+          : 'Every relative import resolves to a loaded file. Bare module specifiers (packages, stdlib) are treated as external by design.') + longLineNote(idx) };
     } },
 
   /* before `importers`: "most imported files" would otherwise match its import- regex */
@@ -523,7 +543,7 @@ var INTENTS = [
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: list.length
           ? '`' + tf + '` exports ' + plural(list.length, 'symbol') + ':\n\n' + list.slice(0, 20).map(function (x) { return '- `' + x.name + '` (' + x.kind + ') — line ' + x.line; }).join('\n')
-          : 'No exports recorded for `' + tf + '`. Tracking covers JS/TS (`export`, `module.exports`), Rust (`pub`), and Go (uppercase initials) — or the file genuinely exports nothing.' };
+          : 'No exports recorded for `' + tf + '`. Tracking covers JS/TS (`export`, `module.exports`), Rust (`pub`), Go (uppercase initials), Java/C# (`public`), and Kotlin (non-private/internal declarations) — or the file genuinely exports nothing.' };
     } },
 
   /* before `listType`/`structure` regexes see them: size/complexity questions */
@@ -551,7 +571,7 @@ var INTENTS = [
     route: function (s, lo) { return /\b(todos?|fixmes?|hacks?|tech(nical)? debt)\b/.test(lo) ? { arg: '' } : null; },
     run: function (arg, q, idx) {
       var steps = [];
-      var byTag = {};
+      var byTag = Object.create(null);
       idx.todos.forEach(function (t) { byTag[t.tag] = (byTag[t.tag] || 0) + 1; });
       var tagNote = Object.keys(byTag).map(function (t) { return t + ' ' + byTag[t]; }).join(' · ');
       steps.push({ action: 'read TODO/FIXME/HACK/XXX tags from the index', note: idx.todos.length ? plural(idx.todos.length, 'tag') + (idx.todos.length >= 500 ? ' (capped)' : '') + ' · ' + tagNote : 'none found', evidence: idx.todos.slice(0, 12).map(function (t) { return evAt(t.file, t.line); }), status: 'done' });
@@ -584,7 +604,7 @@ var INTENTS = [
       var dupes = [];
       idx.symbols.forEach(function (defsArr, name) {
         if (name.length < 4) return;
-        var perFile = {};
+        var perFile = Object.create(null);
         defsArr.forEach(function (d) { if (!perFile[d.file]) perFile[d.file] = d; });
         var files = Object.keys(perFile);
         if (files.length > 1) dupes.push({ name: name, defs: files.map(function (f) { return perFile[f]; }) });
@@ -612,12 +632,12 @@ var INTENTS = [
     } },
 
   { kind: 'related', aliases: ['related'], ground: 'related', helpCmd: '`related`', needsModel: false,
-    route: function (s, lo) { return /\brelated\b|\bconnected to\b|\bassociated with\b|\bneighbou?rs of\b/.test(lo) ? { arg: pickPathish(s) } : null; },
+    route: function (s, lo) { return /\brelated (to|files?)\b|\bfiles related\b|\bconnected to\b|\bassociated with\b|\bneighbou?rs of\b/.test(lo) ? { arg: pickPathish(s) } : null; },
     run: function (arg, q, idx) {
       var steps = [];
       var rf = resolveToFile(arg);
       steps.push({ action: 'resolve “' + arg + '” to a file', note: rf || 'unresolved', evidence: [], status: 'done' });
-      var rel = {};
+      var rel = Object.create(null);
       if (rf) {
         (idx.importsByFile.get(rf) || []).forEach(function (x) { if (x.resolved) rel[x.resolved] = 'imports'; });
         (idx.importedBy.get(rf) || []).forEach(function (x) { rel[x.file] = 'imported by'; });
@@ -678,7 +698,7 @@ var INTENTS = [
         return { steps: steps, verdict: LOCAL_VERDICT(),
           answer: top.length ? matches.length + ' symbol' + (matches.length === 1 ? '' : 's') + ' match `' + arg + '`:\n\n' + top.map(function (mm) { return '- `' + mm.name + '` (' + mm.def.kind + ') — `' + mm.def.file + '` line ' + mm.def.line + (mm.n > 1 ? ' (+' + (mm.n - 1) + ' more)' : ''); }).join('\n') : 'No indexed symbol matches `' + arg + '`.' };
       }
-      var byFile = {};
+      var byFile = Object.create(null);
       idx.symbols.forEach(function (defsArr) { defsArr.forEach(function (d) { byFile[d.file] = (byFile[d.file] || 0) + 1; }); });
       var topFiles = Object.keys(byFile).sort(function (a, b) { return byFile[b] - byFile[a]; }).slice(0, 8);
       steps.push({ action: 'summarize the symbol index', note: idx.symbolCount + ' definitions · ' + idx.symbols.size + ' unique names', evidence: topFiles.map(function (p) { return evAt(p, 1); }), status: 'done' });
@@ -715,7 +735,7 @@ var INTENTS = [
     } },
 
   { kind: 'reason', aliases: [], ground: 'evidence', helpCmd: '', needsModel: true,
-    route: function (s, lo, idx) { return /\b(why|how (do|does|is|should|can|would)|root cause|recommend|refactor|improve|architect(ure)?|risk|risks|should i|would you|best way|design|rationale|trade-?offs?|explain)\b/.test(lo) ? { arg: pickSymbol(s, idx) } : null; },
+    route: function (s, lo, idx) { return /\b(why|how (do|does|is|should|can|would)|root cause|recommend|refactor|improve|architect(ure)?|risk|risks|should i|would you|best way|design|rationale|trade-?offs?|explain|understand(ing)?|help me\b)\b/.test(lo) ? { arg: pickSymbol(s, idx) } : null; },
     run: function (arg, q, idx) {
       var steps = [];
       var t = gatherTerrain(q, steps);
@@ -757,6 +777,25 @@ INTENTS.forEach(function (it) { BY_KIND[it.kind] = it; });
 var ALIAS_TO_KIND = {};
 INTENTS.forEach(function (it) { (it.aliases || []).forEach(function (a) { ALIAS_TO_KIND[a] = it.kind; }); });
 var CMD_RE = new RegExp('^\\s*(' + Object.keys(ALIAS_TO_KIND).join('|') + ')\\b\\s*([\\s\\S]*)$', 'i');
+/* A first word that happens to be an alias is not enough to make a command —
+   "Exports keep breaking" is a question, not `exports keep breaking`. The rest
+   must be argument-shaped: empty, one path/word token (two for `path`/`chain`,
+   any single non-space token for `search` so regex patterns survive), or a
+   quoted string (quotes stripped — the literal escape hatch). Anything
+   prose-shaped declines and falls through to the natural-language cascade. */
+var CMD_TOKEN_RE = /^[\w$./@-]+$/;
+var CMD_MAX_TOKENS = { path: 2, chain: 2 };
+function commandArg(kind, rest) {
+  rest = rest.trim();
+  if (!rest) return { arg: '' };
+  var qm = rest.match(/^"([^"]*)"$/) || rest.match(/^'([^']*)'$/);
+  if (qm) return { arg: qm[1], literal: true };
+  var toks = rest.split(/\s+/);
+  if (toks.length > (CMD_MAX_TOKENS[kind] || 1)) return null;
+  if (kind === 'search') return { arg: rest }; /* one non-space token — regex metachars allowed */
+  for (var i = 0; i < toks.length; i++) if (!CMD_TOKEN_RE.test(toks[i])) return null;
+  return { arg: rest };
+}
 var LOCAL_HELP = 'Ask in plain language ("where is X defined", "what references X", "what imports X", '
   + '"files related to app.js", "project structure", "where are the tests", "entry points", "what changed recently") '
   + 'or use a command: ' + INTENTS.filter(function (it) { return it.helpCmd; }).map(function (it) { return it.helpCmd; }).join(', ')
@@ -769,8 +808,13 @@ function classifyIntent(q) {
   var cmd = s.match(CMD_RE);
   if (cmd) {
     var k = ALIAS_TO_KIND[cmd[1].toLowerCase()];
-    return { kind: k, arg: cmd[2].trim(), deterministic: true, needsModel: false };
+    var ca = commandArg(k, cmd[2]);
+    if (ca) return { kind: k, arg: ca.arg, literal: !!ca.literal, deterministic: true, needsModel: false };
+    /* prose-shaped rest — not a command; fall through to the NL cascade */
   }
+  /* a question *ending* in "why" asks for interpretation — the honest verdict is
+     REQUIRES MODEL REASONING, even when a niche keyword route would also match */
+  if (/\bwhy\s*\??\s*$/i.test(s)) return { kind: 'reason', arg: pickSymbol(s, idx), deterministic: false, needsModel: true };
   for (var i = 0; i < INTENTS.length; i++) {
     var it = INTENTS[i];
     if (!it.route) continue;
