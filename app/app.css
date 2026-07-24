@@ -335,6 +335,22 @@
   .modal .row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
   .modal a.leglink { color: var(--ink); border-bottom: 1px solid var(--line-strong); }
   .modal a.leglink:hover { color: var(--accent); border-color: var(--accent); }
+  /* LOCAL question menu — the "what can I ask" catalog */
+  .modal.modal-wide { width: min(680px, 94vw); }
+  .lm-grp { font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin: 16px 0 8px; }
+  .lm-grp:first-child { margin-top: 0; }
+  .lm-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+  .lm-item { background: var(--surface); border: none; text-align: left; padding: 9px 11px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; transition: background var(--t-feedback) var(--ease-snap); }
+  .lm-item:hover, .lm-item:focus-visible { background: var(--surface-2); outline: none; }
+  .lm-item .lm-l { font-size: 12.5px; color: var(--ink); }
+  .lm-item:hover .lm-l, .lm-item:focus-visible .lm-l { color: var(--accent); }
+  .lm-item .lm-c { font-size: 10.5px; color: var(--ink-3); }
+  /* empty-state starter chips */
+  .empty-asks-wrap { margin-top: 20px; }
+  .empty-asks-hd { font-size: 11px; color: var(--ink-3); margin-bottom: 8px; }
+  .empty-asks { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ask-chip { background: var(--surface); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink-2); font-size: 11.5px; padding: 5px 10px; cursor: pointer; transition: color var(--t-feedback) var(--ease-snap), border-color var(--t-feedback) var(--ease-snap); }
+  .ask-chip:hover, .ask-chip:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
   @media (max-width: 560px) {
     .veil { align-items: flex-start; padding: 12px; }
     .modal { max-height: calc(100dvh - 24px); padding: 18px 16px 20px; }

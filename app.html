@@ -129,6 +129,10 @@
             </ol>
             <p class="mono" style="margin-top:16px">// zero egress to us: your files and questions travel only from this browser to Anthropic's API.</p>
             <button class="btn btn-hairline" type="button" id="emptydemo" style="margin-top:14px">▶ Try a demo project — LOCAL, no key</button>
+            <div class="empty-asks-wrap">
+              <div class="empty-asks-hd mono">// or ask the LOCAL engine — click to drop a question in the box:</div>
+              <div id="emptyasks" class="empty-asks"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -143,7 +147,7 @@
             <button class="btn btn-hairline" type="button" id="stopbtn" hidden>Stop</button>
           </form>
           <div class="comp-note">
-            <span class="kbd-hint">// enter to send · ctrl-k commands · ctrl-e export · <button type="button" class="kbd-link mono" id="keymaphint">? keymap</button></span>
+            <span class="kbd-hint">// enter to send · <button type="button" class="kbd-link mono" id="localmenubtn">▤ what can I ask</button> · ctrl-k commands · ctrl-e export · <button type="button" class="kbd-link mono" id="keymaphint">? keymap</button></span>
             <span>// AI output can be wrong or incomplete — verify before you rely on it</span>
             <span>// costs are estimates; your provider bills actuals — <a href="terms.html">terms</a> · <a href="privacy.html">privacy</a></span>
           </div>
@@ -294,6 +298,16 @@
       <label for="pal-in" class="sr-only">Command</label>
       <input id="pal-in" class="mono" type="text" placeholder="type a command…" autocomplete="off" spellcheck="false">
       <div id="pal-list" role="listbox"></div>
+    </div>
+  </div>
+
+  <!-- LOCAL QUESTION MENU -->
+  <div class="veil" id="localmenuveil">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-label="What you can ask the LOCAL engine">
+      <div class="k mono">MERIDIAN // ASK LOCALLY — no AI, no network</div>
+      <p class="note mono" style="color:var(--ink-3);font-size:11px;letter-spacing:.05em;margin:0 0 14px">// click a question to drop it in the composer — items with a &lt;placeholder&gt; want a name or path before you send. These work with an AI connected too (it grounds the answer on what the engine finds).</p>
+      <div id="localmenubody"></div>
+      <div class="row"><button class="btn btn-hairline" type="button" id="localmenuclose">Close</button></div>
     </div>
   </div>
 

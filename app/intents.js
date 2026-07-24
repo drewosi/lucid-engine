@@ -830,6 +830,48 @@ var LOCAL_HELP = 'Ask in plain language ("where is X defined", "what references 
   + '. Interpretation ("why…", "how should I…") needs a model — '
   + 'connect one in settings and Meridian sends only the relevant evidence, never the whole repo.';
 
+/* ---- The LOCAL "what can I ask" menu — a curated, grouped catalog of the
+   questions the deterministic engine answers, kept next to the registry so a new
+   intent and its menu line land in one file. `fill` is dropped into the composer:
+   an `<arg>` placeholder means "name something, then send"; the rest are ready to
+   send as-is. Filling (not auto-running) keeps it correct for every provider. ---- */
+var LOCAL_MENU = [
+  { group: 'NAVIGATE & DESCRIBE', items: [
+    { label: 'Project structure', fill: 'project structure' },
+    { label: 'Where a symbol is defined', fill: 'where is <name> defined' },
+    { label: 'What uses a symbol', fill: 'who uses <name>' },
+    { label: 'What a file imports', fill: 'what does <file> import' },
+    { label: 'What depends on a file', fill: 'what depends on <file>' },
+    { label: 'Files related to a file', fill: 'files related to <file>' },
+    { label: "A file's exports", fill: 'what does <file> export' },
+    { label: 'Find symbols by name', fill: 'symbols <name>' },
+    { label: 'Where the tests are', fill: 'where are the tests' },
+    { label: 'Entry points', fill: 'entry points' },
+    { label: 'Summarize a directory', fill: 'dir <path>' },
+    { label: 'Recent changes', fill: 'what changed recently' },
+    { label: 'Search text or regex', fill: 'search <text>' }
+  ] },
+  { group: 'ANALYZE — DEPENDENCY GRAPH & HEALTH', items: [
+    { label: 'Circular imports', fill: 'cycles' },
+    { label: 'Orphan (never-imported) files', fill: 'orphans' },
+    { label: 'Broken imports', fill: 'broken' },
+    { label: 'Most-depended-on files', fill: 'hubs' },
+    { label: 'Dependency path between two files', fill: 'path <a> <b>' },
+    { label: 'Change hotspots', fill: 'hotspots' },
+    { label: 'TODO / FIXME tags', fill: 'todos' },
+    { label: 'Environment variables used', fill: 'env' },
+    { label: 'Files without tests', fill: 'untested' },
+    { label: 'Duplicate symbol names', fill: 'dupes' }
+  ] },
+  { group: 'INSTRUMENTS', items: [
+    { label: 'Signals — what deserves attention', fill: 'signals' },
+    { label: 'Drift — what changed since last session', fill: 'drift' }
+  ] }
+];
+/* the empty-state starter set: broad, no-argument questions that give an
+   immediate feel for the engine (they drop into the composer, ready to send) */
+var LOCAL_STARTERS = ['project structure', 'signals', 'orphans', 'where are the tests', 'entry points', 'hotspots', 'todos'];
+
 /* ---- Intent router: deterministic kinds vs. reasoning vs. plain fallback ---- */
 function classifyIntent(q) {
   var s = q.trim(), lo = s.toLowerCase(), idx = st.files.size ? getIndex() : null;
@@ -868,4 +910,4 @@ function groundKinds() {
   return out;
 }
 
-export { CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, classifyIntent, computeSignals, evAt, groundKinds, listOrphans, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };
+export { CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, LOCAL_MENU, LOCAL_STARTERS, classifyIntent, computeSignals, evAt, groundKinds, listOrphans, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };

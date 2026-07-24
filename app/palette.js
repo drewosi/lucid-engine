@@ -7,6 +7,7 @@ import { exportTraces } from './export.js';
 import { flipMode, openDrawer, toggleRail } from './shell.js';
 import { startDemo } from './demo.js';
 import { askLocal } from './local.js';
+import { openLocalMenu } from './localmenu.js';
 import { runAndShowSelfTests } from './selftest.js';
 
 /* ============ COMMAND PALETTE (Ctrl/Cmd-K) ============
@@ -38,6 +39,7 @@ var ACTIONS = [
   { g: 'EXPORT', n: 'Export session as HTML', k: '', f: function () { exportTraces('html'); } },
   { g: 'CONTEXT', n: 'Suggest ignore patterns', k: '', f: function () { openDrawer(true); suggestIgnore(); } },
   { g: 'CONVERSE', n: 'Reset session cost', k: '', f: resetCost },
+  { g: 'LOCAL', n: 'What can I ask locally? (menu)', k: '', f: openLocalMenu },
   { g: 'LOCAL', n: 'Scan for TODO / FIXME tags', k: '', f: function () { askLocal('todos'); } },
   { g: 'LOCAL', n: 'Find circular imports', k: '', f: function () { askLocal('cycles'); } },
   { g: 'LOCAL', n: 'Find orphan (never-imported) files', k: '', f: function () { askLocal('orphans'); } },

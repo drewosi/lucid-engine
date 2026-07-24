@@ -21,6 +21,7 @@ import { initChat } from './chat.js';
 import { initViewer, closeViewer, viewveil } from './viewer.js';
 import { initExport, exportTraces } from './export.js';
 import { initPalette, palOpen, palClose, palOv, openKeymap, closeKeymap, keymapveil } from './palette.js';
+import { initLocalMenu, closeLocalMenu, localmenuveil } from './localmenu.js';
 import { runSelfTests, runAndShowSelfTests } from './selftest.js';
 
 /* frame-buster — a <meta> CSP cannot carry frame-ancestors, so refuse to run
@@ -40,6 +41,7 @@ initChat();     /* composer + streaming controls + cost chip */
 initViewer();
 initExport();
 initPalette();
+initLocalMenu(); /* "what can I ask" catalog + empty-state starter chips */
 
 /* ============ GLOBAL KEYS ============ */
 document.addEventListener('keydown', function (e) {
@@ -69,6 +71,7 @@ document.addEventListener('keydown', function (e) {
   }
   if (e.key === 'Escape') {
     if (palOv.classList.contains('on')) { palClose(); return; }
+    if (localmenuveil.classList.contains('on')) { closeLocalMenu(); return; }
     if (keymapveil.classList.contains('on')) { closeKeymap(); return; }
     if (viewveil.classList.contains('on')) { closeViewer(); return; }
     if (prevveil.classList.contains('on')) { closePreview(); return; }

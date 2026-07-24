@@ -3,7 +3,7 @@ import { buildIndex, detectLang } from './indexer.js';
 import { st } from './state.js';
 import { SAMPLE_PROJECT } from './demo.js';
 import { classifyIntent } from './local.js';
-import { INTENTS, runInvestigation } from './intents.js';
+import { INTENTS, LOCAL_MENU, LOCAL_STARTERS, runInvestigation } from './intents.js';
 import { extractTrace } from './trace.js';
 import { httpErrorText, parseStreamEvent, splitSseEvents } from './chat.js';
 import { __setCapsForTest, ignoredDirPrefix, ingestFile, runIngestPool } from './ingest.js';
@@ -347,6 +347,20 @@ function runSelfTests() {
     }));
     ok('registry · kinds unique', new Set(INTENTS.map(function (it) { return it.kind; })).size === INTENTS.length);
     ok('registry · plain is the terminal fallback', INTENTS[INTENTS.length - 1].kind === 'plain');
+    /* LOCAL question menu — the "what can I ask" catalog is well-formed and every
+       ready-to-send (no-placeholder) entry routes to a real deterministic intent */
+    ok('localmenu · catalog well-formed', LOCAL_MENU.length > 0 && LOCAL_MENU.every(function (g) {
+      return typeof g.group === 'string' && g.group && Array.isArray(g.items) && g.items.length > 0
+        && g.items.every(function (it) { return it && typeof it.label === 'string' && it.label && typeof it.fill === 'string' && it.fill; });
+    }));
+    ok('localmenu · no-placeholder fills route to a real intent', LOCAL_MENU.every(function (g) {
+      return g.items.every(function (it) {
+        if (it.fill.indexOf('<') !== -1) return true; /* templates need an arg — skip */
+        var k = classifyIntent(it.fill).kind;
+        return k !== 'plain' && k !== 'reason';
+      });
+    }), 'every menu command resolves');
+    ok('localmenu · starters are non-empty strings', LOCAL_STARTERS.length > 0 && LOCAL_STARTERS.every(function (s) { return typeof s === 'string' && s.length > 0; }));
     /* index extensions — exports, todos, env vars, per-file symbol counts */
     ok('index · exports JS declaration', (idx.exportsByFile.get('src/aliased.ts') || []).some(function (e) { return e.name === 'ALIASED'; }));
     ok('index · exports CommonJS braces', (idx.exportsByFile.get('src/store.js') || []).some(function (e) { return e.name === 'listTodos'; }));
