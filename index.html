@@ -18,7 +18,7 @@
 <meta name="twitter:title" content="MERIDIAN — An AI instrument for people who build">
 <meta name="twitter:description" content="A browser-only AI workbench. Load your project into memory and get answers with inspectable evidence traces. Free beta, your own API key, zero egress to us.">
 <style>
-  /* ============ LUCID ENGINE TOKENS · v1.2 ============ */
+  /* ============ LUCID ENGINE TOKENS · v2.0 ============ */
   #app {
     --paper: #0A0B0D;
     --surface: #101216;
@@ -38,6 +38,16 @@
     --t-feedback: 120ms;
     --t-state: 200ms;
     --t-entrance: 400ms;
+    --t-ceremony: 600ms;
+
+    /* v2.0 — Signal Orange as a lit instrument, not a UI accent (controlled bloom) */
+    --flare: var(--accent);
+    --flare-bloom:    0 0 0 1px rgba(255,92,10,.42), 0 0 14px -2px rgba(255,92,10,.55);
+    --flare-bloom-lg: 0 0 0 1px rgba(255,92,10,.50), 0 0 24px -4px rgba(255,92,10,.52);
+    /* v2.0 — authored monochrome: film grain + light-source falloff (ground only) */
+    --grain-opacity: .05;
+    --atmosphere: radial-gradient(120% 66% at 50% -14%, rgba(255,255,255,.055), transparent 62%);
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   #app[data-mode="light"] {
     --paper: #FAFAF7;
@@ -51,7 +61,24 @@
     --accent: #FF4F00;
     --accent-ink: #FFFFFF;
     --err: #C4452D;
+
+    --flare-bloom:    0 0 0 1px rgba(255,79,0,.30), 0 0 12px -2px rgba(255,79,0,.42);
+    --flare-bloom-lg: 0 0 0 1px rgba(255,79,0,.36), 0 0 22px -4px rgba(255,79,0,.40);
+    --grain-opacity: .03;
+    --atmosphere: radial-gradient(120% 62% at 50% -12%, rgba(17,17,16,.045), transparent 60%);
   }
+
+  /* v2.0 — authored-monochrome ground layers (below content z:1, above #app bg) */
+  .atmosphere { position: fixed; inset: 0; pointer-events: none; z-index: 0; background: var(--atmosphere); }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    opacity: var(--grain-opacity);
+    background-image: var(--grain); background-size: 140px 140px;
+    mix-blend-mode: overlay;
+  }
+  #app[data-mode="dark"] .grain { mix-blend-mode: soft-light; }
+  /* content rides above the ground layers; nav (z:100) + overlays (90–200) already clear them */
+  .hero, .readout, section, footer { position: relative; z-index: 1; }
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -123,7 +150,7 @@
   .hero-copy { position: relative; z-index: 2; padding: 90px 0; max-width: 620px; pointer-events: none; }
   .hero-copy a, .hero-copy .btn { pointer-events: auto; }
   .eyebrow { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; letter-spacing: .16em; color: var(--ink-3); display: flex; align-items: center; gap: 10px; }
-  .eyebrow .dot { width: 8px; height: 8px; background: var(--accent); animation: flare 1.6s var(--ease-inout-engine) infinite alternate; }
+  .eyebrow .dot { width: 8px; height: 8px; background: var(--accent); box-shadow: var(--flare-bloom); animation: flare 1.6s var(--ease-inout-engine) infinite alternate; }
   @keyframes flare { from { opacity: .4; } to { opacity: 1; } }
   h1 { font-size: clamp(44px, 7.2vw, 88px); line-height: .98; letter-spacing: -.03em; font-weight: 700; margin: 22px 0 24px; text-wrap: balance; }
   h1 .thin { color: var(--ink-3); font-weight: 700; }
@@ -195,7 +222,7 @@
   .terminal { background: #0A0B0D; border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
   .term-hd { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #22242A; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .14em; color: #6C6B66; }
   .term-hd .chip { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #FF5C0A; color: #FF5C0A; border-radius: 3px; padding: 1px 8px; font-size: 10px; }
-  .term-hd .chip .dot { width: 5px; height: 5px; background: #FF5C0A; animation: flare 1.6s var(--ease-inout-engine) infinite alternate; }
+  .term-hd .chip .dot { width: 5px; height: 5px; background: var(--accent); box-shadow: var(--flare-bloom); animation: flare 1.6s var(--ease-inout-engine) infinite alternate; }
   .term-bd { padding: 18px 18px 20px; font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.65; color: #D9D8D1; min-height: 180px; cursor: pointer; }
   .term-bd .dim { color: #6C6B66; }
   .term-bd .q-echo { color: #8A8880; }
@@ -348,6 +375,10 @@
 </head>
 <body>
 <div id="app" data-mode="dark">
+
+  <!-- v2.0 authored-monochrome ground layers -->
+  <div class="atmosphere" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
 
   <!-- BOOT -->
   <div id="boot" aria-hidden="true">
@@ -734,6 +765,8 @@
   var rotY = 0, tilt = 0.35, tiltTarget = 0.35, yawBoost = 0, lastT = performance.now();
   var ptr = { x: -1e4, y: -1e4 };
   var fps = 0, frames = 0, fpsClock = performance.now();
+  /* Instrument Resolve — the field resolves into existence once, as the boot lifts */
+  var formed = reduced ? true : false, resolving = false, resolveStart = 0, resolveDur = 600;
 
   function palette() {
     var dark = app.getAttribute('data-mode') === 'dark';
@@ -759,12 +792,12 @@
       var y = 1 - (i / (n - 1)) * 2;
       var r = Math.sqrt(Math.max(0, 1 - y * y));
       var th = golden * i;
-      pts.push({ x: Math.cos(th) * r, y: y, z: Math.sin(th) * r, a: false, ox: 0, oy: 0 });
+      pts.push({ x: Math.cos(th) * r, y: y, z: Math.sin(th) * r, a: false, ox: 0, oy: 0, sd: Math.random() });
     }
     m = Math.max(24, Math.round(n * 0.055));
     for (i = 0; i < m; i++) {
       var phi = (i / m) * Math.PI * 2;
-      pts.push({ x: Math.sin(phi), y: Math.cos(phi), z: 0, a: true, ox: 0, oy: 0 });
+      pts.push({ x: Math.sin(phi), y: Math.cos(phi), z: 0, a: true, ox: 0, oy: 0, sd: Math.random() * 0.5 });
     }
     $('ro-pts').textContent = pts.length;
     $('dbg-pts').textContent = pts.length;
@@ -782,11 +815,17 @@
       tilt += (tiltTarget - tilt) * 0.06;
     }
     ctx.clearRect(0, 0, W, H);
+    /* resolve progress: 0 = unformed (hidden behind boot), 1 = fully formed */
+    var gz = formed ? 1 : (resolving ? Math.min(1, (now - resolveStart) / resolveDur) : 0);
+    if (gz > 0) {
     var sy = Math.sin(rotY), cy = Math.cos(rotY), st = Math.sin(tilt), ct = Math.cos(tilt);
     var fov = 3.2, i, p, n = pts.length;
     for (var pass = 0; pass < 2; pass++) {
       var accPass = pass === 1;
       ctx.fillStyle = 'rgb(' + (accPass ? pal.acc : pal.pt) + ')';
+      /* Flare Bloom — the meridian ring ignites; controlled, on-state only */
+      ctx.shadowBlur = accPass ? 6 * gz : 0;
+      ctx.shadowColor = accPass ? 'rgb(' + pal.acc + ')' : 'transparent';
       for (i = 0; i < n; i++) {
         p = pts[i];
         if (p.a !== accPass) continue;
@@ -806,11 +845,23 @@
         p.ox += (txo - p.ox) * 0.14; p.oy += (tyo - p.oy) * 0.14;
         var t = (z2 + 1) / 2;
         var size = (accPass ? 1.4 : 0.9) + 1.7 * t;
-        ctx.globalAlpha = (accPass ? 0.45 : 0.14) + 0.6 * t;
-        ctx.fillRect(px + p.ox - size / 2, py + p.oy - size / 2, size, size);
+        var alpha = (accPass ? 0.45 : 0.14) + 0.6 * t;
+        var fx = px + p.ox, fy = py + p.oy;
+        if (gz < 1) {
+          /* staggered assembly: each point scales up from centre into place */
+          var lp = Math.max(0, Math.min(1, gz * 1.35 - p.sd * 0.35));
+          var e = 1 - Math.pow(1 - lp, 3);
+          fx = CX + (fx - CX) * e; fy = CY + (fy - CY) * e;
+          alpha *= e; size *= (0.55 + 0.45 * e);
+        }
+        ctx.globalAlpha = alpha;
+        ctx.fillRect(fx - size / 2, fy - size / 2, size, size);
       }
     }
+    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
+    if (resolving && gz >= 1) { resolving = false; formed = true; }
+    }
     frames++;
     if (now - fpsClock > 1000) {
       fps = frames; frames = 0; fpsClock = now;
@@ -850,6 +901,8 @@
     boot.classList.add('done');
     setTimeout(function () { boot.remove(); }, 450);
     document.querySelectorAll('.hero .rv').forEach(function (el) { el.classList.add('in'); });
+    /* Instrument Resolve — the field materialises as the boot overlay lifts */
+    if (!reduced && !formed) { resolving = true; resolveStart = performance.now(); }
   }
   if (reduced) { finishBoot(); }
   else {

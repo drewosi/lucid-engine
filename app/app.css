@@ -1,4 +1,4 @@
-  /* ============ LUCID ENGINE TOKENS · v1.2 — keep in sync with index.html ============ */
+  /* ============ LUCID ENGINE TOKENS · v2.0 — keep in sync with index.html ============ */
   #app {
     --paper: #0A0B0D;
     --surface: #101216;
@@ -19,6 +19,16 @@
     --t-feedback: 120ms;
     --t-state: 200ms;
     --t-entrance: 400ms;
+    --t-ceremony: 600ms;
+
+    /* v2.0 — Signal Orange as a lit instrument (controlled bloom, on-state only) */
+    --flare: var(--accent);
+    --flare-bloom:    0 0 0 1px rgba(255,92,10,.42), 0 0 14px -2px rgba(255,92,10,.55);
+    --flare-bloom-lg: 0 0 0 1px rgba(255,92,10,.50), 0 0 24px -4px rgba(255,92,10,.52);
+    /* v2.0 — authored monochrome: film grain (working screens stay calm — grain only) */
+    --grain-opacity: .045;
+    --atmosphere: radial-gradient(120% 66% at 50% -14%, rgba(255,255,255,.055), transparent 62%);
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   #app[data-mode="light"] {
     --paper: #FAFAF7;
@@ -33,7 +43,22 @@
     --accent-ink: #FFFFFF;
     --err: #C4452D;
     --ok: #3E7A44;
+
+    --flare-bloom:    0 0 0 1px rgba(255,79,0,.30), 0 0 12px -2px rgba(255,79,0,.42);
+    --flare-bloom-lg: 0 0 0 1px rgba(255,79,0,.36), 0 0 22px -4px rgba(255,79,0,.40);
+    --grain-opacity: .028;
+    --atmosphere: radial-gradient(120% 62% at 50% -12%, rgba(17,17,16,.045), transparent 60%);
   }
+
+  /* v2.0 — film-grain over the working surface (above content, below modals z≥120 — modals stay crisp) */
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 110;
+    opacity: var(--grain-opacity);
+    background-image: var(--grain); background-size: 140px 140px;
+    mix-blend-mode: overlay;
+  }
+  #app[data-mode="dark"] .grain { mix-blend-mode: soft-light; }
+  @media (prefers-reduced-motion: reduce) { .grain { will-change: auto; } }
 
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
@@ -252,7 +277,7 @@
   .msg-a .bd .txt code { background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; font-size: 12px; }
   .msg-a .bd pre { background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 12px 14px; overflow-x: auto; margin: 10px 0; }
   .msg-a .bd pre code { background: none; border: none; padding: 0; font-size: 12px; line-height: 1.6; }
-  .msg-a .bd .cursor { display: inline-block; width: 1ch; background: var(--accent); height: 1.1em; vertical-align: text-bottom; animation: flare 1s steps(2) infinite; }
+  .msg-a .bd .cursor { display: inline-block; width: 1ch; background: var(--accent); box-shadow: var(--flare-bloom); height: 1.1em; vertical-align: text-bottom; animation: flare 1s steps(2) infinite; }
   @keyframes flare { from { opacity: .4; } to { opacity: 1; } }
   .msg-a .errline { color: var(--err); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; letter-spacing: .03em; }
 
@@ -286,7 +311,7 @@
   #selftestveil .st-badge { border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 1px 7px; font-size: 9px; letter-spacing: .12em; margin-left: 8px; }
   .linkcanvas { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
   .trace-wait { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .12em; color: var(--ink-3); border-top: 1px dashed var(--line-strong); margin-top: 16px; padding-top: 14px; }
-  .trace-wait i { display: inline-block; width: 8px; height: 8px; background: var(--accent); animation: flare 1s var(--ease-inout-engine) infinite alternate; margin-right: 8px; }
+  .trace-wait i { display: inline-block; width: 8px; height: 8px; background: var(--accent); box-shadow: var(--flare-bloom); animation: flare 1s var(--ease-inout-engine) infinite alternate; margin-right: 8px; }
 
   /* proposed actions (experimental instrument) */
   .act-card { border-top: 1px dashed var(--line-strong); margin-top: 14px; padding-top: 12px; }
