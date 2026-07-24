@@ -151,6 +151,7 @@ A deterministic self-test suite (200+ checks) exercises the index, smart packer,
 - **[privacy.html](privacy.html)** / **[terms.html](terms.html)** — the legal layer, written for this exact architecture (no servers, BYO key, localStorage-only storage).
 - **[dna.html](dna.html)** — the Lucid Engine design system as a browsable page.
 - **[DESIGN-DNA.md](DESIGN-DNA.md)** — the full system spec (v1.2), including a paste-ready instruction block for AI design tools (§10).
+- **[USER-GUIDE.md](USER-GUIDE.md)** — step-by-step guide to using the workbench, dual-tracked for beginners and experienced coders. Linked from the landing-page footer and the workbench command palette (`Ctrl-K` → "user guide").
 
 ## Workbench UI architecture
 

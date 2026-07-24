@@ -47,6 +47,7 @@ var ACTIONS = [
   { g: 'SETTINGS', n: 'Load the demo project (LOCAL)', k: '', f: function () { startDemo(); } },
   { g: 'SETTINGS', n: 'Toggle ceremony / daylight', k: '', f: flipMode },
   { g: 'SETTINGS', n: 'Show keymap', k: '?', f: openKeymap },
+  { g: 'SETTINGS', n: 'Open the user guide (GitHub)', k: '', f: function () { window.open('https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md', '_blank', 'noopener'); } },
   { g: 'SETTINGS', n: 'Run self-tests (dev)', k: '', f: runAndShowSelfTests }
 ];
 var palSel = 0, palMatches = [];

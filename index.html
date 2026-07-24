@@ -650,6 +650,7 @@
           <ul>
             <li><a href="app.html">Workbench — launch</a></li>
             <li><a href="one-pager.html">One-pager</a></li>
+            <li><a href="https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md">User guide</a></li>
             <li><a href="#capabilities">Capabilities</a></li>
             <li><a href="#tracedemo">Trace demo</a></li>
             <li><a href="#pricing">Pricing</a></li>
@@ -1171,6 +1172,7 @@
     { g: 'MACHINERY', n: 'Show keymap', k: '?', f: function () { $('keymap').classList.add('on'); } },
     { g: 'EXTERNAL', n: 'Launch Meridian (workbench)', k: '', f: function () { window.location.href = 'app.html'; } },
     { g: 'EXTERNAL', n: 'Open GitHub repo', k: '', f: function () { window.open(REPO, '_blank', 'noopener'); } },
+    { g: 'EXTERNAL', n: 'Open the user guide', k: '', f: function () { window.open(REPO + '/blob/main/USER-GUIDE.md', '_blank', 'noopener'); } },
     { g: 'EXTERNAL', n: 'Open design system (DNA)', k: '', f: function () { window.location.href = 'dna.html'; } },
     { g: 'EXTERNAL', n: 'Copy live URL', k: '', f: function () {
         if (navigator.clipboard && navigator.clipboard.writeText) {
