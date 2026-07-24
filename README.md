@@ -150,7 +150,7 @@ A deterministic self-test suite (200+ checks) exercises the index, smart packer,
   - Module map: `main.js` (entry + init order + global keys) · `state.js` (the shared store + cache invalidation) · `config.js` (providers/models/localStorage keys) · `helpers.js` · `shell.js` (provider/model/theme/first-run/settings) · `ingest.js` (folder loading, tree, budget, preview, ignore patterns) · `demo.js` (bundled sample project) · `memory.js` (IndexedDB projects) · `smart-context.js` (scoring + packing + project map) · `indexer.js` (symbols/imports index) · `prompt.js` (context assembly + grounding) · `chat.js` (provider request loop + cost) · `local.js` (the no-API LOCAL engine) · `trace.js` (rendering + trace parsing) · `actions.js` · `viewer.js` · `export.js` · `palette.js` · `selftest.js`.
 - **[privacy.html](privacy.html)** / **[terms.html](terms.html)** — the legal layer, written for this exact architecture (no servers, BYO key, localStorage-only storage).
 - **[dna.html](dna.html)** — the Lucid Engine design system as a browsable page.
-- **[DESIGN-DNA.md](DESIGN-DNA.md)** — the full system spec (v1.2), including a paste-ready instruction block for AI design tools (§10).
+- **[DESIGN-DNA.md](DESIGN-DNA.md)** — the full system spec (v2.0), including a paste-ready instruction block for AI design tools (§10).
 - **[USER-GUIDE.md](USER-GUIDE.md)** — step-by-step guide to using the workbench, dual-tracked for beginners and experienced coders. Linked from the landing-page footer and the workbench command palette (`Ctrl-K` → "user guide").
 
 ## Workbench UI architecture
@@ -176,7 +176,7 @@ Modules never query by structure — every JS↔DOM touchpoint is a stable eleme
 
 ### Styling
 
-- **`app/app.css`** is the source of truth: DESIGN-DNA v1.2 tokens (`--paper`, `--accent` Signal Orange `#FF4F00`/`#FF5C0A`, the gray ramp, `--ease-*` easings, `--t-*` durations) on `#app`, with `#app[data-mode="light"]` overrides — both modes always work.
+- **`app/app.css`** is the source of truth: DESIGN-DNA tokens (`--paper`, `--accent` Signal Orange `#FF4F00`/`#FF5C0A`, the gray ramp, `--ease-*` easings, `--t-*` durations) on `#app`, with `#app[data-mode="light"]` overrides — both modes always work.
 - **No CSS framework** — the handful of spacing/width utility classes the markup uses (`.mt-2`, `.mt-1\.5`, `.w-full`, `.sr-only`) are defined locally in `app/app.css`. (Tailwind's Play CDN was removed in v0.6 to get to `script-src 'self'`.)
 - Layout is a CSS grid: `main.deck { grid-template-columns: var(--rail-w) minmax(0,1fr) auto }` — the rail width is a custom property set by the resize handle; the third column is the docked viewer (auto → 0 when closed). Breakpoints: ≥1100 three-column, 860–1100 rail + chat with the viewer overlaying, ≤860 single column with the rail as an overlay.
 - Motion uses only the DNA's named patterns (Signal Trace, Light Lift, Flare Pulse, Machinery Reveal…), 120–240ms with the custom easings, and everything degrades to instant under `prefers-reduced-motion`.
