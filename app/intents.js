@@ -626,6 +626,17 @@ var INTENTS = [
       var em = q.toLowerCase().match(/\b(typescript|javascript|python|golang|go|rust|java|ruby|markdown|html|css|json|yaml|c\+\+|c#|[a-z]{1,6})\s+files?\b/);
       var alias = { typescript: 'ts', javascript: 'js', python: 'py', golang: 'go', rust: 'rs', java: 'java', ruby: 'rb', markdown: 'md', 'c++': 'cpp', 'c#': 'cs' };
       var want = em ? (alias[em[1]] || em[1]) : '';
+      /* "list all files" / "show the files" — the captured word is a determiner, not
+         an extension; list every loaded path instead of filtering by a bogus ext */
+      var DETERMINER = { all: 1, every: 1, the: 1, these: 1, those: 1, any: 1, my: 1, our: 1, your: 1 };
+      if (!want || DETERMINER[want]) {
+        var everything = sortedPaths();
+        steps.push({ action: 'list all loaded files', note: everything.length + ' file' + (everything.length === 1 ? '' : 's'), evidence: everything.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
+        return { steps: steps, verdict: LOCAL_VERDICT(),
+          answer: everything.length
+            ? everything.length + ' file' + (everything.length === 1 ? '' : 's') + ' loaded:\n\n' + everything.slice(0, 40).map(function (p) { return '- `' + p + '`'; }).join('\n') + (everything.length > 40 ? '\n\n… +' + (everything.length - 40) + ' more.' : '')
+            : 'No files loaded.' };
+      }
       var matched = sortedPaths().filter(function (p) { return fileExt(p) === want; });
       steps.push({ action: 'filter files by extension “' + want + '”', note: matched.length + ' file' + (matched.length === 1 ? '' : 's'), evidence: matched.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(), answer: matched.length ? matched.length + ' `.' + want + '` file' + (matched.length === 1 ? '' : 's') + ':\n\n' + matched.slice(0, 25).map(function (p) { return '- `' + p + '`'; }).join('\n') : 'No `.' + want + '` files loaded.' };
@@ -657,7 +668,7 @@ var INTENTS = [
     } },
 
   { kind: 'imports', aliases: ['imports'], ground: 'import', helpCmd: '`imports`', needsModel: false,
-    route: function (s, lo) { return /\bwhat does\b[\s\S]*\bimport\b|\bimports of\b|\bdependencies of\b|\bwhat.*\bdepend(s)? on\b/.test(lo) ? { arg: pickPathish(s) } : null; },
+    route: function (s, lo) { return /\bwhat does\b[\s\S]*\bimport\b|\bimports of\b|\bdependencies of\b|\bwhat (?:do|does)\b[\s\S]*\bdepend on\b/.test(lo) ? { arg: pickPathish(s) } : null; },
     run: function (arg, q, idx) {
       var steps = [];
       var tf2 = resolveToFile(arg);
@@ -676,6 +687,17 @@ var INTENTS = [
     run: function (arg, q, idx) {
       var steps = [];
       var tf = resolveToFile(arg);
+      /* "who uses <symbol>" — the arg names no file but is a known symbol, so the
+         user wants references, not importer edges. Answer refs instead of dead-ending. */
+      if (!tf && symLookup(arg, idx).length) {
+        var rr = localSearchData(arg, 'refs');
+        steps.push({ action: 'no file named “' + arg + '” — treat as a symbol', note: rr.hits.length + ' reference' + (rr.hits.length === 1 ? '' : 's') + ' in ' + rr.filesHit + ' file' + (rr.filesHit === 1 ? '' : 's'), evidence: rr.hits.slice(0, 10).map(localEvidence), status: 'done' });
+        return { steps: steps, verdict: LOCAL_VERDICT(),
+          actions: [{ kind: 'def', command: arg, why: 'jump to where ' + arg + ' is defined' }],
+          answer: rr.hits.length
+            ? '`' + arg + '` is referenced ' + (rr.hits.length >= rr.cap ? rr.cap + '+' : rr.hits.length) + ' time' + (rr.hits.length === 1 ? '' : 's') + ' across ' + rr.filesHit + ' file' + (rr.filesHit === 1 ? '' : 's') + '. (No loaded file is named `' + arg + '`, so this is a symbol-reference search.) Chips open each at its line.'
+            : 'No references to `' + arg + '` in the loaded files.' };
+      }
       var imps = tf ? (idx.importedBy.get(tf) || []) : [];
       steps.push({ action: 'resolve “' + arg + '” to a file', note: tf || 'unresolved', evidence: [], status: 'done' });
       steps.push({ action: 'read importer edges from the index', note: imps.length + ' importer' + (imps.length === 1 ? '' : 's'), evidence: imps.slice(0, 12).map(function (x) { return evAt(x.file, x.line); }), status: 'done' });

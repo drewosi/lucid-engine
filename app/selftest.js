@@ -264,6 +264,8 @@ function runSelfTests() {
       ['importers store.js', 'importers'],
       ['what imports store.js', 'importers'],
       ['what does server.js import', 'imports'],
+      ['what depends on store.js', 'importers'],       /* dependents, NOT imports — must beat the imports route */
+      ['what does store.js depend on', 'imports'],     /* the "what does X depend on" form stays with imports */
       ['files related to store.js', 'related'],
       ['project structure', 'structure'],
       ['where are the tests', 'tests'],
@@ -396,6 +398,15 @@ function runSelfTests() {
     ok('intent · signals leads with the broken-import CRITICAL', /CRITICAL/.test(sg.answer) && /broken relative import/.test(sg.answer) && /`broken`/.test(sg.answer));
     ok('intent · signals includes the cycle finding', /import cycle/.test(sg.answer) && /`cycles`/.test(sg.answer));
     ok('intent · signals caps at five, verdict local', sg.steps.length <= 5 && sg.verdict.local === true);
+    /* routing-collision fixes (audit 3) — natural phrasings that used to dead-end */
+    var wu = inv('who uses addTodo');
+    ok('intent · "who uses <symbol>" answers references, not a file dead-end', /referenced\s+\d+\s+time/.test(wu.answer) && wu.answer.indexOf('Could not resolve') === -1, wu.answer.split('\n')[0]);
+    var wd = inv('what depends on store.js');
+    ok('intent · "what depends on X" answers dependents, not X\'s own imports', /imported by \d+ file/.test(wd.answer), wd.answer.split('\n')[0]);
+    var la = inv('list all files');
+    ok('intent · "list all files" lists files, not a `.all` filter', /files loaded:/.test(la.answer) && la.answer.indexOf('.all') === -1, la.answer.split('\n')[0]);
+    var lj = inv('list js files');
+    ok('intent · "list js files" still filters by extension', /`\.js` file/.test(lj.answer), lj.answer.split('\n')[0]);
     /* bounded search (audit F5) — invalid patterns are flagged, quoted queries
        match literally, and the scan aborts honestly instead of hanging the tab */
     var sInv = localSearchData('todo(', 'text');
