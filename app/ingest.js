@@ -41,6 +41,22 @@ var MAX_TOTAL = 300 * 1024 * 1024;
 function ignoredPath(path) {
   return path.split('/').some(function (seg) { return IGNORE_DIRS.indexOf(seg.toLowerCase()) !== -1 || (seg !== '.' && seg.charAt(0) === '.' && seg !== '.github' && seg !== '.env.example'); });
 }
+/* The offending *directory* prefix of a path — the path up to and including the
+   first non-basename segment that is an IGNORE_DIRS name or a dot-directory
+   (except .github), or '' when no directory segment is ignored. Mirrors the
+   directory-level skip in collectEntry / collectHandle so the flat webkitdirectory
+   picker can count an ignored dir ONCE (per distinct prefix) instead of once per
+   file. Dot-*files* live in the basename and are deliberately not matched here —
+   they fall through to ingestFile's ignoredPath guard, counted per file on every
+   load path. */
+function ignoredDirPrefix(path) {
+  var segs = path.split('/');
+  for (var i = 0; i < segs.length - 1; i++) {
+    var s = segs[i];
+    if (IGNORE_DIRS.indexOf(s.toLowerCase()) !== -1 || (s !== '.' && s !== '' && s.charAt(0) === '.' && s !== '.github')) return segs.slice(0, i + 1).join('/');
+  }
+  return '';
+}
 /* Encoding sniff over the head bytes. Honors UTF-16/UTF-8 BOMs (so UTF-16 text with
    its many 0x00 bytes is not misread as binary), otherwise flags binary on any null
    byte or a high control-character ratio. Returns a TextDecoder label or 'binary'. */
@@ -211,9 +227,18 @@ function pickHandler(input) {
   st.lastDirHandle = null;
   beginBatch();
   var list = Array.prototype.slice.call(input.files || []);
-  runIngestPool(list.map(function (f) {
-    return { path: f.webkitRelativePath || f.name, getFile: function () { return Promise.resolve(f); } };
-  })).then(afterIngest);
+  /* the picker hands us a flat FileList with no directory objects to skip, so
+     ignored dirs would otherwise be counted once per file (drop/FSA count them
+     once per directory). Pre-filter here and tally each distinct ignored dir
+     once, so the skip count means the same thing regardless of load path. */
+  var seenIgnored = Object.create(null), items = [];
+  list.forEach(function (f) {
+    var path = f.webkitRelativePath || f.name;
+    var pref = ignoredDirPrefix(path);
+    if (pref) { if (!seenIgnored[pref]) { seenIgnored[pref] = 1; st.skipped.dirs++; } return; }
+    items.push({ path: path, getFile: function () { return Promise.resolve(f); } });
+  });
+  runIngestPool(items).then(afterIngest);
   input.value = '';
 }
 /* full unload — shared by the [ CLEAR ] control and the REPLACE ingest path */
@@ -623,7 +648,7 @@ function __setCapsForTest(o) {
   return prev;
 }
 
-export { IGNORE_DIRS, __setCapsForTest, afterIngest, closePreview, closeSkipReview, getIgnoreText, ingestFile, maybeAutoSmart, openPreview, openSkipReview, prevveil, recordSkip, renderBudget, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
+export { IGNORE_DIRS, __setCapsForTest, afterIngest, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, maybeAutoSmart, openPreview, openSkipReview, prevveil, recordSkip, renderBudget, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
 
 export function initIngest() {
   st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */

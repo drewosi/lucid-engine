@@ -58,6 +58,10 @@ function symLookup(name, idx) {
 /* null-prototype: looked up with project-supplied tokens — a token named
    `constructor` must not be treated as a stop word */
 var STOP_INTENT = Object.assign(Object.create(null), { where: 1, what: 1, which: 1, who: 1, does: 1, do: 1, is: 1, are: 1, the: 1, file: 1, files: 1, function: 1, functions: 1, method: 1, methods: 1, symbol: 1, symbols: 1, class: 1, classes: 1, defined: 1, definition: 1, declared: 1, reference: 1, references: 1, referenced: 1, import: 1, imports: 1, imported: 1, related: 1, project: 1, structure: 1, test: 1, tests: 1, entry: 1, point: 1, points: 1, recent: 1, recently: 1, show: 1, list: 1, find: 1, all: 1, call: 1, calls: 1, uses: 1, used: 1, depend: 1, depends: 1, this: 1, that: 1, for: 1, and: 1, with: 1 });
+/* usage/dependency verbs — never the search target itself, so when pickSymbol
+   falls back to bare query terms these are skipped in favor of the real noun
+   ("who uses the store" must pick `store`, not the verb `uses`) */
+var PICK_SKIP = Object.assign(Object.create(null), { uses: 1, use: 1, used: 1, using: 1, call: 1, calls: 1, called: 1, calling: 1, import: 1, imports: 1, imported: 1, importing: 1, depend: 1, depends: 1, depended: 1, reference: 1, references: 1, referenced: 1 });
 /* pick the most identifier-like token from a question (for def/refs/symbols) */
 function pickSymbol(q, idx) {
   var bt = q.match(/`([^`]+)`/); if (bt) return bt[1].trim();
@@ -66,7 +70,9 @@ function pickSymbol(q, idx) {
   if (idx) { for (var i = 0; i < toks.length; i++) { if (symLookup(toks[i], idx).length) return toks[i]; } }
   var fancy = toks.filter(function (t) { return (/[A-Z]/.test(t) || t.indexOf('_') !== -1 || t.indexOf('.') !== -1 || /\d/.test(t)) && !STOP_INTENT[t.toLowerCase()]; });
   if (fancy.length) return fancy.sort(function (a, b) { return b.length - a.length; })[0];
-  var terms = queryTerms(q); return terms.length ? terms[0] : '';
+  var terms = queryTerms(q);
+  for (var ti = 0; ti < terms.length; ti++) if (!PICK_SKIP[terms[ti]]) return terms[ti]; /* prefer the noun over a usage verb */
+  return terms.length ? terms[0] : '';
 }
 /* pick a path-ish token from a question (for imports/importers/related/dir) */
 function pickPathish(q) {

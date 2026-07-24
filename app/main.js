@@ -82,4 +82,4 @@ syncProviderUI();
 setCtxMode(st.ctxMode); /* also renders the budget */
 window.__meridianSelfTest = runSelfTests; /* L3: run from the console (async — returns a Promise of results) */
 if (/[?&]selftest\b/.test(location.search)) setTimeout(runAndShowSelfTests, 300);
-console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— Engine v0.5 · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');
+console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— Engine v0.6 · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');

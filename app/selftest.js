@@ -6,7 +6,7 @@ import { classifyIntent } from './local.js';
 import { INTENTS, runInvestigation } from './intents.js';
 import { extractTrace } from './trace.js';
 import { httpErrorText, parseStreamEvent, splitSseEvents } from './chat.js';
-import { __setCapsForTest, ingestFile, runIngestPool } from './ingest.js';
+import { __setCapsForTest, ignoredDirPrefix, ingestFile, runIngestPool } from './ingest.js';
 import { localSearchData } from './actions.js';
 import { buildContextBlocks } from './prompt.js';
 import { app, esc, rememberFocus, returnFocus, toast, trap } from './helpers.js';
@@ -407,6 +407,14 @@ function runSelfTests() {
     ok('intent · "list all files" lists files, not a `.all` filter', /files loaded:/.test(la.answer) && la.answer.indexOf('.all') === -1, la.answer.split('\n')[0]);
     var lj = inv('list js files');
     ok('intent · "list js files" still filters by extension', /`\.js` file/.test(lj.answer), lj.answer.split('\n')[0]);
+    var wts = inv('who uses the store');
+    ok('intent · "who uses the store" resolves the noun, not the verb', /imported by \d+ file/.test(wts.answer) && wts.answer.indexOf('Could not resolve') === -1, wts.answer.split('\n')[0]);
+    /* ignored-dir skip counting (audit 4 · M4) — the picker path must classify an
+       ignored directory by its dir prefix, matching drop/FSA; dot-files are not dirs */
+    ok('ingest · ignoredDirPrefix flags an IGNORE_DIRS segment once', ignoredDirPrefix('proj/node_modules/x/y.js') === 'proj/node_modules', ignoredDirPrefix('proj/node_modules/x/y.js'));
+    ok('ingest · ignoredDirPrefix flags a dot-directory', ignoredDirPrefix('a/.cache/b.js') === 'a/.cache', ignoredDirPrefix('a/.cache/b.js'));
+    ok('ingest · ignoredDirPrefix ignores a clean path', ignoredDirPrefix('src/app.js') === '', ignoredDirPrefix('src/app.js'));
+    ok('ingest · ignoredDirPrefix does not match a dot-file basename', ignoredDirPrefix('foo/.env') === '', ignoredDirPrefix('foo/.env'));
     /* bounded search (audit F5) — invalid patterns are flagged, quoted queries
        match literally, and the scan aborts honestly instead of hanging the tab */
     var sInv = localSearchData('todo(', 'text');
