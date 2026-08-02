@@ -176,9 +176,12 @@ everything MERIDIAN stored.
 > You can also set a per-session spend warning in Settings — MERIDIAN warns before
 > the *estimated* total crosses it.
 
-**Custom endpoints (🔵).** Point MERIDIAN at Ollama, LM Studio, vLLM, etc. Enter a
-base URL like `http://localhost:11434/v1` and a model id, then **[ TEST ENDPOINT ]**
-probes reachability, CORS, and latency. Remote (non-localhost) endpoints are
+**Custom endpoints (🔵).** Point MERIDIAN at LM Studio, Ollama, vLLM, etc. Enter a
+base URL (`http://localhost:1234/v1` for LM Studio, `http://localhost:11434/v1` for
+Ollama) and a model id, then **[ TEST ENDPOINT ]** probes reachability, CORS, and
+latency. The API key is **optional**: leave it empty for keyless local servers, or
+save any placeholder (LM Studio accepts e.g. `lm-studio`) — whatever you save is
+passed through verbatim as a `Bearer` token. Remote (non-localhost) endpoints are
 **blocked on the hosted page** by its security policy — to use one, self-host the
 workbench and widen `connect-src` ([§12](#12-for-power-users-internals--self-hosting)).
 

@@ -5,8 +5,8 @@ var PROVIDERS = {
                note: '// requests go straight from this browser to api.anthropic.com. supports prompt caching.' },
   openai:    { label: 'OPENAI', keyLS: 'meridian.key.openai', keyHint: 'sk-…',
                note: '// requests go straight from this browser to api.openai.com via the chat-completions API, streamed.' },
-  custom:    { label: 'CUSTOM', keyLS: 'meridian.key.custom', keyHint: 'api key (optional for local servers)',
-               note: '// any OpenAI-compatible endpoint on localhost: ollama, LM Studio, vLLM… the server must allow browser CORS. remote endpoints are blocked by this page’s CSP unless you self-host (see the note below). cost estimates are unavailable.' },
+  custom:    { label: 'CUSTOM', keyLS: 'meridian.key.custom', keyHint: 'api key (optional — any placeholder works for LM Studio)',
+               note: '// any OpenAI-compatible endpoint on localhost: LM Studio (http://localhost:1234/v1), ollama (http://localhost:11434/v1), vLLM… the key is optional — leave it empty for keyless servers, or save any placeholder (LM Studio accepts e.g. lm-studio). the server must allow browser CORS. remote endpoints are blocked by this page’s CSP unless you self-host (see the note below). cost estimates are unavailable.' },
   local:     { label: 'LOCAL', keyLS: 'meridian.key.local', keyHint: '', /* keyLS is never read — local needs no key */
                note: '// no API, no key, no AI. questions run as deterministic keyword/symbol search over the loaded files — nothing ever leaves this tab.' }
 };

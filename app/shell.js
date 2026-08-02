@@ -103,7 +103,7 @@ function setCustState(msg, kind) {
 /* validate + normalize a custom OpenAI-compatible base URL; warns (does not block)
    on a missing /v1 suffix and on non-localhost http:// (mixed-content on an https page) */
 function validateCustomUrl(u) {
-  if (!u) return { ok: false, msg: 'enter a base URL (e.g. http://localhost:11434/v1)' };
+  if (!u) return { ok: false, msg: 'enter a base URL (e.g. http://localhost:1234/v1 for LM Studio, :11434 for ollama)' };
   var parsed;
   try { parsed = new URL(u); } catch (e) { return { ok: false, msg: 'not a valid URL' }; }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return { ok: false, msg: 'URL must be http:// or https://' };
@@ -234,7 +234,7 @@ export function initShell() {
     fetch(u + '/models', { method: 'GET', headers: headers, signal: ctrl.signal }).then(function (res) {
       clearTimeout(to);
       var ms = t0 ? ' · ' + Math.round(performance.now() - t0) + ' ms' : '';
-      if (res.ok || res.status === 401 || res.status === 400) setCustState('reachable' + ms + (res.status === 401 ? ' (needs a key)' : ''), 'ok');
+      if (res.ok || res.status === 401 || res.status === 400) setCustState('reachable' + ms + (res.status === 401 ? ' (needs a key — LM Studio-style servers accept any placeholder, e.g. lm-studio)' : ''), 'ok');
       else setCustState('reached, HTTP ' + res.status + ' — check the base path' + ms, 'note');
     }).catch(function (err) {
       clearTimeout(to);
