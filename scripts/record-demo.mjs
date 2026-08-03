@@ -1,10 +1,16 @@
 /**
  * record-demo.mjs — capture a real MERIDIAN demo, honestly.
  *
- * Drives app.html's built-in first-run demo: a tiny bundled `todo-api` project
- * answered by the deterministic LOCAL engine (no key, no AI, no network). What
- * you see is the actual product — the UI self-labels DEMO · LOCAL ENGINE,
- * LOCAL · NO AI, and KNOWN LOCALLY. Nothing is faked or re-created.
+ * Two acts, both the actual product — nothing faked, nothing re-created:
+ *   Act 1 — LOCAL engine: the built-in first-run demo answers a tiny bundled
+ *           `todo-api` project deterministically (no key, no AI, no network).
+ *           The UI self-labels DEMO · LOCAL ENGINE, LOCAL · NO AI, KNOWN LOCALLY.
+ *   Act 2 — Sonnet 5 how-to: switch the provider to Anthropic and the model to
+ *           SONNET 5 (1M-token context), show where your own key goes, then open
+ *           [ PREVIEW SEND ] — the exact context (files + token estimates +
+ *           grounding state) that would be sent to the model. No key is entered
+ *           and no request is made, so no model answer is shown or fabricated;
+ *           the honest-demo rule is preserved.
  *
  * Output: an intermediate .webm (gitignored). Convert to media/meridian-demo.mp4
  * and media/meridian-demo.gif with scripts/encode-demo.sh.
@@ -53,6 +59,15 @@ function serve() {
   return p;
 }
 
+// Move the presenter cursor to an element's centre (so switches/selects read on
+// video even when we drive them programmatically).
+async function glide(page, selector) {
+  const el = page.locator(selector);
+  await el.scrollIntoViewIfNeeded().catch(() => {});
+  const box = await el.boundingBox().catch(() => null);
+  if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 async function main() {
   if (!existsSync(CHROME)) throw new Error('chromium not found at ' + CHROME);
   mkdirSync(REC_DIR, { recursive: true });
@@ -73,6 +88,8 @@ async function main() {
   const page = await ctx.newPage();
   await page.goto(`http://localhost:${PORT}/app.html`, { waitUntil: 'load' });
 
+  /* ======================= ACT 1 — LOCAL ENGINE ======================= */
+
   // Scene 1 — first-run: the honest entry point (no key required).
   const demoBtn = page.locator('#fr-demo');
   await demoBtn.waitFor({ state: 'visible', timeout: 15000 });
@@ -89,34 +106,61 @@ async function main() {
   // Scene 3 — click an evidence chip → the cited file opens at the cited line.
   const opened = await openFirstEvidence(page);
   if (opened) {
-    await sleep(2600); // dwell on the highlighted lines in the viewer
+    await sleep(2400); // dwell on the highlighted lines in the viewer
     await page.locator('#vclose').click();
-    await sleep(700);
+    await sleep(600);
   }
 
-  // Scene 4 & 5 — the other two bundled questions, straight from the demo chips.
+  // Scene 4 — one more bundled question, straight from the demo chips.
   const chips = page.locator('#demobanner .demochip');
   const n = await chips.count();
-  for (let i = 1; i < Math.min(n, 3); i++) {
-    await chips.nth(i).scrollIntoViewIfNeeded();
-    await chips.nth(i).hover();
+  if (n > 1) {
+    await chips.nth(1).scrollIntoViewIfNeeded();
+    await chips.nth(1).hover();
     await sleep(400);
-    await chips.nth(i).click();
+    await chips.nth(1).click();
     await page.locator('.convo-in .ev-row .ev').last().waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
-    await sleep(2300);
+    await sleep(2200);
   }
 
-  // Scene 6 — exportable traces: Markdown + self-contained HTML.
-  const exhtml = page.locator('#exporthtml');
-  await exhtml.scrollIntoViewIfNeeded();
-  await exhtml.hover();
+  /* ==================== ACT 2 — SONNET 5 HOW-TO ==================== */
+
+  // Scene 5 — switch the provider to Anthropic; the model select offers SONNET 5.
+  await glide(page, '#navprov');
   await sleep(500);
-  await exhtml.click();          // → self-contained HTML trace export
-  await sleep(1100);
-  await page.locator('#exportmd').hover();
-  await sleep(500);
-  await page.locator('#exportmd').click(); // → Markdown export
-  await sleep(1400);
+  await page.selectOption('#navprov', 'anthropic').catch(() => {});
+  await sleep(650);
+  await glide(page, '#modelsel');
+  await page.selectOption('#modelsel', 'claude-sonnet-5').catch(() => {});
+  await sleep(900); // top bar now reads ANTHROPIC · SONNET 5 · live context
+
+  // Scene 6 — bring your own key: open Settings, show the ANTHROPIC API KEY field.
+  // (Nothing is typed — the key is yours; requests go straight to Anthropic.)
+  await glide(page, '#setbtn');
+  await sleep(300);
+  await page.locator('#setbtn').click();
+  await page.locator('#drawer.open').waitFor({ state: 'visible', timeout: 4000 }).catch(() => {});
+  await glide(page, '#keyin');
+  await sleep(2200); // read: "ANTHROPIC API KEY · sk-ant-…" + the provider note
+  await page.locator('#setbtn').click(); // close settings
+  await sleep(600);
+
+  // Scene 7 — ask a question, then PREVIEW SEND: exactly what goes to Sonnet 5.
+  await glide(page, '#prompt');
+  await page.locator('#prompt').click();
+  await page.locator('#prompt').fill('Where is the todo list persisted, and what validates a new todo?');
+  await sleep(700);
+  await glide(page, '#prevbtn');
+  await sleep(350);
+  await page.locator('#prevbtn').click();
+  // The CONTEXT // SEND PREVIEW panel: files + token estimates + grounding state.
+  await sleep(3200); // dwell on the honest "what would be sent" breakdown
+  await page.keyboard.press('Escape');
+  await sleep(700);
+
+  // Scene 8 — the grounding switch: verified path:line evidence sent with the ask.
+  await glide(page, '#groundbtn');
+  await sleep(1500);
 
   await ctx.close();   // finalizes the .webm
   await browser.close();
