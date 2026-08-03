@@ -12,6 +12,10 @@
  *           and no request is made, so no model answer is shown or fabricated;
  *           the honest-demo rule is preserved.
  *
+ * A caption bar (mono system voice) is baked into the capture so the video
+ * explains itself — README embeds autoplay muted and the GIF has no audio,
+ * so on-screen text beats a voiceover for this medium.
+ *
  * Output: an intermediate .webm (gitignored). Convert to media/meridian-demo.mp4
  * and media/meridian-demo.gif with scripts/encode-demo.sh.
  *
@@ -19,7 +23,8 @@
  * `npm i playwright` (throwaway, gitignored). Run: `node scripts/record-demo.mjs`
  */
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
+import http from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -54,9 +59,43 @@ const CURSOR_INIT = `
   })();
 `;
 
-function serve() {
-  const p = spawn('python3', ['-m', 'http.server', String(PORT)], { cwd: ROOT, stdio: 'ignore' });
-  return p;
+// A narrator caption bar in the system's mono voice, pinned to the bottom edge.
+// pointer-events:none (never blocks the UI), z 150 (below toasts at 160 so real
+// product feedback still reads above it). Purely presentational for the video.
+const CAPTION_INIT = `
+  (function(){
+    function mount(){
+      if (document.getElementById('__cap')) return;
+      var b = document.createElement('div');
+      b.id = '__cap';
+      b.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:46px;z-index:150;'
+        + 'display:flex;align-items:center;justify-content:center;pointer-events:none;'
+        + 'background:rgba(10,11,13,.94);border-top:1px solid #34363E;'
+        + 'font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;'
+        + 'font-size:14px;letter-spacing:.04em;color:#EDECE7;opacity:0;'
+        + 'transition:opacity .25s cubic-bezier(.16,1,.3,1)';
+      document.documentElement.appendChild(b);
+    }
+    if (document.documentElement) mount();
+    document.addEventListener('DOMContentLoaded', mount);
+  })();
+`;
+
+// Set (or clear) the caption. idx renders in Signal Orange, text in ink.
+async function cap(page, idx, text) {
+  await page.evaluate(([i, t]) => {
+    var b = document.getElementById('__cap');
+    if (!b) return;
+    if (!t) { b.style.opacity = '0'; return; }
+    b.innerHTML = '';
+    var n = document.createElement('b');
+    n.style.cssText = 'color:#FF5C0A;font-weight:500;margin-right:14px';
+    n.textContent = i;
+    var s = document.createElement('span');
+    s.textContent = t;
+    b.appendChild(n); b.appendChild(s);
+    b.style.opacity = '1';
+  }, [idx, text]).catch(() => {});
 }
 
 // Move the presenter cursor to an element's centre (so switches/selects read on
@@ -68,11 +107,25 @@ async function glide(page, selector) {
   if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 }
 
+// Zero-dependency static server (node builtins only — same pattern as
+// scripts/run-selftests.mjs; python is not required on the box).
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
+function serve() {
+  const srv = http.createServer(async (req, res) => {
+    try {
+      const p = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/\/+$/, '') || '/index.html';
+      const buf = await readFile(path.join(ROOT, p));
+      res.writeHead(200, { 'content-type': MIME[path.extname(p)] || 'application/octet-stream' });
+      res.end(buf);
+    } catch (e) { res.writeHead(404); res.end('not found'); }
+  });
+  return new Promise((resolve) => srv.listen(PORT, '127.0.0.1', () => resolve(srv)));
+}
+
 async function main() {
   if (!existsSync(CHROME)) throw new Error('chromium not found at ' + CHROME);
   mkdirSync(REC_DIR, { recursive: true });
-  const server = serve();
-  await sleep(700); // let the static server come up
+  const server = await serve();
 
   const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox', '--force-color-profile=srgb'] });
   const ctx = await browser.newContext({
@@ -82,18 +135,20 @@ async function main() {
     recordVideo: { dir: REC_DIR, size: { width: W, height: H } },
   });
   await ctx.addInitScript(CURSOR_INIT);
+  await ctx.addInitScript(CAPTION_INIT);
   // Swallow export downloads so clicking the export buttons doesn't hang.
   ctx.on('page', (pg) => pg.on('download', (d) => d.saveAs(path.join(REC_DIR, 'dl-' + d.suggestedFilename())).catch(() => {})));
 
   const page = await ctx.newPage();
-  await page.goto(`http://localhost:${PORT}/app.html`, { waitUntil: 'load' });
+  await page.goto(`http://127.0.0.1:${PORT}/app.html`, { waitUntil: 'load' });
 
   /* ======================= ACT 1 — LOCAL ENGINE ======================= */
 
   // Scene 1 — first-run: the honest entry point (no key required).
   const demoBtn = page.locator('#fr-demo');
   await demoBtn.waitFor({ state: 'visible', timeout: 15000 });
-  await sleep(1900); // read the modal: "Try the demo — LOCAL, no key"
+  await cap(page, '01', 'THE HONEST ENTRY — the demo runs the LOCAL engine: no key, no AI, zero network');
+  await sleep(2400); // read the modal + caption
   await demoBtn.hover();
   await sleep(350);
   await demoBtn.click();
@@ -101,12 +156,14 @@ async function main() {
   // Scene 2 — sample project loads; LOCAL answers Q1 with a trace + evidence.
   await page.locator('#demobanner').waitFor({ state: 'visible', timeout: 8000 });
   await page.locator('.convo-in .ev-row .ev').first().waitFor({ state: 'visible', timeout: 8000 });
-  await sleep(2200);
+  await cap(page, '02', 'LOCAL answers from the project index — every claim pinned to file:line evidence');
+  await sleep(2600);
 
   // Scene 3 — click an evidence chip → the cited file opens at the cited line.
+  await cap(page, '03', 'evidence chips open the cited file at its exact line');
   const opened = await openFirstEvidence(page);
   if (opened) {
-    await sleep(2400); // dwell on the highlighted lines in the viewer
+    await sleep(2600); // dwell on the highlighted lines in the viewer
     await page.locator('#vclose').click();
     await sleep(600);
   }
@@ -115,56 +172,63 @@ async function main() {
   const chips = page.locator('#demobanner .demochip');
   const n = await chips.count();
   if (n > 1) {
+    await cap(page, '04', 'a second question — deterministic, honestly labeled KNOWN LOCALLY');
     await chips.nth(1).scrollIntoViewIfNeeded();
     await chips.nth(1).hover();
     await sleep(400);
     await chips.nth(1).click();
     await page.locator('.convo-in .ev-row .ev').last().waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
-    await sleep(2200);
+    await sleep(2400);
   }
 
   /* ==================== ACT 2 — SONNET 5 HOW-TO ==================== */
 
   // Scene 5 — switch the provider to Anthropic; the model select offers SONNET 5.
+  await cap(page, '05', 'SONNET 5 SETUP — provider → ANTHROPIC, model → SONNET 5 · 1M-token context');
   await glide(page, '#navprov');
-  await sleep(500);
+  await sleep(700);
   await page.selectOption('#navprov', 'anthropic').catch(() => {});
   await sleep(650);
   await glide(page, '#modelsel');
   await page.selectOption('#modelsel', 'claude-sonnet-5').catch(() => {});
-  await sleep(900); // top bar now reads ANTHROPIC · SONNET 5 · live context
+  await sleep(1200); // top bar now reads ANTHROPIC · SONNET 5 · live context
 
   // Scene 6 — bring your own key: open Settings, show the ANTHROPIC API KEY field.
   // (Nothing is typed — the key is yours; requests go straight to Anthropic.)
+  await cap(page, '06', 'your key goes in settings — stored in this browser only, sent straight to Anthropic');
   await glide(page, '#setbtn');
   await sleep(300);
   await page.locator('#setbtn').click();
   await page.locator('#drawer.open').waitFor({ state: 'visible', timeout: 4000 }).catch(() => {});
   await glide(page, '#keyin');
-  await sleep(2200); // read: "ANTHROPIC API KEY · sk-ant-…" + the provider note
+  await sleep(2600); // read: "ANTHROPIC API KEY · sk-ant-…" + the provider note
   await page.locator('#setbtn').click(); // close settings
   await sleep(600);
 
   // Scene 7 — ask a question, then PREVIEW SEND: exactly what goes to Sonnet 5.
+  await cap(page, '07', '[ PREVIEW SEND ] — the exact files + tokens a question would send to Sonnet 5');
   await glide(page, '#prompt');
   await page.locator('#prompt').click();
   await page.locator('#prompt').fill('Where is the todo list persisted, and what validates a new todo?');
-  await sleep(700);
+  await sleep(800);
   await glide(page, '#prevbtn');
   await sleep(350);
   await page.locator('#prevbtn').click();
   // The CONTEXT // SEND PREVIEW panel: files + token estimates + grounding state.
-  await sleep(3200); // dwell on the honest "what would be sent" breakdown
+  await sleep(3600); // dwell on the honest "what would be sent" breakdown
   await page.keyboard.press('Escape');
-  await sleep(700);
+  await sleep(600);
 
   // Scene 8 — the grounding switch: verified path:line evidence sent with the ask.
+  await cap(page, '08', 'GROUND: ON — verified path:line evidence accompanies every model question');
   await glide(page, '#groundbtn');
-  await sleep(1500);
+  await sleep(2200);
+  await cap(page, '', '');
+  await sleep(400);
 
   await ctx.close();   // finalizes the .webm
   await browser.close();
-  server.kill('SIGTERM');
+  server.close();
   console.log('done — .webm written under', REC_DIR);
 }
 
