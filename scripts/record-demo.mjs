@@ -156,7 +156,7 @@ async function main() {
   // Scene 2 — sample project loads; LOCAL answers Q1 with a trace + evidence.
   await page.locator('#demobanner').waitFor({ state: 'visible', timeout: 8000 });
   await page.locator('.convo-in .ev-row .ev').first().waitFor({ state: 'visible', timeout: 8000 });
-  await cap(page, '02', 'LOCAL answers from the project index — every claim pinned to file:line evidence');
+  await cap(page, '02', 'the opening answer is SIGNALS — ranked, real findings, each pinned to file:line evidence');
   await sleep(2600);
 
   // Scene 3 — click an evidence chip → the cited file opens at the cited line.
