@@ -327,7 +327,23 @@ function runSelfTests() {
       ['Structure of payments confuses me, why?', 'reason'],      /* trailing-why beats the structure route */
       ['Exports keep breaking', 'plain'],                         /* two prose tokens — the gate declines */
       ['search "cache control"', 'search'],                       /* quoted arg = the literal escape hatch */
-      ['why do we have circular imports', 'cycles']               /* leading why stays with the cascade */
+      ['why do we have circular imports', 'cycles'],              /* leading why stays with the cascade */
+      /* natural-language collision & edge cases (audit: routing robustness pass) */
+      ['what uses store.js', 'importers'],                        /* "what uses" — was falling to plain */
+      ['what uses addTodo', 'importers'],                         /* symbol arg — the run redirects to references */
+      ['who uses addTodo', 'importers'],
+      ['who uses the store', 'importers'],                        /* determiner + usage verb — arg must be the noun */
+      ['what depends on the store', 'importers'],
+      ['who imports util.js', 'importers'],
+      ['show the dependency graph', 'hubs'],                      /* was falling to plain — fan-in is the honest answer */
+      ['list all files', 'listType'],                             /* determiner guard lists everything */
+      ['list every file', 'listType'],
+      ['show all python files', 'listType'],
+      ['list all functions', 'symbols'],                          /* not listType — no real extension present */
+      ['uses of json', 'refs'],                                   /* bare "uses of" stays with refs, not importers */
+      ['what calls listTodos', 'refs'],
+      ['where is the config', 'def'],                             /* determiner question still lands on def */
+      ['what does the server import', 'imports']                  /* determiner + no extension resolves via basename */
     ];
     ROUTES.forEach(function (rc) {
       var got = classifyIntent(rc[0]) || {};
@@ -340,6 +356,9 @@ function runSelfTests() {
     ok('route · quoted search arg unwrapped + literal', qs.arg === 'cache control' && qs.literal === true, qs.arg);
     ok('route · path keeps two tokens', classifyIntent('path src/index.js src/store.js').arg === 'src/index.js src/store.js');
     ok('route · trailing-why is not deterministic', classifyIntent('Imports are slow, why?').needsModel === true);
+    ok('route · determiner arg picks the noun (who uses the store)', classifyIntent('who uses the store').arg === 'store', classifyIntent('who uses the store').arg);
+    ok('route · determiner arg picks the noun (what depends on the store)', classifyIntent('what depends on the store').arg === 'store', classifyIntent('what depends on the store').arg);
+    ok('route · def determiner arg (where is the config)', classifyIntent('where is the config').arg === 'config', classifyIntent('where is the config').arg);
     /* registry consistency — every reasoning instance is a complete entry */
     ok('registry · entries complete (kind/ground/run)', INTENTS.every(function (it) {
       return typeof it.kind === 'string' && it.kind && typeof it.ground === 'string' && typeof it.run === 'function'
@@ -406,6 +425,17 @@ function runSelfTests() {
     ok('intent · untested flags util.js but not store.js', ut.answer.indexOf('src/util.js') !== -1 && ut.answer.indexOf('src/store.js') === -1);
     var dp = inv('dupes');
     ok('intent · dupes finds dupeSym in both files', dp.answer.indexOf('dupeSym') !== -1 && /dupea/.test(dp.answer) && /dupeb/.test(dp.answer));
+    /* routing-robustness run-level checks — the fixed routes produce real answers */
+    var wu = inv('what uses addTodo');
+    ok('intent · what-uses a symbol redirects to references', /referenced/.test(wu.answer) && wu.verdict.local === true, wu.answer.slice(0, 60));
+    var wf = inv('what uses store.js');
+    ok('intent · what-uses a file lists importers', /imported by/.test(wf.answer) && wf.answer.indexOf('src/server.js') !== -1, wf.answer.slice(0, 60));
+    var laf = inv('list all files');
+    ok('intent · list-all-files lists every loaded path', /loaded/.test(laf.answer) && laf.answer.indexOf('README.md') !== -1, laf.answer.slice(0, 60));
+    var dg = inv('show the dependency graph');
+    ok('intent · dependency-graph answers fan-in ranking', /Most-imported|No file is imported/.test(dg.answer) && dg.verdict.local === true, dg.answer.slice(0, 60));
+    var hlp = inv('help');
+    ok('intent · help states the machinery limits', /Intentional limits/.test(hlp.answer) && /static import edges/.test(hlp.answer));
     var pt = inv('path src/index.js src/store.js');
     ok('intent · path walks index → server → store', pt.answer.indexOf('src/index.js') !== -1 && pt.answer.indexOf('src/server.js') !== -1 && pt.answer.indexOf('src/store.js') !== -1);
     var sg = inv('signals');

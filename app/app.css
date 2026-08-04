@@ -267,8 +267,12 @@
   .msg-a { background: var(--surface); border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
   .msg-a .term-hd { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--line); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); }
   .msg-a .term-hd .chip { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 1px 8px; font-size: 9.5px; letter-spacing: .1em; }
-  .msg-a .term-hd .hdcopy { border: 1px solid var(--line-strong); background: transparent; color: var(--ink-3); border-radius: 3px; padding: 1px 8px; font-size: 9.5px; letter-spacing: .1em; cursor: pointer; font-family: inherit; }
+  .msg-a .term-hd .hdcopy { border: 1px solid var(--line-strong); background: transparent; color: var(--ink-2); border-radius: 3px; padding: 1px 8px; font-size: 9.5px; letter-spacing: .1em; cursor: pointer; font-family: inherit; }
   .msg-a .term-hd .hdcopy:hover { border-color: var(--accent); color: var(--accent); }
+  /* one-time first-answer orientation — a note in the seam, never a modal */
+  .orient { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line-strong); font-size: 11px; color: var(--ink-3); letter-spacing: .03em; line-height: 1.8; }
+  .orient .kbd-link { color: var(--ink-2); font-size: inherit; }
+  .orient .kbd-link:hover { color: var(--accent); }
   .msg-a .term-hd .chip.dim { border-color: var(--line-strong); color: var(--ink-3); }
   .msg-a .term-hd .chip.err { border-color: var(--err); color: var(--err); }
   .msg-a .bd { padding: 16px 18px 18px; font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.7; color: var(--ink); }
@@ -476,12 +480,15 @@
   .ov-index { font-size: 10.5px; color: var(--accent); letter-spacing: .05em; margin-top: 12px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; }
   .ov-langs { font-size: 10.5px; color: var(--ink-2); letter-spacing: .05em; margin-top: 8px; }
   .ov-cap { font-size: 10px; color: var(--ink-3); letter-spacing: .04em; margin-top: 8px; line-height: 1.8; }
+  .ov-skip { font-size: 10.5px; color: var(--ink-2); letter-spacing: .04em; margin-top: 10px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; }
+  .ov-lim { font-size: 10px; color: var(--ink-3); letter-spacing: .04em; margin-top: 8px; line-height: 1.7; border-top: 1px dashed var(--line); padding-top: 8px; }
 
-  /* verdict badge — KNOWN LOCALLY vs REQUIRES MODEL REASONING */
+  /* verdict badge — KNOWN LOCALLY vs REQUIRES MODEL REASONING. The two states
+     must read apart at a glance: tinted ground + colored edge, not edge alone. */
   .verdict { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 12px; margin-top: 14px; padding: 8px 12px; border-radius: 3px; border: 1px solid var(--line-strong); }
-  .verdict.ok { border-left: 2px solid var(--ok); }
-  .verdict.model { border-left: 2px solid var(--accent); }
-  .verdict .vk { font-size: 11px; letter-spacing: .1em; font-weight: 500; }
+  .verdict.ok { border-left: 2px solid var(--ok); background: color-mix(in srgb, var(--ok) 7%, transparent); }
+  .verdict.model { border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .verdict .vk { font-size: 11px; letter-spacing: .1em; font-weight: 700; }
   .verdict.ok .vk { color: var(--ok); }
   .verdict.model .vk { color: var(--accent); }
   .verdict .vt { font-size: 11px; color: var(--ink-3); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; letter-spacing: .03em; }

@@ -19,10 +19,33 @@ function renderVerdict(msgEl, verdict) {
   var bd = msgEl.querySelector('.bd');
   var v = document.createElement('div');
   v.className = 'verdict ' + (verdict.local ? 'ok' : 'model');
+  v.title = verdict.local
+    ? 'Answered entirely from the deterministic project index — no model, no network'
+    : 'Meridian gathered the evidence; interpreting it needs a model — connect one in settings';
   v.innerHTML = '<span class="vk mono"></span><span class="vt"></span>';
   v.querySelector('.vk').textContent = verdict.local ? '✓ ' + verdict.text : '○ ' + verdict.text;
   v.querySelector('.vt').textContent = verdict.local ? 'answered from the project index — zero inference, zero network' : 'evidence gathered locally — connect a model to synthesize';
   bd.appendChild(v);
+}
+
+/* one-time, in-the-seam orientation after the first LOCAL answer of the session:
+   reinforce the core model (index answered, no model ran) and hand the curious a
+   door (the "what can I ask" catalog). Session-scoped by design — no storage. */
+function renderOrientation(msgEl) {
+  if (st.orientShown || !st.files.size) return;
+  st.orientShown = true;
+  var bd = msgEl.querySelector('.bd');
+  var o = document.createElement('div');
+  o.className = 'orient mono';
+  o.appendChild(document.createTextNode('// this answer came from the deterministic index — no model was used. '));
+  o.appendChild(document.createElement('br'));
+  o.appendChild(document.createTextNode('// ✓ KNOWN LOCALLY = answered from the index · ○ REQUIRES MODEL REASONING = evidence gathered, a model synthesizes · '));
+  var b = document.createElement('button');
+  b.type = 'button'; b.className = 'kbd-link mono'; b.textContent = '▤ what can I ask';
+  b.title = 'Everything the deterministic engine answers';
+  b.addEventListener('click', function () { var m = $('localmenubtn'); if (m) m.click(); });
+  o.appendChild(b);
+  bd.appendChild(o);
 }
 
 function askLocal(q) {
@@ -47,6 +70,7 @@ function askLocal(q) {
   txtEl.innerHTML = renderRich(answer);
   renderVerdict(msgEl, verdict);
   renderTrace(msgEl, trace);
+  renderOrientation(msgEl);
   /* the header chip defaults to TRACED — relabel it so nobody mistakes this for a model */
   var chip = msgEl.querySelector('.term-hd .chip');
   if (chip) { chip.className = 'chip'; chip.textContent = 'LOCAL · NO AI'; }
@@ -100,6 +124,25 @@ function renderOverview() {
   ov.querySelector('.ov-index').textContent = '// indexed ' + idx.symbolCount + ' symbol' + (idx.symbolCount === 1 ? '' : 's') + ' · ' + (idx.importCount || 0) + ' import' + ((idx.importCount || 0) === 1 ? '' : 's') + ' · ' + langCount + ' language' + (langCount === 1 ? '' : 's');
   ov.querySelector('.ov-langs').textContent = '// languages: ' + (langs.slice(0, 6).map(function (e) { return e + ' ·' + idx.byExt[e]; }).join('  ') || 'none');
   ov.querySelector('.ov-cap').textContent = '// ✓ known locally: ' + CAP_LOCAL.join(' · ') + '   ○ requires a model: ' + CAP_MODEL.join(' · ');
+  /* skipped files belong on the orientation surface, not only in the rail — the
+     same review modal, reached through the already-wired control */
+  if (st.skippedFiles.length) {
+    var sk = document.createElement('div');
+    sk.className = 'ov-skip mono';
+    sk.appendChild(document.createTextNode('// ' + st.skippedFiles.length + ' file' + (st.skippedFiles.length === 1 ? '' : 's') + ' skipped during load (binary · oversized · ignored · caps) — '));
+    var sb = document.createElement('button');
+    sb.type = 'button'; sb.className = 'kbd-link mono'; sb.textContent = '[ REVIEW SKIPPED ]';
+    sb.title = 'List every skipped file and pull specific ones back in';
+    sb.addEventListener('click', function () { var r = $('skiprev'); if (r) r.click(); });
+    sk.appendChild(sb);
+    ov.appendChild(sk);
+  }
+  /* honest machinery limits, stated once where orientation happens — each
+     analysis repeats its own caveat in its answer */
+  var lim = document.createElement('div');
+  lim.className = 'ov-lim mono';
+  lim.textContent = '// machinery limits: static import edges only (regex extraction per language · >400-char lines not indexed) — cycles/orphans/hubs/untested read that graph; dynamic loading, DI and bundler wiring are invisible. each analysis states its own caveats in its answer.';
+  ov.appendChild(lim);
 }
 
 export { askLocal, classifyIntent, pickSymbol, renderOverview, runInvestigation, symLookup };

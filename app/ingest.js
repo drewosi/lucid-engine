@@ -111,7 +111,10 @@ function ingestFile(file, path, force) {
       checked: true,
       lang: detectLang(path, text)
     });
-    if (st.files.size % 100 === 0) setStatus('INGESTING — ' + st.files.size + ' FILES…');
+    if (st.files.size % 100 === 0) {
+      var skT = st.skipped.binary + st.skipped.big + st.skipped.over + st.skipped.user + st.skipped.readerr + st.skipped.memcap;
+      setStatus('INGESTING — ' + st.files.size + ' FILES' + (skT ? ' · ' + skT + ' SKIPPED' : '') + '…');
+    }
   }).catch(function (e) {
     /* read/decode failure is NOT binary — record it so the review modal shows it */
     console.warn('meridian: could not read', path, e);
@@ -210,14 +213,23 @@ function afterIngest() {
   var base = st.files.size + ' file' + (st.files.size === 1 ? '' : 's') + ' loaded into memory';
   if (batchSkipped && st.skippedFiles.length) toast(base + ' · ' + batchSkipped + ' skipped in this load.', { label: '[ REVIEW ]', fn: openSkipReview });
   else toast(base + (batchSkipped ? ' · ' + batchSkipped + ' skipped in this load.' : '.'));
-  renderOverview();
-  setStatus('CORE IDLE — ' + st.files.size + ' files in memory');
-  /* graceful scaling: warn as the in-memory file cap approaches or is hit */
-  if (st.skipped.memcap) toast('Memory cap reached (~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB of text) — ' + st.skipped.memcap + ' file' + (st.skipped.memcap === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
-  else if (st.skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
-  else if (st.files.size >= Math.floor(MAX_FILES * 0.9)) toast('Approaching the ' + MAX_FILES + '-file cap (' + st.files.size + ' loaded) — large repos may hit it; ignore patterns help.');
-  maybeAutoSmart();
-  recordSessionDrift(); /* last: renderOverview above has already rebuilt the index */
+  /* the index build inside renderOverview() is synchronous and can block for a
+     while on a large project — announce it and yield one frame so the status
+     actually paints before the work starts. Order inside the deferred block is
+     load-bearing: recordSessionDrift must run after renderOverview's rebuild. */
+  setStatus('INDEXING — ' + st.files.size + ' files…');
+  var finish = function () {
+    renderOverview();
+    setStatus('CORE IDLE — ' + st.files.size + ' files in memory');
+    /* graceful scaling: warn as the in-memory file cap approaches or is hit */
+    if (st.skipped.memcap) toast('Memory cap reached (~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB of text) — ' + st.skipped.memcap + ' file' + (st.skipped.memcap === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
+    else if (st.skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
+    else if (st.files.size >= Math.floor(MAX_FILES * 0.9)) toast('Approaching the ' + MAX_FILES + '-file cap (' + st.files.size + ' loaded) — large repos may hit it; ignore patterns help.');
+    maybeAutoSmart();
+    recordSessionDrift(); /* last: renderOverview above has already rebuilt the index */
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { setTimeout(finish, 0); });
+  else setTimeout(finish, 0);
 }
 
 var dz = $('dropzone');

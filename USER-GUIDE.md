@@ -240,11 +240,19 @@ C#, Kotlin, Swift, PHP (symbols + import resolution), plus basic support for
 others (Scala, Elixir, Dart…). Depth varies — it's regex-based, dependency-free
 analysis, not a full compiler, and the app says so where it matters.
 
-> 🔵 **Power user:** graph analyses (`cycles`/`orphans`/`hubs`/`path`/`untested`)
-> walk **statically resolved** import edges only — files wired at runtime (dynamic
-> import, DI, HTML `<script>`, bundler config) can show as orphaned without being
-> dead. Each answer discloses this. `search` is bounded to ~400K lines / 2s on the
-> main thread and tells you when it stops early.
+> 🔵 **Power user — the intentional limits, in one place:** graph analyses
+> (`cycles`/`orphans`/`hubs`/`path`/`untested`) walk **statically resolved**
+> import edges only — files wired at runtime (dynamic import, DI, HTML
+> `<script>`, bundler config) can show as orphaned without being dead. Symbol
+> and import extraction is **regex-based with per-language depth ceilings** (not
+> a compiler), and **lines over 400 characters are not indexed** (minified /
+> one-line content) — imports on them are invisible, so such files can appear
+> orphaned or unresolved. `untested` matches tests to sources by **name stem +
+> what test files import** — integration tests that exercise code indirectly are
+> not traced. `search` is bounded to ~400K lines / 2s on the main thread and
+> tells you when it stops early. Every affected answer discloses its own caveat
+> in place, and the PROJECT INTELLIGENCE overview carries a standing machinery
+> note.
 
 ---
 
@@ -403,8 +411,9 @@ fixture — no network, no API. Run it three ways: the palette → **"Run self-t
 browser console. Headless in CI via `scripts/run-selftests.mjs` (GitHub Actions on
 every push/PR).
 
-**Widen `connect-src` for a remote endpoint.** Self-host (below) and add your
-endpoint's origin to the `connect-src` line in `app.html`.
+**Widen `connect-src` for a remote endpoint.** Self-host and add your endpoint's
+origin to the `connect-src` line in `app.html` — the concrete steps are in
+[§13](#13-run-it-on-your-own-machine).
 
 ---
 
@@ -419,6 +428,32 @@ The app is plain browser files with **no build step**, but it must be served ove
 
 Any static host works; GitHub Pages needs no configuration. Editing is
 edit-refresh-ship — no compile.
+
+### Point it at a private model endpoint
+
+The hosted page's CSP only allows network to `api.anthropic.com`,
+`api.openai.com`, and `localhost`/`127.0.0.1` — a **remote** custom endpoint
+(a hosted vLLM box, openrouter, a company gateway) is blocked there by design.
+Self-hosting lifts that in one edit:
+
+1. **Clone or fork** the repo (or just copy `app.html` + the `app/` folder — that
+   is the entire workbench).
+2. **Edit the one `connect-src` line** in `app.html`'s `<meta
+   http-equiv="Content-Security-Policy">` tag: append your endpoint's origin,
+   e.g. `https://models.internal.example`. Add nothing else — every origin you
+   add is an origin an injected script could reach, so keep the list minimal.
+3. **Serve statically** (step above) and open your copy of `app.html`.
+4. In the app: **⚙ SETTINGS → PROVIDER → CUSTOM**, set the base URL (e.g.
+   `https://models.internal.example/v1`) and model id, add a key if your server
+   wants one (optional for most local servers), then **[ TEST ENDPOINT ]**.
+
+### What changes vs. the GitHub Pages version
+
+Nothing else. Same files, same zero-dependency build (none), same behavior:
+`app.html` still loads **no third-party scripts** and makes no requests except
+to the providers you configured. The only third-party anything in the repo is
+the optional goatcounter analytics on `index.html` (the landing page) — the
+workbench itself has none, hosted or self-hosted.
 
 ---
 

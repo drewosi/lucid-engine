@@ -293,7 +293,7 @@ var INTENTS = [
     run: function () {
       return { steps: [{ action: 'list capabilities', note: 'local engine reference', evidence: [], status: 'done' }],
         verdict: LOCAL_VERDICT(),
-        answer: '**Meridian LOCAL engine** — deterministic project intelligence, no AI, no network.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n' + LOCAL_HELP };
+        answer: '**Meridian LOCAL engine** — deterministic project intelligence, no AI, no network.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n**Intentional limits:** the graph analyses (cycles, orphans, hubs, untested, path) read static import edges only — regex extraction per language, lines over 400 chars not indexed — so dynamic loading, DI and bundler wiring are invisible. Each analysis states its own caveats in its answer.\n\n' + LOCAL_HELP };
     } },
 
   { kind: 'entries', aliases: ['entries', 'entrypoints'], ground: 'entry-point', helpCmd: '`entries`', needsModel: false,
@@ -485,7 +485,7 @@ var INTENTS = [
 
   /* before `importers`: "most imported files" would otherwise match its import- regex */
   { kind: 'hubs', aliases: ['hubs'], ground: 'hub', helpCmd: '`hubs`', needsModel: false,
-    route: function (s, lo) { return /\b(most (imported|depended[- ]on|used)|central files?|hubs?|fan-?in)\b/.test(lo) ? { arg: '' } : null; },
+    route: function (s, lo) { return /\b(most (imported|depended[- ]on|used)|central files?|hubs?|fan-?in|(?:dependency|import) graph)\b/.test(lo) ? { arg: '' } : null; },
     run: function (arg, q, idx) {
       var steps = [];
       var ranked = [];
@@ -689,7 +689,7 @@ var INTENTS = [
     } },
 
   { kind: 'importers', aliases: ['importers', 'importedby'], ground: 'importer', helpCmd: '`importers`', needsModel: false,
-    route: function (s, lo) { return /\b(imports?|importe(rs|d)?|depend(s|ents?|encies)?|who (imports|uses|depends)|used by|includes)\b/.test(lo) ? { arg: pickPathish(s) } : null; },
+    route: function (s, lo) { return /\b(imports?|importe(rs|d)?|depend(s|ents?|encies)?|(?:who|what) (imports|uses|depends)|used by|includes)\b/.test(lo) ? { arg: pickPathish(s) } : null; },
     run: function (arg, q, idx) {
       var steps = [];
       var tf = resolveToFile(arg);

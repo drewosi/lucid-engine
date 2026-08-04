@@ -23,6 +23,7 @@ export var st = {
   /* chat */
   history: [],
   transcript: [],
+  orientShown: false,      /* one-time first-LOCAL-answer orientation note — session-scoped by design */
   streaming: false,
   aborter: null,
   spent: { in: 0, out: 0, cacheW: 0, cacheR: 0 },

@@ -1,4 +1,5 @@
 import { st } from './state.js';
+import { getIndex } from './indexer.js';
 import { evExcerpt, exchangeMarkdown, renderRich } from './trace.js';
 import { $, esc, toast } from './helpers.js';
 /* ============ EXPORT TRACES ============
@@ -14,9 +15,36 @@ function download(name, mime, text) {
   setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 400);
 }
 
+/* compact project-intelligence summary for full-session exports — deterministic,
+   computed from the (cached) index at export time. Null when no project is loaded. */
+function intelSummary() {
+  if (!st.files.size) return null;
+  var idx = getIndex();
+  var langs = Object.keys(idx.byExt).filter(function (e) { return e !== '·'; })
+    .sort(function (a, b) { return idx.byExt[b] - idx.byExt[a]; }).slice(0, 5)
+    .map(function (e) { return e + ' (' + idx.byExt[e] + ')'; });
+  var hubs = [];
+  idx.importedBy.forEach(function (arr, p) { if (arr.length) hubs.push({ p: p, n: arr.length }); });
+  hubs.sort(function (a, b) { return b.n - a.n || (a.p < b.p ? -1 : 1); });
+  return {
+    files: idx.fileCount, symbols: idx.symbolCount, imports: idx.importCount || 0,
+    packages: idx.packages.length, entries: idx.entries.length, tests: idx.tests.length,
+    langs: langs, hubs: hubs.slice(0, 3)
+  };
+}
+
 function buildMarkdown() {
   var L = ['# MERIDIAN session trace', '',
     '_exported ' + new Date().toISOString() + ' — AI output can be wrong or incomplete; verify before relying on it._', ''];
+  var pi = intelSummary();
+  if (pi) {
+    L.push('## Project intelligence (deterministic — computed at export time)', '');
+    L.push('- **' + pi.files + '** files · **' + pi.symbols + '** symbols · **' + pi.imports + '** imports');
+    L.push('- packages ' + pi.packages + ' · entry points ' + pi.entries + ' · test files ' + pi.tests);
+    if (pi.langs.length) L.push('- languages: ' + pi.langs.join(', '));
+    if (pi.hubs.length) L.push('- most-imported: ' + pi.hubs.map(function (h) { return '`' + h.p + '` (' + h.n + ')'; }).join(' · '));
+    L.push('');
+  }
   st.transcript.forEach(function (x, i) { L.push(exchangeMarkdown(x, i)); });
   return L.join('\n');
 }
@@ -43,6 +71,15 @@ function buildExportHTML() {
   var h = ['<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MERIDIAN session trace</title><style>' + css + '</style></head><body>'];
   h.push('<h1>MERIDIAN<span class="tag">SESSION TRACE — SELF-CONTAINED EXPORT</span></h1>');
   h.push('<p class="note">exported ' + esc(new Date().toISOString()) + ' — AI output can be wrong or incomplete; verify before relying on it. evidence excerpts were pulled from the files as loaded at export time.</p>');
+  var pi = intelSummary();
+  if (pi) {
+    h.push('<section><h2><span class="n">PI</span>Project intelligence <span class="meta">deterministic — computed at export time</span></h2>');
+    h.push('<div class="answer mono">' + pi.files + ' files · ' + pi.symbols + ' symbols · ' + pi.imports + ' imports<br>'
+      + 'packages ' + pi.packages + ' · entry points ' + pi.entries + ' · test files ' + pi.tests
+      + (pi.langs.length ? '<br>languages: ' + esc(pi.langs.join(', ')) : '')
+      + (pi.hubs.length ? '<br>most-imported: ' + pi.hubs.map(function (hb) { return '<code>' + esc(hb.p) + '</code> (' + hb.n + ')'; }).join(' · ') : '')
+      + '</div></section>');
+  }
   st.transcript.forEach(function (x, i) {
     h.push('<section>');
     h.push('<h2><span class="n">' + String(i + 1).padStart(2, '0') + '</span>' + esc(x.q.replace(/\s+/g, ' ').slice(0, 120)) + '</h2>');
