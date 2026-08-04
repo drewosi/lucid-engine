@@ -92,7 +92,37 @@ function openViewer(path, a, b, quote) {
   viewveil.classList.add('on');
   applyModality();
   if (hitEl) hitEl.scrollIntoView({ block: 'center' });
+  syncSymActs();
   vb.focus();
+}
+
+/* DEF/REFS from a citation: derive the symbol from the cited quote and hand the
+   question to the composer (the demo.js submit pattern — no import of the intent
+   registry, so the actions↔viewer module cycle never forms). A symbol the index
+   doesn't know degrades to an honest "no indexed definition" answer. */
+var STOP_VIEW = { function: 1, return: 1, const: 1, class: 1, import: 1, export: 1, module: 1, require: 1, public: 1, private: 1, static: 1, async: 1, await: 1, todo: 1, fixme: 1, hack: 1, xxx: 1 };
+function citedSymbol() {
+  var toks = (curQuote || '').match(/[A-Za-z_$][\w$]{2,}/g) || [];
+  for (var i = 0; i < toks.length; i++) if (!STOP_VIEW[toks[i].toLowerCase()]) return toks[i];
+  return '';
+}
+function syncSymActs() {
+  var sym = citedSymbol();
+  var vd = $('vdef'), vr = $('vrefs');
+  if (!vd || !vr) return;
+  vd.hidden = vr.hidden = !sym;
+  if (sym) {
+    vd.textContent = 'DEF ' + sym.slice(0, 18);
+    vr.textContent = 'REFS ' + sym.slice(0, 18);
+  }
+}
+function askAbout(kind) {
+  var sym = citedSymbol();
+  if (!sym) return;
+  if (!dockMQ.matches) closeViewer(); /* overlay mode traps focus — release before composing */
+  var p = $('prompt');
+  p.value = kind + ' ' + sym;
+  $('askform').requestSubmit();
 }
 /* docked = non-modal (no trap); overlay = modal + focus trap. Re-applied if the
    viewport crosses the dock boundary while the viewer is open. */
@@ -125,6 +155,8 @@ function copyViewed() {
 function initViewer() {
   $('vclose').addEventListener('click', closeViewer);
   $('vcopy').addEventListener('click', copyViewed);
+  $('vdef').addEventListener('click', function () { askAbout('def'); });
+  $('vrefs').addEventListener('click', function () { askAbout('refs'); });
   viewveil.addEventListener('click', function (e) { if (e.target === viewveil) closeViewer(); });
   if (dockMQ.addEventListener) dockMQ.addEventListener('change', function () {
     if (viewveil.classList.contains('on')) applyModality();

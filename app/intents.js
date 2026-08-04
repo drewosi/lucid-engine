@@ -93,14 +93,25 @@ function longLineNote(idx) {
     + ' were not indexed (minified/one-line content) — imports on those lines are invisible, so such files can appear orphaned or their targets unresolved.';
 }
 
-/* shared evidence-gathering used by plain + reason: term search → ranked files */
+/* shared evidence-gathering used by plain + reason: term search → ranked files.
+   When the operator has pinned citations, the search scopes to the pinned files
+   (disclosed as the first step) — precise intents (def/refs/…) stay unscoped. */
 function gatherTerrain(q, steps) {
   var terms = queryTerms(q), perFile = Object.create(null);
+  var pinFiles = null;
+  if (st.pinnedEv && st.pinnedEv.length) {
+    pinFiles = Object.create(null);
+    st.pinnedEv.forEach(function (ev) { pinFiles[ev.file] = 1; });
+    var pfN = Object.keys(pinFiles).length;
+    steps.push({ action: 'scope to pinned evidence', note: plural(st.pinnedEv.length, 'pinned citation') + ' across ' + plural(pfN, 'file'),
+      evidence: st.pinnedEv.slice(0, 8).map(function (ev) { return { file: ev.file, startLine: ev.startLine || 1, endLine: ev.endLine || ev.startLine || 1, quote: ev.quote || '', kind: 'evidence' }; }), status: 'done' });
+  }
   steps.push({ action: 'extract search terms', note: terms.length ? terms.join(', ') : 'none', evidence: [], status: 'done' });
   terms.slice(0, 4).forEach(function (t) {
     var r = localSearchData(t, 'text');
-    steps.push({ action: 'search “' + t + '”', note: r.hits.length ? r.hits.length + ' hit' + (r.hits.length === 1 ? '' : 's') : 'no matches', evidence: r.hits.slice(0, 4).map(localEvidence), status: 'done' });
-    r.hits.forEach(function (h) { (perFile[h.p] || (perFile[h.p] = { count: 0, first: h })).count++; });
+    var hits = pinFiles ? r.hits.filter(function (h) { return pinFiles[h.p]; }) : r.hits;
+    steps.push({ action: 'search “' + t + '”' + (pinFiles ? ' (pinned files only)' : ''), note: hits.length ? hits.length + ' hit' + (hits.length === 1 ? '' : 's') : 'no matches', evidence: hits.slice(0, 4).map(localEvidence), status: 'done' });
+    hits.forEach(function (h) { (perFile[h.p] || (perFile[h.p] = { count: 0, first: h })).count++; });
   });
   var ranked = Object.keys(perFile).map(function (p) {
     return { p: p, count: perFile[p].count, first: perFile[p].first, score: perFile[p].count * 10 + (st.files.has(p) ? st.files.get(p).base : 0) };
@@ -483,6 +494,63 @@ var INTENTS = [
           : 'Every relative import resolves to a loaded file. Bare module specifiers (packages, stdlib) are treated as external by design.') + longLineNote(idx) };
     } },
 
+  /* before `hubs`/`importers`: blast-radius phrasings ("what breaks", "transitively",
+     "who would notice") must not fall into the direct-importer or plain routes */
+  { kind: 'impact', aliases: ['impact', 'blast'], ground: 'impact', helpCmd: '`impact <file>`', needsModel: false,
+    route: function (s, lo) { return /\b(blast radius|what (would )?breaks?|breaks? if|impact of|transitive(ly)?( dependents?| dependen(ts|cies))?|ripple effect|who would (notice|be affected))\b/.test(lo) ? { arg: pickPathish(s) } : null; },
+    run: function (arg, q, idx) {
+      var steps = [];
+      var tf = resolveToFile(arg);
+      /* a symbol, not a file — impact is file-granular, so analyze its defining file (disclosed) */
+      if (!tf && arg) {
+        var sd = symLookup(arg, idx);
+        if (sd.length) {
+          tf = sd[0].file;
+          steps.push({ action: '“' + arg + '” names a symbol — analyze its defining file', note: tf, evidence: [evAt(sd[0].file, sd[0].line)], status: 'done' });
+        }
+      }
+      steps.push({ action: 'resolve “' + (arg || '?') + '” to a file', note: tf || 'unresolved', evidence: [], status: 'done' });
+      if (!tf) return { steps: steps, verdict: LOCAL_VERDICT(), answer: '`impact` needs a loaded file (or an indexed symbol), e.g. `impact src/store.js` — or ask “what breaks if I change store.js”.' };
+      /* BFS over reverse (importer) edges: depth 1 = direct, ≥2 = transitive */
+      var depth = Object.create(null), order = [], queue = [tf], qi = 0, CAP = 200, capped = false;
+      depth[tf] = 0;
+      while (qi < queue.length) {
+        var n = queue[qi++];
+        var imps = idx.importedBy.get(n) || [];
+        for (var i = 0; i < imps.length; i++) {
+          var e = imps[i];
+          if (depth[e.file] !== undefined) continue;
+          if (order.length >= CAP) { capped = true; break; }
+          depth[e.file] = depth[n] + 1;
+          order.push({ file: e.file, via: n, line: e.line, d: depth[e.file] });
+          queue.push(e.file);
+        }
+        if (capped) break;
+      }
+      var direct = order.filter(function (x) { return x.d === 1; });
+      var trans = order.filter(function (x) { return x.d >= 2; });
+      steps.push({ action: 'read direct importers', note: plural(direct.length, 'file'), evidence: direct.slice(0, 10).map(function (x) { return evAt(x.file, x.line); }), status: 'done' });
+      steps.push({ action: 'walk the transitive closure (reverse import edges)', note: plural(trans.length, 'deeper dependent') + (capped ? ' (walk capped at ' + CAP + ')' : ''), evidence: trans.slice(0, 10).map(function (x) { return evAt(x.file, x.line); }), status: 'done' });
+      var testSet = Object.create(null); idx.tests.forEach(function (p) { testSet[p] = 1; });
+      var entrySet = Object.create(null); idx.entries.forEach(function (p) { entrySet[p] = 1; });
+      var testsHit = order.filter(function (x) { return testSet[x.file]; });
+      var entriesHit = order.filter(function (x) { return entrySet[x.file]; });
+      steps.push({ action: 'classify the affected set', note: plural(testsHit.length, 'test file') + ' · ' + plural(entriesHit.length, 'entry point'), evidence: testsHit.slice(0, 4).map(function (x) { return evAt(x.file, x.line); }).concat(entriesHit.slice(0, 4).map(function (x) { return evAt(x.file, x.line); })), status: 'done' });
+      if (!order.length) {
+        return { steps: steps, verdict: LOCAL_VERDICT(),
+          answer: 'Nothing imports `' + tf + '` — its static blast radius is **the file itself**. ' + ((idx.importedBy.get(tf) || []).length ? '' : 'If it is not an entry point, test, config, or doc, `orphans` will list it too.') + '\n\nStatic import edges only — dynamic loading, DI, or bundler wiring could still depend on it invisibly.' + longLineNote(idx) };
+      }
+      function li(x) { return '- `' + x.file + '` — imports ' + (x.via === tf ? 'it' : '`' + x.via + '`') + ' at line ' + x.line + (testSet[x.file] ? ' · **test**' : '') + (entrySet[x.file] ? ' · **entry point**' : ''); }
+      return { steps: steps, verdict: LOCAL_VERDICT(),
+        answer: '**Blast radius of `' + tf + '`** — ' + plural(order.length, 'dependent file') + (capped ? ' (walk capped at ' + CAP + ')' : '') + ': '
+          + direct.length + ' direct, ' + trans.length + ' transitive.\n\n'
+          + '**Direct importers (break immediately):**\n' + direct.slice(0, 15).map(li).join('\n') + (direct.length > 15 ? '\n… +' + (direct.length - 15) + ' more' : '') + '\n'
+          + (trans.length ? '\n**Transitive dependents (break through the chain):**\n' + trans.slice(0, 15).map(li).join('\n') + (trans.length > 15 ? '\n… +' + (trans.length - 15) + ' more' : '') + '\n' : '')
+          + '\n' + (testsHit.length ? plural(testsHit.length, 'test file') + ' ' + (testsHit.length === 1 ? 'is' : 'are') + ' in the blast radius — a break would be caught there. ' : 'No test file is in the blast radius — a break here would surface at runtime, not in tests. ')
+          + (entriesHit.length ? plural(entriesHit.length, 'entry point') + ' reached — the break is user-visible.' : '')
+          + '\n\nStatic resolved import edges only — dynamic loading, DI and bundler wiring are not traced.' + longLineNote(idx) };
+    } },
+
   /* before `importers`: "most imported files" would otherwise match its import- regex */
   { kind: 'hubs', aliases: ['hubs'], ground: 'hub', helpCmd: '`hubs`', needsModel: false,
     route: function (s, lo) { return /\b(most (imported|depended[- ]on|used)|central files?|hubs?|fan-?in|(?:dependency|import) graph)\b/.test(lo) ? { arg: '' } : null; },
@@ -855,6 +923,7 @@ var LOCAL_MENU = [
     { label: 'Circular imports', fill: 'cycles' },
     { label: 'Orphan (never-imported) files', fill: 'orphans' },
     { label: 'Broken imports', fill: 'broken' },
+    { label: 'Blast radius of a change', fill: 'what breaks if I change <file>' },
     { label: 'Most-depended-on files', fill: 'hubs' },
     { label: 'Dependency path between two files', fill: 'path <a> <b>' },
     { label: 'Change hotspots', fill: 'hotspots' },

@@ -109,7 +109,13 @@ function loadProject(rec) {
     rec.handle.queryPermission({ mode: 'read' }).then(function (perm) {
       return perm === 'granted' ? perm : rec.handle.requestPermission({ mode: 'read' });
     }).then(function (perm) {
-      if (perm !== 'granted') { toast('Read permission declined — drop the folder instead.'); return; }
+      if (perm !== 'granted') {
+        /* blocked or forgotten by the browser — leave standing guidance, not just a toast */
+        var pn = $('projnote'); pn.hidden = false;
+        pn.textContent = '// “' + rec.name + '”: read permission declined — the browser blocked or forgot folder access. click the project again to re-authorize, or drop the folder to reload it.';
+        toast('Read permission declined — click the project again to re-authorize, or drop the folder.');
+        return;
+      }
       st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
       st.totalBytes = 0;
       st.skippedFiles.length = 0;

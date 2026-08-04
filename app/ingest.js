@@ -6,7 +6,7 @@ import { applyPendingProject, renderProjects, walkHandle } from './memory.js';
 import { renderOverview } from './local.js';
 import { recordSession as recordSessionDrift } from './drift.js';
 import { LS, MODELS } from './config.js';
-import { INSTRUCTIONS, buildInvestigationBlock } from './prompt.js';
+import { INSTRUCTIONS, buildInvestigationBlock, buildPinnedBlock } from './prompt.js';
 /* ============ CONTEXT ENGINE ============ */
 var SKIP_LIST_MAX = 500;
 function recordSkip(path, reason, size, ref) {
@@ -481,16 +481,40 @@ function openPreview() {
   body.innerHTML = '';
   function sec(txt) { var d = document.createElement('div'); d.className = 'prev-sec'; d.textContent = txt; body.appendChild(d); }
   function note(txt) { var p = document.createElement('p'); p.className = 'prev-note'; p.textContent = txt; body.appendChild(p); }
-  function fileRow(path, tok, whole) {
+  function fileRow(path, tok, whole, why, ctl) {
     var r = document.createElement('div');
     r.className = 'prev-row';
     var pk = document.createElement('span'); pk.className = 'pk' + (whole ? '' : ' ex'); pk.textContent = whole ? 'WHOLE' : 'EXCERPT';
     var pp = document.createElement('span'); pp.className = 'pp'; pp.textContent = path; pp.title = path;
+    if (why && why.length) {
+      var pw = document.createElement('span'); pw.className = 'pw';
+      pw.textContent = why.join(' · ');
+      pw.title = 'Why this file scored in: ' + why.join(', ');
+      pp.appendChild(pw);
+    }
     var pt = document.createElement('span'); pt.className = 'pt'; pt.textContent = '≈' + fmtTok(tok);
     r.appendChild(pk); r.appendChild(pp); r.appendChild(pt);
+    if (ctl) {
+      var f = st.files.get(path);
+      if (f && st.ctxMode === 'smart') {
+        var pb = document.createElement('button');
+        pb.type = 'button'; pb.className = 'prev-ctl mono' + (f.pin ? ' on' : ''); pb.textContent = '⌖';
+        pb.title = f.pin ? 'Unpin — return to scored packing' : 'Always send this file (packed first, still within budget)';
+        pb.addEventListener('click', function () { f.pin = !f.pin; invalidateSelection(); openPreview(); });
+        r.appendChild(pb);
+      }
+      if (f) {
+        var xb = document.createElement('button');
+        xb.type = 'button'; xb.className = 'prev-ctl mono'; xb.textContent = '−';
+        xb.title = 'Exclude — uncheck this file (same as unchecking it in the tree)';
+        xb.addEventListener('click', function () { f.checked = false; invalidateSelection(); renderTree(); renderBudget(); openPreview(); });
+        r.appendChild(xb);
+      }
+    }
     body.appendChild(r);
   }
   var smart = st.ctxMode === 'smart';
+  if (st.curProvider === 'local') note('// provider is LOCAL — nothing is sent anywhere. this preview shows what a model WOULD receive if you connected one.');
   if (smart) {
     var map = buildProjectMap();
     var packed = packSmartContext(q, getBudget());
@@ -505,8 +529,30 @@ function openPreview() {
     pre.textContent = map.length > 20000 ? map.slice(0, 20000) + '\n… truncated for display — the full map is sent' : map;
     body.appendChild(pre);
     sec('BLOCK 2 — SELECTED FILES · ' + packed.count + ' OF ' + packed.total + ' · ≈' + fmtTok(packed.tokens) + ' TOK');
-    packed.included.forEach(function (it) { fileRow(it.p, it.tok, it.whole); });
+    note('// each row says why it scored in: ⌖ pins a file (always sent, packed first) · − excludes it (unchecks it in the tree).');
+    packed.included.forEach(function (it) { fileRow(it.p, it.tok, it.whole, it.why, true); });
     if (!packed.included.length) note('// nothing fit the budget — raise it in settings.');
+    if (packed.notPacked && packed.notPacked.length) {
+      sec('DID NOT FIT — TOP SCORERS LEFT OUT OF THE BUDGET');
+      packed.notPacked.forEach(function (np) {
+        var r = document.createElement('div');
+        r.className = 'prev-row np';
+        var pk = document.createElement('span'); pk.className = 'pk ex'; pk.textContent = 'LEFT OUT';
+        var pp = document.createElement('span'); pp.className = 'pp'; pp.textContent = np.p; pp.title = np.p;
+        var pt = document.createElement('span'); pt.className = 'pt'; pt.textContent = 'score ' + np.s + ' · ≈' + fmtTok(np.tok);
+        r.appendChild(pk); r.appendChild(pp); r.appendChild(pt);
+        var f = st.files.get(np.p);
+        if (f) {
+          var pb = document.createElement('button');
+          pb.type = 'button'; pb.className = 'prev-ctl mono'; pb.textContent = '⌖';
+          pb.title = 'Pin — always send this file (packed first, within budget)';
+          pb.addEventListener('click', function () { f.pin = true; invalidateSelection(); openPreview(); });
+          r.appendChild(pb);
+        }
+        body.appendChild(r);
+      });
+      note('// raise the budget in settings, or pin what must go.');
+    }
   } else {
     var sel = selectedTokens();
     $('prevstat').textContent = 'FULL · ' + sel.count + ' FILES · ≈' + fmtTok(sel.tokens) + ' TOK';
@@ -517,10 +563,20 @@ function openPreview() {
     sortedPaths().some(function (p) {
       var f = st.files.get(p);
       if (!f.checked) return false;
-      fileRow(p, f.tokens, true);
+      fileRow(p, f.tokens, true, null, true);
       return ++shown >= 300;
     });
     if (sel.count > shown) note('// … ' + (sel.count - shown) + ' more files not listed here (all are sent).');
+  }
+  /* pinned evidence — same helper the real request uses, so the preview cannot drift */
+  var pinB = buildPinnedBlock();
+  if (pinB) {
+    sec('PINNED EVIDENCE · ' + pinB.count + ' CITATION' + (pinB.count === 1 ? '' : 'S') + ' ≈' + fmtTok(pinB.tokens) + ' TOK (operator-pinned, uncached)');
+    note('// excerpts of the citations pinned in the tray — sent with every question while pinned. unpin (or [ CLEAR ]) to stop.');
+    var ppre = document.createElement('pre');
+    ppre.className = 'mapview';
+    ppre.textContent = pinB.text.length > 8000 ? pinB.text.slice(0, 8000) + '\n… truncated for display — the full block is sent' : pinB.text;
+    body.appendChild(ppre);
   }
   /* grounding block — same helper the real request uses, so the preview cannot drift */
   if (st.groundMode) {
@@ -703,6 +759,12 @@ export function initIngest() {
       ]);
     } else run(false);
   });
+  /* honest capability note where the choice is made: without showDirectoryPicker
+     (Firefox/Safari) the folder is read once — no persistent handle, no one-click
+     reload. The picker itself still works via the webkitdirectory fallback. */
+  if (!window.showDirectoryPicker) {
+    $('dirbtn').title = 'This browser reads the folder once (no showDirectoryPicker) — re-pick or re-drop to reload; one-click project reload is unavailable.';
+  }
   $('dirbtn').addEventListener('click', function () {
     if (window.showDirectoryPicker) {
       window.showDirectoryPicker({ mode: 'read' }).then(function (h) {

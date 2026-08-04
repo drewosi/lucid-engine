@@ -37,7 +37,10 @@ function renderOrientation(msgEl) {
   var bd = msgEl.querySelector('.bd');
   var o = document.createElement('div');
   o.className = 'orient mono';
-  o.appendChild(document.createTextNode('// this answer came from the deterministic index — no model was used. '));
+  var lead = document.createElement('span');
+  lead.className = 'lead';
+  lead.textContent = '// this answer came from the deterministic index — no model was used, nothing left this tab. ';
+  o.appendChild(lead);
   o.appendChild(document.createElement('br'));
   o.appendChild(document.createTextNode('// ✓ KNOWN LOCALLY = answered from the index · ○ REQUIRES MODEL REASONING = evidence gathered, a model synthesizes · '));
   var b = document.createElement('button');

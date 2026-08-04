@@ -71,6 +71,7 @@
           <h2 class="rail-hd">PROJECTS <span class="n" id="projcount"></span></h2>
           <div id="projlist"></div>
           <button class="btn-quiet acc" type="button" id="saveproj">[ SAVE PROJECT ]</button>
+          <p class="rail-note">// saved = selection + settings only, <b>never contents</b>. ⟳ = one-click disk reload (Chromium folder picker); other browsers re-drop the folder.</p>
           <p class="rail-note" id="projnote" hidden></p>
         </div>
 
@@ -143,6 +144,7 @@
       <div class="composer">
         <div class="composer-in">
           <div id="statusline"><span id="status" role="status" aria-live="polite">CORE IDLE</span><span class="cost" id="costline"></span></div>
+          <div id="pintray" hidden aria-label="Pinned evidence"></div>
           <form id="askform" class="comp-row">
             <label for="prompt" class="sr-only">Your question</label>
             <textarea id="prompt" placeholder="ask about the loaded project — or anything…" rows="1"></textarea>
@@ -163,6 +165,8 @@
       <div class="viewer" role="dialog" aria-modal="false" aria-label="Cited file">
         <div class="vh"><span id="vtitle">—</span><span class="rng" id="vrange"></span>
           <span class="vh-acts">
+            <button class="btn-icon mono" type="button" id="vdef" title="Ask the LOCAL engine where the cited symbol is defined" hidden>DEF</button>
+            <button class="btn-icon mono" type="button" id="vrefs" title="Ask the LOCAL engine for every reference to the cited symbol" hidden>REFS</button>
             <button class="btn-icon mono" type="button" id="vcopy" title="Copy the highlighted lines (whole file when nothing is highlighted)">⧉ COPY</button>
             <button class="btn-icon mono" type="button" id="vclose">ESC CLOSE</button>
           </span>

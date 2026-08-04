@@ -190,6 +190,70 @@ function evidenceChip(ev) {
   } else { btn.disabled = true; btn.title = 'File is not in the loaded context — the citation cannot be verified.'; }
   return btn;
 }
+/* ---- pinned evidence: chips as first-class objects. Pins are session-scoped
+   ({file,startLine,endLine,quote}); the tray above the composer shows them and
+   discloses exactly how they scope the next question. ---- */
+function pinKey(ev) { return ev.file + ':' + (ev.startLine || 1) + '–' + (ev.endLine || ev.startLine || 1); }
+function isPinned(ev) { return st.pinnedEv.some(function (p) { return pinKey(p) === pinKey(ev); }); }
+function togglePin(ev) {
+  var k = pinKey(ev);
+  var i = st.pinnedEv.findIndex(function (p) { return pinKey(p) === k; });
+  if (i === -1) st.pinnedEv.push({ file: ev.file, startLine: ev.startLine, endLine: ev.endLine, quote: ev.quote || '' });
+  else st.pinnedEv.splice(i, 1);
+  renderPinTray();
+  /* every visible pin button for this citation reflects the new state */
+  document.querySelectorAll('.evpin[data-pin="' + (window.CSS && CSS.escape ? CSS.escape(k) : k.replace(/"/g, '')) + '"]').forEach(function (b) {
+    b.classList.toggle('on', i === -1);
+    b.title = i === -1 ? 'Unpin this citation' : 'Pin this citation — scope the next question to pinned evidence';
+  });
+}
+function evPinBtn(ev) {
+  if (!ev || typeof ev.file !== 'string' || !st.files.has(ev.file)) return null;
+  var b = document.createElement('button');
+  b.type = 'button'; b.className = 'evpin mono' + (isPinned(ev) ? ' on' : '');
+  b.textContent = '⌖';
+  b.setAttribute('data-pin', pinKey(ev));
+  b.setAttribute('aria-label', 'Pin citation ' + pinKey(ev));
+  b.title = isPinned(ev) ? 'Unpin this citation' : 'Pin this citation — scope the next question to pinned evidence';
+  b.addEventListener('click', function (e) { e.stopPropagation(); togglePin(ev); });
+  return b;
+}
+function pinnedMarkdown() {
+  return st.pinnedEv.map(function (ev) {
+    var a = ev.startLine || 1, bb = ev.endLine || a;
+    return '- `' + ev.file + ':' + a + '–' + bb + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : '');
+  }).join('\n');
+}
+function renderPinTray() {
+  var tray = $('pintray');
+  if (!tray) return;
+  var n = st.pinnedEv.length;
+  tray.hidden = !n;
+  tray.innerHTML = '';
+  if (!n) return;
+  var hd = document.createElement('div');
+  hd.className = 'pin-hd mono';
+  hd.textContent = '⌖ PINNED EVIDENCE · ' + n;
+  var cp = document.createElement('button');
+  cp.type = 'button'; cp.className = 'btn-quiet acc'; cp.textContent = '[ COPY CITATIONS ]';
+  cp.title = 'Copy all pinned citations as Markdown';
+  cp.addEventListener('click', function () { copyText(pinnedMarkdown(), n + ' citation' + (n === 1 ? '' : 's') + ' copied as Markdown.'); });
+  var cl = document.createElement('button');
+  cl.type = 'button'; cl.className = 'btn-quiet'; cl.textContent = '[ CLEAR ]';
+  cl.addEventListener('click', function () {
+    st.pinnedEv.length = 0;
+    renderPinTray();
+    document.querySelectorAll('.evpin.on').forEach(function (b) { b.classList.remove('on'); b.title = 'Pin this citation — scope the next question to pinned evidence'; });
+  });
+  hd.appendChild(cp); hd.appendChild(cl);
+  tray.appendChild(hd);
+  tray.appendChild(evidenceChipRow(st.pinnedEv, 12));
+  var note = document.createElement('div');
+  note.className = 'pin-note mono';
+  note.textContent = '// the next question scopes to these: LOCAL search filters to the pinned files · a model request attaches the pinned excerpts. precise commands (def, refs, cycles…) stay unscoped.';
+  tray.appendChild(note);
+}
+
 /* copy one citation as `path:a–b` + its quote — for pasting into an issue or a doc */
 function evCopyBtn(ev) {
   if (!ev || typeof ev.file !== 'string') return null;
@@ -219,6 +283,8 @@ function evidenceChipRow(evList, max) {
     cell.appendChild(c);
     var cp = evCopyBtn(ev);
     if (cp) cell.appendChild(cp);
+    var pn = evPinBtn(ev);
+    if (pn) cell.appendChild(pn);
     row.appendChild(cell);
     n++;
   });
@@ -438,4 +504,4 @@ function exchangeMarkdown(x, i) {
   }
   return L.join('\n');
 }
-export { addAiMsg, addUserMsg, atBottom, attachCopy, convoIn, evExcerpt, exchangeMarkdown, extractTrace, renderFound, renderRich, renderTrace, scrollEnd };
+export { addAiMsg, addUserMsg, atBottom, attachCopy, convoIn, evExcerpt, exchangeMarkdown, extractTrace, renderFound, renderPinTray, renderRich, renderTrace, scrollEnd };

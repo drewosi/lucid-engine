@@ -228,28 +228,51 @@ function buildInvestigationBlock(q, budgetTok) {
    Returns { blocks, note } — note is a short human-readable summary for the statusline.
    A grounding block (per-question, uncached) is always placed AFTER the cached map/ctx
    block so Anthropic prompt caching of the stable prefix is preserved. */
+/* Operator-pinned citations, carried as line-true excerpts in the uncached zone.
+   Bounded by the grounding caps; shares the preview so it can never drift. */
+function buildPinnedBlock() {
+  if (!st.pinnedEv || !st.pinnedEv.length) return null;
+  var parts = [], used = 0, count = 0, capTok = Math.floor(GROUND_MAX_TOK / 2);
+  for (var i = 0; i < st.pinnedEv.length && count < GROUND_MAX_EVIDENCE; i++) {
+    var ev = st.pinnedEv[i];
+    var ex = groundExcerpt(ev.file, ev.startLine, ev.endLine);
+    if (!ex) continue; /* pinned from a file no longer loaded — skipped, not faked */
+    var t = '─── [PINNED] ' + ev.file + ':' + ex.startLine + '–' + ex.endLine + (ev.quote ? ' — “' + String(ev.quote).slice(0, 100) + '”' : '') + '\n' + ex.text;
+    var tok = estTokens(t, ev.file);
+    if (used + tok > capTok) break;
+    parts.push(t); used += tok; count++;
+  }
+  if (!parts.length) return null;
+  return { text: 'PINNED EVIDENCE — citations the operator pinned in the workbench. Treat them as the focus of this question and prefer citing these exact lines.\n\n' + parts.join('\n\n'), count: count, tokens: used };
+}
+
 function buildContextBlocks(q) {
   var groundBudget = Math.min(GROUND_MAX_TOK, Math.floor(getBudget() * 0.25));
   var invBlock = st.groundMode ? buildInvestigationBlock(q, groundBudget) : null;
-  var groundTok = invBlock ? estTokens(invBlock.text) : 0;
-  var gNote = invBlock ? ' · GROUNDED ' + invBlock.count + ' EV' : '';
+  var pinBlock = buildPinnedBlock();
+  var groundTok = (invBlock ? estTokens(invBlock.text) : 0) + (pinBlock ? pinBlock.tokens : 0);
+  var gNote = (invBlock ? ' · GROUNDED ' + invBlock.count + ' EV' : '') + (pinBlock ? ' · PINNED ' + pinBlock.count : '');
   if (st.ctxMode !== 'smart') {
     var ctx = assembleContext();
     var fblocks = ctx ? [{ type: 'text', text: ctx, cache_control: { type: 'ephemeral' } }] : [];
+    if (pinBlock) fblocks.push({ type: 'text', text: pinBlock.text });
     if (invBlock) fblocks.push({ type: 'text', text: invBlock.text });
-    return { blocks: fblocks, note: invBlock ? ('GROUNDED ' + invBlock.count + ' EV') : null, ground: invBlock };
+    return { blocks: fblocks, note: (invBlock || pinBlock) ? gNote.replace(/^ · /, '') : null, ground: invBlock };
   }
   var map = buildProjectMap();
   if (!map) {
     /* no file checked ≠ no grounding: the FOUND panel renders from `ground`, so the
        model must receive the same block — an empty send under a FOUND chip would lie */
-    return { blocks: invBlock ? [{ type: 'text', text: invBlock.text }] : [],
-             note: invBlock ? ('GROUNDED ' + invBlock.count + ' EV') : null, ground: invBlock };
+    var nblocks = [];
+    if (pinBlock) nblocks.push({ type: 'text', text: pinBlock.text });
+    if (invBlock) nblocks.push({ type: 'text', text: invBlock.text });
+    return { blocks: nblocks, note: (invBlock || pinBlock) ? gNote.replace(/^ · /, '') : null, ground: invBlock };
   }
-  /* grounding is counted against the one budget so grounding + selected files stay bounded */
+  /* grounding + pinned are counted against the one budget so the total stays bounded */
   var packed = packSmartContext(q, Math.max(4000, getBudget() - groundTok));
-  /* cache the stable map block; grounding + packed subset vary per question */
+  /* cache the stable map block; pinned + grounding + packed subset vary per question */
   var blocks = [{ type: 'text', text: map, cache_control: { type: 'ephemeral' } }];
+  if (pinBlock) blocks.push({ type: 'text', text: pinBlock.text });
   if (invBlock) blocks.push({ type: 'text', text: invBlock.text });
   if (packed.text) {
     blocks.push({ type: 'text', text: 'SELECTED FILES — the subset most relevant to this question. ' + CTX_PREAMBLE + ' Excerpted files keep true line numbers; omitted ranges are marked.\n\n' + packed.text });
@@ -257,4 +280,4 @@ function buildContextBlocks(q) {
   var mapTok = estTokens(map);
   return { blocks: blocks, note: 'SMART CTX ' + packed.count + '/' + packed.total + ' FILES ≈ ' + fmtTok(packed.tokens + mapTok + groundTok) + ' TOK' + gNote, ground: invBlock };
 }
-export { FENCE, INSTRUCTIONS, STRICT_SUFFIX, buildContextBlocks, buildInvestigationBlock };
+export { FENCE, INSTRUCTIONS, STRICT_SUFFIX, buildContextBlocks, buildInvestigationBlock, buildPinnedBlock };

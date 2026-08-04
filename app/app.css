@@ -241,6 +241,11 @@
   .prev-row .pt { color: var(--ink-3); font-size: 10px; flex: none; }
   .prev-row .pk { flex: none; border: 1px solid var(--line-strong); border-radius: 3px; padding: 0 6px; font-size: 9px; letter-spacing: .1em; color: var(--ink-3); }
   .prev-row .pk.ex { border-color: var(--accent); color: var(--accent); }
+  .prev-row .pw { margin-left: 10px; font-size: 9.5px; color: var(--ink-3); letter-spacing: .05em; }
+  .prev-row.np .pp { color: var(--ink-3); }
+  .prev-ctl { flex: none; border: 1px solid var(--line-strong); border-radius: 3px; background: transparent; color: var(--ink-3); cursor: pointer; font-size: 11px; line-height: 1; padding: 1px 6px; font-family: inherit; }
+  .prev-ctl:hover { border-color: var(--accent); color: var(--accent); }
+  .prev-ctl.on { color: var(--accent); border-color: var(--accent); }
   #prevbody pre.mapview { background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px; font-size: 11px; line-height: 1.5; overflow-x: auto; white-space: pre; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; }
 
   /* skipped-file review */
@@ -271,6 +276,7 @@
   .msg-a .term-hd .hdcopy:hover { border-color: var(--accent); color: var(--accent); }
   /* one-time first-answer orientation — a note in the seam, never a modal */
   .orient { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line-strong); font-size: 11px; color: var(--ink-3); letter-spacing: .03em; line-height: 1.8; }
+  .orient .lead { color: var(--ok); }
   .orient .kbd-link { color: var(--ink-2); font-size: inherit; }
   .orient .kbd-link:hover { color: var(--accent); }
   .msg-a .term-hd .chip.dim { border-color: var(--line-strong); color: var(--ink-3); }
@@ -303,8 +309,17 @@
   .ev.dead:hover { border-color: var(--line-strong); color: var(--ink-2); }
   .ev-cell { display: inline-flex; align-items: stretch; }
   .ev-cell .ev { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-  .evcopy { border: 1px solid var(--line-strong); border-left: none; border-radius: 0 3px 3px 0; background: var(--surface); color: var(--ink-3); cursor: pointer; font-size: 11px; line-height: 1; padding: 0 7px; font-family: inherit; }
+  .evcopy { border: 1px solid var(--line-strong); border-left: none; border-radius: 0; background: var(--surface); color: var(--ink-3); cursor: pointer; font-size: 11px; line-height: 1; padding: 0 7px; font-family: inherit; }
   .evcopy:hover { border-color: var(--accent); color: var(--accent); }
+  .evpin { border: 1px solid var(--line-strong); border-left: none; border-radius: 0 3px 3px 0; background: var(--surface); color: var(--ink-3); cursor: pointer; font-size: 11px; line-height: 1; padding: 0 7px; font-family: inherit; }
+  .evpin:hover { border-color: var(--accent); color: var(--accent); }
+  .evpin.on { color: var(--accent); border-color: var(--accent); }
+  /* pinned-evidence tray — a seam above the composer, never a modal */
+  #pintray { border-top: 1px dashed var(--line-strong); padding: 10px 0 4px; margin-bottom: 8px; }
+  .pin-hd { display: flex; align-items: baseline; gap: 14px; font-size: 11px; letter-spacing: .1em; color: var(--accent); }
+  .pin-hd .btn-quiet { font-size: 10px; }
+  #pintray .ev-row { margin-top: 8px; }
+  .pin-note { margin-top: 8px; font-size: 10px; color: var(--ink-3); letter-spacing: .03em; line-height: 1.7; }
   .ev.unverified { border-style: dashed; border-color: var(--err); }
   .reground-row { margin-top: 12px; }
   #selftestveil table { width: 100%; border-collapse: collapse; margin: 12px 0; }

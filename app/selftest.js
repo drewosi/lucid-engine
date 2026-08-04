@@ -3,7 +3,7 @@ import { buildIndex, detectLang } from './indexer.js';
 import { st } from './state.js';
 import { SAMPLE_PROJECT } from './demo.js';
 import { classifyIntent } from './local.js';
-import { INTENTS, LOCAL_MENU, LOCAL_STARTERS, runInvestigation } from './intents.js';
+import { INTENTS, LOCAL_MENU, LOCAL_STARTERS, listOrphans, runInvestigation } from './intents.js';
 import { extractTrace } from './trace.js';
 import { httpErrorText, parseStreamEvent, splitSseEvents } from './chat.js';
 import { __setCapsForTest, ignoredDirPrefix, ingestFile, runIngestPool } from './ingest.js';
@@ -156,11 +156,13 @@ function runSelfTests() {
   var savedFiles = st.files, savedIndex = st.projectIndex, savedDirty = st.indexDirty;
   var savedSkipped = st.skipped, savedSkipList = st.skippedFiles, savedBytes = st.totalBytes;
   var savedDriftSig = st.driftSig, savedDriftPrev = st.driftPrev, savedDriftPending = st.driftPending;
+  var savedPins = st.pinnedEv;
   var savedCaps = __setCapsForTest({}); /* read-only snapshot — cap tests lower them, restore() puts them back */
   function restore() {
     st.files = savedFiles; st.projectIndex = savedIndex; st.indexDirty = savedDirty;
     st.skipped = savedSkipped; st.skippedFiles = savedSkipList; st.totalBytes = savedBytes;
     st.driftSig = savedDriftSig; st.driftPrev = savedDriftPrev; st.driftPending = savedDriftPending;
+    st.pinnedEv = savedPins;
     __setCapsForTest(savedCaps);
   }
   try {
@@ -343,7 +345,13 @@ function runSelfTests() {
       ['uses of json', 'refs'],                                   /* bare "uses of" stays with refs, not importers */
       ['what calls listTodos', 'refs'],
       ['where is the config', 'def'],                             /* determiner question still lands on def */
-      ['what does the server import', 'imports']                  /* determiner + no extension resolves via basename */
+      ['what does the server import', 'imports'],                 /* determiner + no extension resolves via basename */
+      /* blast radius / transitive impact — must beat importers' depend- regex and plain */
+      ['impact src/store.js', 'impact'],
+      ['blast radius of store.js', 'impact'],                     /* alias + prose rest declines the command gate */
+      ['what breaks if I change store.js', 'impact'],
+      ['what depends on store.js transitively', 'impact'],
+      ['who would notice if store.js disappeared', 'impact']
     ];
     ROUTES.forEach(function (rc) {
       var got = classifyIntent(rc[0]) || {};
@@ -436,6 +444,49 @@ function runSelfTests() {
     ok('intent · dependency-graph answers fan-in ranking', /Most-imported|No file is imported/.test(dg.answer) && dg.verdict.local === true, dg.answer.slice(0, 60));
     var hlp = inv('help');
     ok('intent · help states the machinery limits', /Intentional limits/.test(hlp.answer) && /static import edges/.test(hlp.answer));
+    /* blast radius — direct vs transitive, classification, and the honest zero case */
+    var imp = inv('what breaks if I change store.js');
+    ok('intent · impact finds direct importers', /Blast radius/.test(imp.answer) && imp.answer.indexOf('src/server.js') !== -1 && imp.verdict.local === true, imp.answer.slice(0, 60));
+    ok('intent · impact walks to transitive dependents', imp.answer.indexOf('src/index.js') !== -1 && /Transitive dependents/.test(imp.answer));
+    ok('intent · impact counts tests in the radius', /1 test file is in the blast radius/.test(imp.answer));
+    ok('intent · impact discloses the static-edges limit', /Static resolved import edges only/.test(imp.answer));
+    var imp0 = inv('impact test/store.test.js');
+    ok('intent · impact zero-dependents is honest', /the file itself/.test(imp0.answer) && imp0.verdict.local === true, imp0.answer.slice(0, 60));
+    var impSym = inv('impact addTodo');
+    ok('intent · impact resolves a symbol to its defining file', /src\/store\.js/.test(impSym.answer) && impSym.steps.some(function (s) { return /names a symbol/.test(s.action); }));
+    /* pinned-evidence scoping — plain/reason terrain filters to pinned files, disclosed as a step */
+    st.pinnedEv = [{ file: 'src/config.js', startLine: 2, endLine: 5, quote: '' }];
+    var pinInv = inv('summarize everything about the port configuration');
+    var scopeStep = pinInv.steps[0];
+    ok('pins · scope step discloses the pinned set', /scope to pinned evidence/.test(scopeStep.action) && /1 pinned citation across 1 file/.test(scopeStep.note), scopeStep.note);
+    var searchHitsOutside = pinInv.steps.some(function (s) {
+      return /^search /.test(s.action) && (s.evidence || []).some(function (ev) { return ev.file !== 'src/config.js'; });
+    });
+    ok('pins · terrain search hits only pinned files', !searchHitsOutside);
+    st.pinnedEv = [];
+    var unpinInv = inv('summarize everything about the port configuration');
+    ok('pins · clearing pins restores full search', !/scope to pinned evidence/.test(unpinInv.steps[0].action));
+    /* demo seeding — legacy.js gives the signals-first demo real, honest findings */
+    ok('demo · legacy.js is a real orphan', listOrphans(idx).indexOf('src/legacy.js') !== -1);
+    ok('demo · legacy.js carries the debt tags', idx.todos.filter(function (t) { return t.file === 'src/legacy.js'; }).length >= 5);
+    /* packer legibility — why-tags, pin-first packing, exclusion honesty */
+    var pk1 = packSmartContext('where is API_BASE_URL defined', 4000);
+    ok('packer · included entries carry why-tags', pk1.included.length > 0 && pk1.included.every(function (x) { return Array.isArray(x.why); })
+      && pk1.included.some(function (x) { return x.why.length > 0; }));
+    ok('packer · keyword scorers say kw', pk1.included.some(function (x) { return x.why.some(function (w) { return w.indexOf('kw') === 0; }); }));
+    var pinTarget = 'src/legacy.js'; /* low-score file — without a pin it loses under a tight budget */
+    st.files.get(pinTarget).pin = true;
+    var pk2 = packSmartContext('where is API_BASE_URL defined', 600);
+    st.files.get(pinTarget).pin = false;
+    ok('packer · pinned file packs first under a tight budget', pk2.included.length > 0 && pk2.included[0].p === pinTarget
+      && pk2.included[0].why.indexOf('pinned') !== -1, pk2.included.length ? pk2.included[0].p : 'none');
+    var savedChecked = st.files.get('src/store.js').checked;
+    st.files.get('src/store.js').checked = false;
+    var pk3 = packSmartContext('where is addTodo defined', 200000);
+    st.files.get('src/store.js').checked = savedChecked;
+    ok('packer · unchecked file never packs', !pk3.included.some(function (x) { return x.p === 'src/store.js'; }));
+    ok('packer · notPacked lists top scorers left out', Array.isArray(pk2.notPacked) && pk2.notPacked.length > 0
+      && pk2.notPacked.every(function (x) { return typeof x.s === 'number' && !pk2.included.some(function (y) { return y.p === x.p; }); }));
     var pt = inv('path src/index.js src/store.js');
     ok('intent · path walks index → server → store', pt.answer.indexOf('src/index.js') !== -1 && pt.answer.indexOf('src/server.js') !== -1 && pt.answer.indexOf('src/store.js') !== -1);
     var sg = inv('signals');

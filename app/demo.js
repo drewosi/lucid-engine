@@ -29,6 +29,7 @@ var SAMPLE_PROJECT = {
     '- src/store.js  — in-memory todo store (addTodo, listTodos, removeTodo)',
     '- src/config.js — API_BASE_URL and PORT',
     '- src/util.js   — small response helpers',
+    '- src/legacy.js — old response helpers kept for reference (candidates for deletion)',
     '- test/store.test.js — store unit tests'
   ].join('\n'),
   'package.json': [
@@ -105,6 +106,23 @@ var SAMPLE_PROJECT = {
     '',
     'module.exports = { json };'
   ].join('\n'),
+  'src/legacy.js': [
+    '// Old response helpers, kept for reference while the routes migrated to util.js.',
+    '// Nothing imports this file any more — signals/orphans should catch it.',
+    '// TODO: delete once the v1 clients are gone',
+    '// TODO: fold sendText into util.json',
+    'function sendText(res, status, text) {',
+    '  // TODO: charset header',
+    '  res.writeHead(status, { "Content-Type": "text/plain" });',
+    '  res.end(text);',
+    '}',
+    '',
+    '// TODO: was only used by the removed /health route',
+    'function ok(res) { sendText(res, 200, "ok"); }',
+    '',
+    '// TODO: remove with the rest of this file',
+    'module.exports = { sendText, ok };'
+  ].join('\n'),
   'src/index.js': [
     '// Entry point: boot the todo API server.',
     'const { createServer } = require("./server");',
@@ -129,7 +147,10 @@ var SAMPLE_PROJECT = {
     'console.log("store tests passed");'
   ].join('\n')
 };
-var DEMO_QUESTIONS = ['where is API_BASE_URL defined?', 'what imports store.js?', 'show the entry points'];
+/* signals first: the opening answer is ranked, evidence-backed findings — the
+   grounding model lands before the visitor does any work. The findings are real
+   (src/legacy.js is genuinely orphaned and genuinely carries the debt tags). */
+var DEMO_QUESTIONS = ['signals', 'where is API_BASE_URL defined?', 'what imports store.js?'];
 
 function loadSampleProject() {
   st.files.clear();

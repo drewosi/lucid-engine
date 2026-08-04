@@ -157,15 +157,26 @@ function packSmartContext(q, budgetTokens) {
   var dirVals = Object.keys(dirM).map(function (d) { return dirM[d]; }).sort(function (a, b) { return a - b; });
   var hotCut = dirVals.length > 3 ? dirVals[Math.floor(dirVals.length * 0.75)] : Infinity;
 
-  /* pass 1 — cheap: static importance + recency + intent + path term hits */
+  /* pass 1 — cheap: static importance + recency + intent + path term hits.
+     Each component that fires records a compact why-tag so the preview can say
+     in plain language why a file scored in — same data, no second scorer. */
   var scored = paths.map(function (p) {
     var f = st.files.get(p), s = f.base + recRank[p], lp = p.toLowerCase();
+    var why = [];
+    var name = p.slice(p.lastIndexOf('/') + 1);
+    if (f.pin) why.push('pinned');
+    if (README_NAMES.test(name)) why.push('readme');
+    else if (CONFIG_NAMES.test(name)) why.push('config');
+    else if (ENTRY_NAMES.test(name)) why.push('entry');
+    if (recRank[p] >= 4.5) why.push('recent');
     var d = p.indexOf('/') === -1 ? '.' : p.slice(0, p.lastIndexOf('/'));
-    if (dirM[d] >= hotCut) s += 3;
-    if (wantsTests && TEST_PATH.test(p)) s += 7; /* cancels the static -3 and boosts */
-    if (wantsDocs && (README_NAMES.test(p.slice(p.lastIndexOf('/') + 1)) || /\.(md|mdx|rst)$/i.test(p) || DOCS_PATH.test(p))) s += 5;
-    for (var i = 0; i < terms.length; i++) if (lp.indexOf(terms[i]) !== -1) s += 30;
-    return { p: p, f: f, s: s };
+    if (dirM[d] >= hotCut) { s += 3; if (why.indexOf('recent') === -1) why.push('hot dir'); }
+    if (wantsTests && TEST_PATH.test(p)) { s += 7; why.push('test boost'); } /* cancels the static -3 and boosts */
+    if (wantsDocs && (README_NAMES.test(name) || /\.(md|mdx|rst)$/i.test(p) || DOCS_PATH.test(p))) { s += 5; why.push('docs boost'); }
+    var kwPath = 0;
+    for (var i = 0; i < terms.length; i++) if (lp.indexOf(terms[i]) !== -1) { s += 30; kwPath++; }
+    if (kwPath) why.push('kw in path');
+    return { p: p, f: f, s: s, why: why, hits: 0 };
   });
   scored.sort(function (a, b) { return b.s - a.s; });
 
@@ -177,17 +188,21 @@ function packSmartContext(q, budgetTokens) {
       /* recomputed per scan — memoizing this on the file object converged toward
          a full lowercase copy of the corpus in memory, and could go stale */
       var lc = it.f.content.toLowerCase();
-      for (var t = 0; t < terms.length; t++) it.s += Math.min(countHits(lc, terms[t]), 12) * 2;
+      for (var t = 0; t < terms.length; t++) { var hn = Math.min(countHits(lc, terms[t]), 12); it.s += hn * 2; it.hits += hn; }
+      if (it.hits) it.why.push('kw ×' + it.hits);
     }
     scored.sort(function (a, b) { return b.s - a.s; });
   }
+  /* operator pins pack first (still budget-bounded) — the one explicit override */
+  var pinnedFirst = scored.filter(function (x) { return x.f.pin; })
+    .concat(scored.filter(function (x) { return !x.f.pin; }));
 
   /* greedy pack: whole small files, excerpts for big ones */
-  var parts = [], used = 0, count = 0, included = [];
-  for (var k = 0; k < scored.length && count < SMART_MAX_FILES; k++) {
+  var parts = [], used = 0, count = 0, included = [], packedSet = Object.create(null);
+  for (var k = 0; k < pinnedFirst.length && count < SMART_MAX_FILES; k++) {
     var remaining = budgetTokens - used;
     if (remaining < 400) break;
-    var e = scored[k], body, tok, whole;
+    var e = pinnedFirst[k], body, tok, whole;
     if (e.f.tokens <= WHOLE_FILE_MAX && e.f.tokens <= remaining) {
       body = numberLines(e.f.content, 1); tok = e.f.tokens; whole = true;
     } else {
@@ -196,10 +211,16 @@ function packSmartContext(q, budgetTokens) {
       body = ex.text; tok = ex.tokens; whole = false;
     }
     parts.push('═══ FILE: ' + e.p + ' ═══\n' + body);
-    included.push({ p: e.p, tok: tok, whole: whole });
+    included.push({ p: e.p, tok: tok, whole: whole, why: e.why });
+    packedSet[e.p] = 1;
     used += tok; count++;
   }
-  return { text: parts.join('\n\n'), count: count, total: paths.length, tokens: used, included: included };
+  /* the top scorers that did NOT fit — so exclusion is explicit, never implied */
+  var notPacked = [];
+  for (var m = 0; m < scored.length && notPacked.length < 8; m++) {
+    if (!packedSet[scored[m].p]) notPacked.push({ p: scored[m].p, s: Math.round(scored[m].s), tok: scored[m].f.tokens });
+  }
+  return { text: parts.join('\n\n'), count: count, total: paths.length, tokens: used, included: included, notPacked: notPacked };
 }
 
 /* PROJECT MAP — full shape of the project in few tokens; cached until context changes */

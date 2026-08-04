@@ -24,6 +24,7 @@ export var st = {
   history: [],
   transcript: [],
   orientShown: false,      /* one-time first-LOCAL-answer orientation note — session-scoped by design */
+  pinnedEv: [],            /* operator-pinned evidence citations {file,startLine,endLine,quote} — session-scoped */
   streaming: false,
   aborter: null,
   spent: { in: 0, out: 0, cacheW: 0, cacheR: 0 },
