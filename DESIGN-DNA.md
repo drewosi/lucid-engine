@@ -417,7 +417,7 @@ from decaying into *nice.*
 
 ---
 
-## 10. CLAUDE DESIGN SYSTEM INSTRUCTIONS (paste-ready)
+## 10. AI DESIGN SYSTEM INSTRUCTIONS (paste-ready)
 
 ```
 YOU ARE DESIGNING FOR DREW — DESIGN DNA: "LUCID ENGINE" v2.0
@@ -822,7 +822,7 @@ and each fails at least one gate above.
 
 ## 15. VERSION NOTES
 
-- **v1.0** — Identity, personality, emotional goal, visual + interaction language, tensions, bans, reference library, decision framework, paste-ready Claude instructions (§1–§10).
+- **v1.0** — Identity, personality, emotional goal, visual + interaction language, tensions, bans, reference library, decision framework, paste-ready AI instructions (§1–§10).
 - **v1.1** — Added §11 Motion Library, §12 UX Pattern Library, §13 UI Component Specs.
 - **v1.2** — Turn-4 decisions locked: mode rule = purpose decides the door; accent = Signal Orange (#FF4F00); type = grotesque + mono, pure instrument; in-product ceremony = small moments in the seams; sound = off by default, earned only in world-sites. Added 6 motion patterns (Counter Roll, Threshold Wipe, Constellation Link, Orbit Focus, Signal Sweep, Type Feed), the command palette + wayfinder + honest-demo UX rules, and 7 component specs.
 - **v2.0** — The *goddamn* standard. Raised the ceiling without loosening a single ban:
