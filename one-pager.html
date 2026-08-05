@@ -160,20 +160,19 @@
 
   <header class="hd">
     <div>
-      <div class="wordmark">MERIDIAN <span class="tag mono">INSTRUMENT 01</span></div>
-      <div class="mono" style="font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-top:6px">// an AI instrument for people who build</div>
+      <div class="wordmark">MERIDIAN <span class="tag mono">CODE WORKBENCH</span></div>
+      <div class="mono" style="font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-top:6px">a code workbench that shows its evidence</div>
     </div>
     <div class="eyebrow mono"><span class="dot"></span>FREE BETA · LIVE</div>
   </header>
 
   <section class="lede">
-    <h1>Answers you can <span class="thin">audit.</span></h1>
-    <p>A <b>browser-only AI workbench</b>. Load your project into your tab's memory, ask questions, and every answer arrives with a <b>trace</b> — the reasoning pinned to the exact files and lines it stands on, as clickable evidence chips that open the cited file at the cited range. Underneath the chat is a deterministic project-intelligence engine that understands the terrain <i>before</i> a model enters the room.</p>
+    <h1>Answers you can audit.</h1>
+    <p>A <b>browser-only AI workbench</b>. Load your project into your tab's memory, ask questions, and every answer arrives with a <b>trace</b>: clickable citations that open the cited file at the cited line. Underneath the chat is a deterministic project-intelligence engine that indexes the project before any model sees it.</p>
   </section>
 
   <div class="sec-head">
     <span class="idx mono">01</span><h2>What makes it different</h2>
-    <span class="anno mono">// every chip below is LIVE today</span>
   </div>
 
   <div class="pillars">
@@ -181,43 +180,42 @@
       <div class="pk mono">A1</div>
       <h3>Zero backend <span class="flag live mono">LIVE</span></h3>
       <p>The whole product is static files on GitHub Pages. There is no server of ours to receive your data — file contents live in tab memory and vanish on close.</p>
-      <span class="note mono">// zero egress to us · metadata-only persistence</span>
+      <span class="note mono">zero egress to us · metadata-only persistence</span>
     </div>
     <div class="pillar">
       <div class="pk mono">A2</div>
       <h3>BYO keys <span class="flag live mono">LIVE</span></h3>
       <p>Requests go straight from your browser to your provider — Anthropic, OpenAI, or any OpenAI-compatible endpoint — under your own account. Keys live in localStorage, one per provider.</p>
-      <span class="note mono">// anthropic · openai · custom endpoint</span>
+      <span class="note mono">anthropic · openai · custom endpoint</span>
     </div>
     <div class="pillar">
       <div class="pk mono">A3</div>
       <h3>Local engine <span class="flag live mono">LIVE</span></h3>
       <p>The LOCAL provider answers with <b>no key, no AI, and zero network</b>. It runs a real investigation over the project index and returns findings through the same trace UI, verdict-labeled <span class="mono" style="color:var(--ink)">KNOWN LOCALLY</span>.</p>
-      <span class="note mono">// def · refs · imports · structure · tests</span>
+      <span class="note mono">def · refs · imports · structure · tests</span>
     </div>
     <div class="pillar">
       <div class="pk mono">A4</div>
       <h3>Single-file <span class="flag live mono">LIVE</span></h3>
       <p>Dependency-free HTML, CSS and ES modules — no build step, no framework, no npm. The workbench loads <b>zero third-party scripts</b> and its CSP blocks inline script outright.</p>
-      <span class="note mono">// app.html · index.html · dna.html</span>
+      <span class="note mono">app.html · index.html · app/*.js</span>
     </div>
     <div class="pillar">
       <div class="pk mono">A5</div>
       <h3>Multi-language indexing <span class="flag live mono">LIVE</span></h3>
       <p>Symbol &amp; import extraction across <b>JS/TS, Python, Go, Rust, Java, Kotlin, Ruby, C#, Swift, PHP</b> — dynamic <span class="mono">import()</span>, tsconfig <span class="mono">paths</span>, workspaces, receiver methods, <span class="mono">use</span>/<span class="mono">mod</span>, Maven/Gradle roots, namespace maps, composer psr-4. Regex-based, no parser, no dependencies.</p>
-      <span class="note mono">// 10+ languages today — others basic</span>
+      <span class="note mono">10+ languages today · others basic</span>
     </div>
     <div class="pillar">
       <div class="pk mono">A6</div>
       <h3>Exportable traces <span class="flag live mono">LIVE</span></h3>
       <p>Export the whole session — answers, traces, and the actual cited lines — as Markdown or a self-contained zero-asset HTML page. Or copy one answer, or one evidence chip's <span class="mono">path:line</span> + quote.</p>
-      <span class="note mono">// markdown · self-contained html · per-chip copy</span>
+      <span class="note mono">markdown · self-contained html · per-chip copy</span>
     </div>
   </div>
 
   <div class="sec-head">
     <span class="idx mono">02</span><h2>How it works</h2>
-    <span class="anno mono">// load → ask → trace</span>
   </div>
 
   <div class="steps">
@@ -239,8 +237,7 @@
   </div>
 
   <div class="sec-head">
-    <span class="idx mono">03</span><h2>Honest ledger — live vs roadmap</h2>
-    <span class="anno mono">// where the site simulates or promises, it says so</span>
+    <span class="idx mono">03</span><h2>What's live and what's planned</h2>
   </div>
 
   <div class="ledger">
@@ -258,12 +255,10 @@
     <div class="col roadmap">
       <div class="ch mono"><span>○</span> ROADMAP / PLANNED</div>
       <ul>
-        <li>Continuous / fleet-wide <b>Drift Watch</b> — today it compares sessions <span class="flag road mono">ROADMAP</span></li>
-        <li>Deeper instruments &amp; wider language depth (Scala/Elixir/Dart…) <span class="flag road mono">ROADMAP</span></li>
-        <li>Paid tiers — Operator, Laboratory <span class="flag road mono">PLANNED</span> · nothing can be purchased today</li>
+        <li>Continuous / fleet-wide <b>Drift Watch</b> — today it compares sessions <span class="flag road mono">PLANNED</span></li>
+        <li>Deeper instruments &amp; wider language depth (Scala/Elixir/Dart…) <span class="flag road mono">PLANNED</span></li>
         <li><b>Propose Action</b> is experimental &amp; read-only; nothing executes without a click</li>
       </ul>
-      <div class="foot mono">// the landing page's trace console is a scripted simulation (SIM chip). the workbench trace is real — it runs against your project.</div>
     </div>
   </div>
 
@@ -271,7 +266,7 @@
     <div class="links mono">
       <a href="https://drewosi.github.io/lucid-engine/">→ LANDING</a>
       <a href="https://drewosi.github.io/lucid-engine/app.html">→ WORKBENCH</a>
-      <a href="https://drewosi.github.io/lucid-engine/dna.html">→ DESIGN DNA</a>
+      <a href="https://github.com/drewosi/lucid-engine">→ SOURCE</a>
     </div>
     <div class="close mono">Your key · your machine · <b>zero egress to us.</b></div>
   </footer>

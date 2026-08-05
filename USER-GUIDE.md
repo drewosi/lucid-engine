@@ -2,8 +2,8 @@
 
 **MERIDIAN is a browser-only workbench for understanding a codebase.** You load a
 project folder into your browser, then ask questions about it. Every answer comes
-back with a **trace** — the reasoning steps, each pinned to the exact files and
-lines it stands on, which you click to open.
+back with a **trace**: reasoning steps, each carrying citations you click to open
+the file at the cited lines.
 
 Nothing you load ever reaches us. Your files live in the browser tab and vanish
 when you close it. If you connect an AI, your question goes straight from your
@@ -18,15 +18,15 @@ browser to that AI provider under your own key — never through a server of our
 
 It serves two readers, and marks the difference where it matters:
 
-- 🟢 **New to this** — you write a little code, or none, and want to *understand*
+- **New to this:** — you write a little code, or none, and want to *understand*
   a project. Follow the guide top to bottom. Concepts are explained the first
   time they appear, and there's a [Glossary](#glossary) at the end.
-- 🔵 **Experienced** — you know codebases and just want the fast path and the
+- **Experienced:** — you know codebases and just want the fast path and the
   internals. Skim [Quick start](#quick-start-2-minutes-no-key-needed), the
   [Command reference](#6-the-local-command-reference), and
   [For power users](#12-for-power-users-internals--self-hosting).
 
-Call-outs marked **🔵 Power user** add depth without cluttering the main path.
+Call-outs marked **Power user** add depth without cluttering the main path.
 
 ---
 
@@ -68,12 +68,12 @@ MERIDIAN is built the opposite way. It does two things:
    runs its own investigation, then hands the AI only the **verified evidence** it
    found — not your whole repo — so the answer stays anchored to real lines.
 
-The mental model: **MERIDIAN understands the terrain before a model enters the
-room.** The AI is a reasoning layer, not the foundation. And because the index is
+The mental model: **MERIDIAN indexes the project before a model is involved.**
+The AI is a reasoning layer, not the foundation. And because the index is
 always there, you can get real answers with **no key, no AI, and no internet** —
 that's the **LOCAL** engine, and it's the best place to start.
 
-> 🟢 **Jargon, once:** a **symbol** = a named thing in code (function, class,
+> **Jargon, once:** a **symbol** = a named thing in code (function, class,
 > constant). An **import** = one file using another. A **token** = the unit AIs
 > bill by (~¾ of a word). A **trace** = MERIDIAN's shown work: numbered steps,
 > each with clickable evidence. Full [Glossary](#glossary) at the end.
@@ -147,7 +147,7 @@ it in anyway (true binaries stay out).
 wildcard) to skip more — e.g. `*.min.js`, `*.map`, `*.lock`. **[ Suggest ]**
 proposes common ones, but only globs that actually match a file you loaded.
 
-> 🔵 **Power user:** the indexer skips any single line longer than 400 characters
+> **Power user:** the indexer skips any single line longer than 400 characters
 > (minified bundles), so imports on those lines don't enter the graph — and the
 > `orphans`/`broken` answers disclose the skipped-line count so a missing edge is
 > never presented as a certainty. Reads run through a bounded 32-wide pool so the
@@ -172,11 +172,11 @@ browser's `localStorage` only, one per provider, and sent straight to that
 provider's API. **[ CLEAR KEY ]** removes it; the **clear-all-data** button wipes
 everything MERIDIAN stored.
 
-> 🟢 **Recommended:** create your API key **with a spend limit** at your provider.
+> **Recommended:** create your API key **with a spend limit** at your provider.
 > You can also set a per-session spend warning in Settings — MERIDIAN warns before
 > the *estimated* total crosses it.
 
-**Custom endpoints (🔵).** Point MERIDIAN at LM Studio, Ollama, vLLM, etc. Enter a
+**Custom endpoints.** Point MERIDIAN at LM Studio, Ollama, vLLM, etc. Enter a
 base URL (`http://localhost:1234/v1` for LM Studio, `http://localhost:11434/v1` for
 Ollama) and a model id, then **[ TEST ENDPOINT ]** probes reachability, CORS, and
 latency. The API key is **optional**: leave it empty for keyless local servers, or
@@ -240,7 +240,7 @@ C#, Kotlin, Swift, PHP (symbols + import resolution), plus basic support for
 others (Scala, Elixir, Dart…). Depth varies — it's regex-based, dependency-free
 analysis, not a full compiler, and the app says so where it matters.
 
-> 🔵 **Power user — the intentional limits, in one place:** graph analyses
+> **Power user — the intentional limits, in one place:** graph analyses
 > (`cycles`/`orphans`/`hubs`/`path`/`untested`) walk **statically resolved**
 > import edges only — files wired at runtime (dynamic import, DI, HTML
 > `<script>`, bundler config) can show as orphaned without being dead. Symbol
@@ -269,7 +269,7 @@ then ask anything — including the interpretive questions LOCAL declines
   so answers are anchored to what MERIDIAN actually found, not the model's guess.
 - Press **Stop** (or the palette) to cancel a stream; partial output is kept.
 
-> 🔵 **Power user:** grounding is per-question and placed *after* the cached
+> **Power user:** grounding is per-question and placed *after* the cached
 > project context, so Anthropic prompt-cache of the stable prefix is preserved.
 > Toggle it off for a raw context-only request.
 
@@ -321,7 +321,7 @@ shell command.
 - **File checkboxes** — tick/untick files (tri-state per directory) to include or
   exclude them; the budget bar shows the running total.
 
-> 🔵 **Power user — how SMART scores files:** static importance (file type,
+> **Power user — how SMART scores files:** static importance (file type,
 > READMEs/manifests/entry points weigh up; tests, lockfiles, generated dirs weigh
 > down) + recency (file *and* directory) + path depth + query-keyword hits.
 > Debug-worded questions boost test files; onboarding-worded questions boost docs.
@@ -368,8 +368,8 @@ control; the palette is a shortcut, never the only way.
 | `Esc` | Close the top-most panel |
 | `Enter` / `Shift-Enter` | Send question / newline |
 
-**Appearance:** toggle **ceremony (dark) / daylight (light)** from the top bar or
-palette. All motion respects your OS "reduce motion" setting.
+**Appearance:** toggle **dark / light mode** from the top bar or palette. All
+motion respects your OS "reduce motion" setting.
 
 ---
 
@@ -451,9 +451,7 @@ Self-hosting lifts that in one edit:
 
 Nothing else. Same files, same zero-dependency build (none), same behavior:
 `app.html` still loads **no third-party scripts** and makes no requests except
-to the providers you configured. The only third-party anything in the repo is
-the optional goatcounter analytics on `index.html` (the landing page) — the
-workbench itself has none, hosted or self-hosted.
+to the providers you configured. Neither does the landing page.
 
 ---
 
@@ -492,8 +490,8 @@ workbench itself has none, hosted or self-hosted.
 - **LOCAL uses no network at all.** And the workbench page loads **zero
   third-party scripts**.
 
-That architecture *is* the privacy story — it's not a policy you have to trust,
-it's how the thing is built.
+That architecture is the privacy model: not a policy you have to trust, but how
+the thing is built.
 
 ---
 
@@ -523,6 +521,5 @@ it's how the thing is built.
 ---
 
 *Anything this guide doesn't cover is usually answered in-app by the `?` keymap,
-the **[ PREVIEW SEND ]** panel, or the honest labels MERIDIAN puts on everything —*
-`LOCAL · NO AI`, `KNOWN LOCALLY`, `REQUIRES MODEL REASONING`, `SMART`, `GROUNDED`,
-`SIM`, `ROADMAP`. *Where the tool simulates or promises, it says so.*
+the **[ PREVIEW SEND ]** panel, or the labels MERIDIAN puts on its answers:*
+`LOCAL · NO AI`, `KNOWN LOCALLY`, `REQUIRES MODEL REASONING`, `SMART`, `GROUNDED`.

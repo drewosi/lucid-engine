@@ -1,9 +1,6 @@
-# LUCID ENGINE
+# MERIDIAN
 
-**Drew's personal design DNA — and MERIDIAN, the instrument built on it. Now a real, working product in free beta.**
-
-> Lucid Engine is the combination of **hospitable clarity**, **visible engineering**, and **cinematic depth**.
-> *"The front door is a museum. The basement is a laboratory."*
+**A browser-only code workbench with evidence traces, in free beta.** This repo also contains the Lucid Engine design system it's built with.
 
 ## Live
 
@@ -12,14 +9,12 @@
 | **MERIDIAN** — landing page | https://drewosi.github.io/lucid-engine/ |
 | **MERIDIAN Workbench** — the app (free beta) | https://drewosi.github.io/lucid-engine/app.html |
 | **One-pager** — the pitch on one page | https://drewosi.github.io/lucid-engine/one-pager.html |
-| **Design DNA** — the system itself | https://drewosi.github.io/lucid-engine/dna.html |
 | Terms · Privacy | [terms.html](https://drewosi.github.io/lucid-engine/terms.html) · [privacy.html](https://drewosi.github.io/lucid-engine/privacy.html) |
 
 ## One-pager & demo
 
 A clean [**one-pager**](one-pager.html) (`one-pager.html`) states the whole pitch on a single
-screen and prints to one PDF page — six pillars, each labeled `LIVE`, over an honest ledger of
-what's live vs `ROADMAP`/`PLANNED`. Like everything here it's one dependency-free file.
+screen and prints to one PDF page. Like everything here it's one dependency-free file.
 
 ![MERIDIAN — LOCAL engine demo](media/meridian-demo.gif)
 
@@ -37,13 +32,13 @@ node scripts/record-demo.mjs                # drives app.html's LOCAL demo → s
 bash scripts/encode-demo.sh                 # → media/meridian-demo.mp4 + .gif
 ```
 
-## What MERIDIAN is now
+## What MERIDIAN is
 
 A **browser-only AI workbench**. You bring your own API key (Anthropic, OpenAI, or any OpenAI-compatible endpoint), load a project folder into your browser's memory, and ask questions. Every answer streams back with a **trace** — the reasoning steps, pinned to the exact files and lines they stand on, as clickable evidence chips that open the cited file at the cited range.
 
-Underneath the chat, MERIDIAN is a **deterministic project-intelligence engine**: it understands the terrain of a project *before* a model enters the room. On load it indexes the project — symbols, import/importer edges, entry points, tests, packages — and shows a **PROJECT INTELLIGENCE** overview. The AI model is an optional reasoning layer on top of that understanding, not the foundation.
+Underneath the chat, MERIDIAN is a **deterministic project-intelligence engine** that indexes the project before any model sees it: symbols, import/importer edges, entry points, tests, packages, surfaced as a **PROJECT INTELLIGENCE** overview. The AI model is an optional reasoning layer on top of that index, not the foundation.
 
-Don't want to use an API at all? The **LOCAL engine** (settings → PROVIDER → LOCAL) answers with **no key, no AI, and zero network**. It routes each question by intent and runs a real investigation over the project index, returning findings through the same trace + evidence-chip UI, honestly labeled `LOCAL · NO AI`. Every answer carries a verdict — **KNOWN LOCALLY** (structure, definitions, references, imports/importers, related files, recent changes, evidence) or **REQUIRES MODEL REASONING** (root-cause, synthesis, architectural recommendations). When a model *is* connected, MERIDIAN sends only the relevant evidence, never the whole repo.
+Don't want to use an API at all? The **LOCAL engine** (settings → PROVIDER → LOCAL) answers with **no key, no AI, and zero network**. It routes each question by intent and runs a real investigation over the project index, returning findings through the same trace + evidence-chip UI, labeled `LOCAL · NO AI`. Every answer carries a verdict: **KNOWN LOCALLY** (structure, definitions, references, imports/importers, related files, recent changes, evidence) or **REQUIRES MODEL REASONING** (root-cause, synthesis, architectural recommendations). When a model *is* connected, MERIDIAN sends only the relevant evidence, never the whole repo.
 
 The architecture *is* the privacy story:
 
@@ -77,8 +72,6 @@ With `[ GROUND: ON ]` (default), every model question first runs Meridian's dete
 - **Session cost, always visible** — a live `$` chip in the nav tracks estimated spend (prompt-cache aware) as answers stream, with a one-click reset; it's no longer only a send-time readout.
 - **Provider quick-switch** — a nav selector flips between Anthropic, OpenAI, a custom endpoint, and LOCAL without a trip through settings; each provider keeps its own key.
 - **Command palette** — `Ctrl-K` in the workbench, plus `Ctrl-E` export, `Ctrl-.` settings, `Ctrl-Shift-O` pick folder, `?` keymap (also a visible `? KEYS` button in the nav).
-
-Honest-labeling rule, upgraded: everything simulated or unbuilt says so on the surface — the landing page's trace console wears a `SIM` chip, unbuilt capabilities wear `ROADMAP` chips, and future pricing wears `PLANNED` chips with a "nothing can be purchased today" note.
 
 ## Engine internals — languages, limits, security, self-tests
 
@@ -137,7 +130,7 @@ LOCAL-engine intents: `def`, `refs`, `imports`, `importers`, `related`, `symbols
 default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://api.anthropic.com https://api.openai.com http://localhost:* http://127.0.0.1:*; base-uri 'none'; object-src 'none'; form-action 'self'
 ```
 
-The tradeoff, disclosed in-app next to the custom-endpoint settings: **remote** custom endpoints (openrouter, a hosted vLLM box…) are blocked on the hosted page. Use a localhost server (LM Studio's `http://localhost:1234/v1`, Ollama's `http://localhost:11434/v1` — the API key is optional, and any placeholder like `lm-studio` is accepted and passed through verbatim), or self-host the workbench and add your endpoint's origin to `connect-src` (step-by-step in the [User Guide §13](USER-GUIDE.md#13-run-it-on-your-own-machine)). Note `frame-ancestors` is ignored in a `<meta>` CSP, so `app/main.js` opens with a frame-buster instead — the workbench refuses to run inside an iframe. The workbench page makes **no third-party requests at all** (Tailwind's Play CDN was removed in v0.6 — every style lives in `app/app.css`). `index.html` (the landing page) uses the optional goatcounter analytics, so if you add a CSP there it must allow `https://gc.zgo.at`.
+The tradeoff, disclosed in-app next to the custom-endpoint settings: **remote** custom endpoints (openrouter, a hosted vLLM box…) are blocked on the hosted page. Use a localhost server (LM Studio's `http://localhost:1234/v1`, Ollama's `http://localhost:11434/v1` — the API key is optional, and any placeholder like `lm-studio` is accepted and passed through verbatim), or self-host the workbench and add your endpoint's origin to `connect-src` (step-by-step in the [User Guide §13](USER-GUIDE.md#13-run-it-on-your-own-machine)). Note `frame-ancestors` is ignored in a `<meta>` CSP, so `app/main.js` opens with a frame-buster instead — the workbench refuses to run inside an iframe. The workbench page makes **no third-party requests at all** (Tailwind's Play CDN was removed in v0.6 — every style lives in `app/app.css`), and neither does the landing page.
 
 ### Self-tests
 
@@ -145,12 +138,11 @@ A deterministic self-test suite (200+ checks) exercises the index, smart packer,
 
 ## What's in here
 
-- **[index.html](index.html)** — the MERIDIAN landing page. Single dependency-free file: live Canvas particle field, command palette (`Ctrl-K`), simulated trace console (labeled SIM), FAQ, waitlist form, ceremony/daylight modes, debug panel (`d`).
+- **[index.html](index.html)** — the MERIDIAN landing page. Single dependency-free file: Canvas particle-field hero, capability cards, system diagram, embedded demo video, FAQ, dark/light modes.
 - **[app.html](app.html)** + **`app/`** — the workbench: markup in `app.html`, styles in `app/app.css`, and the engine as dependency-free ES modules under `app/` (no framework, no npm, no build step — the files ship as authored). Multi-provider key management, folder ingestion (drag-and-drop, picker, or File System Access API — with binary sniffing, ignore-dir filters, and user ignore patterns), the smart context engine (scoring + project map + budgeted packing), IndexedDB project memory, streaming Anthropic/OpenAI-compatible API calls, trace parsing/rendering with evidence chips + a docked file viewer, proposed-action cards, Markdown/HTML trace export, command palette, session cost estimates. Loads **zero third-party scripts** (see Security / CSP).
   - Module map: `main.js` (entry + init order + global keys) · `state.js` (the shared store + cache invalidation) · `config.js` (providers/models/localStorage keys) · `helpers.js` · `shell.js` (provider/model/theme/first-run/settings) · `ingest.js` (folder loading, tree, budget, preview, ignore patterns) · `demo.js` (bundled sample project) · `memory.js` (IndexedDB projects) · `smart-context.js` (scoring + packing + project map) · `indexer.js` (symbols/imports index) · `prompt.js` (context assembly + grounding) · `chat.js` (provider request loop + cost) · `local.js` (the no-API LOCAL engine) · `trace.js` (rendering + trace parsing) · `actions.js` · `viewer.js` · `export.js` · `palette.js` · `selftest.js`.
 - **[privacy.html](privacy.html)** / **[terms.html](terms.html)** — the legal layer, written for this exact architecture (no servers, BYO key, localStorage-only storage).
-- **[dna.html](dna.html)** — the Lucid Engine design system as a browsable page.
-- **[DESIGN-DNA.md](DESIGN-DNA.md)** — the full system spec (v2.0), including a paste-ready instruction block for AI design tools (§10).
+- `dna.html` / `DESIGN-DNA.md` — the design system the site is built with (repo-only; not linked from the public pages).
 - **[USER-GUIDE.md](USER-GUIDE.md)** — step-by-step guide to using the workbench, dual-tracked for beginners and experienced coders. Linked from the landing-page footer and the workbench command palette (`Ctrl-K` → "user guide").
 
 ## Workbench UI architecture
@@ -187,25 +179,6 @@ Modules never query by structure — every JS↔DOM touchpoint is a stable eleme
 - **New sidebar section:** add a `rail-hd` heading + content inside `.rail-scroll`, wire by id in the owning module.
 - **New modal:** copy the `.veil > .modal` pattern, use `rememberFocus()/trap()/returnFocus()` from `helpers.js`, and register it in `main.js`'s `Escape` chain.
 
-## Before public launch — fill the legal placeholders
-
-The legal pages ship with clearly marked placeholders. Find them all with:
-
-```
-grep -rn "TODO(drew)" *.html
-```
-
-- `[ENTITY]` — your legal name or company (footers, privacy §01, terms §01).
-- `[JURISDICTION]` — governing law (terms §15).
-- The terms/privacy are strong standard-practice templates tailored to this architecture, **not legal advice** — have an attorney review before charging money or marketing broadly.
-
-## Make the waitlist real
-
-Out of the box the waitlist form falls back to localStorage (entries never leave the visitor's browser, and the page says so). Two steps make it live:
-
-1. **Email capture (required).** Create a free form at [formspree.io](https://formspree.io), copy the id from its endpoint (`formspree.io/f/<id>`), and paste it into the `FORMSPREE_ID` constant in `index.html` (search for `YOUR_FORM_ID`). The page's copy switches to disclose the transmission automatically — and the privacy policy already describes both states.
-2. **Analytics (optional).** Create a free site at [goatcounter.com](https://www.goatcounter.com) (privacy-friendly, no cookies, no consent banner needed), then uncomment the snippet at the bottom of `index.html` and replace `YOURCODE`. Never add analytics to `app.html` — the workbench makes no third-party requests at all, and that boundary is part of the privacy policy.
-
 ## Developing / verifying
 
 No build step. Serve locally and click around:
@@ -217,19 +190,3 @@ python3 -m http.server 8000
 The workbench is ES modules, so it needs to be served over HTTP — opening `app.html` straight from disk (`file://`) won't load the engine. Any static server works; GitHub Pages needs no configuration.
 
 Key flows to check: first-run modal on the workbench (once per browser), folder load with skipped-file report, Send without a key (should prompt, not request), a real question with a spend-limited key (streaming → trace console → evidence chip → file viewer), Stop mid-stream, wrong key (401 state), `[ CLEAR KEY ]` and the clear-all-data button.
-
-## The three laws
-
-1. **Clarity is the price of admission.** Mystery lives in the experience, never in the architecture.
-2. **Every element must demonstrate thought.** Decoration that merely signals "designed" gets cut.
-3. **Depth is a reward, not a requirement.** Casual users never pay for what explorers earn.
-
-## Depth ladder (try it on the live page)
-
-- **L1** — just read the page.
-- **L2** — `Ctrl-K` palette · `t` mode · `g` grid · `d` field debug · `1–5` jump · `?` keymap.
-- **L3** — open the browser console.
-
----
-
-MERIDIAN started as a fictional product built to prove this design system. The workbench made it real. The honest-demo rule still holds: wherever the site simulates or promises, it says so — `SIM`, `ROADMAP`, and `PLANNED` chips mark the line between what runs today and what's on the bench.

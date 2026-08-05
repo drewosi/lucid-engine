@@ -220,7 +220,7 @@ function afterIngest() {
   setStatus('INDEXING — ' + st.files.size + ' files…');
   var finish = function () {
     renderOverview();
-    setStatus('CORE IDLE — ' + st.files.size + ' files in memory');
+    setStatus('IDLE — ' + st.files.size + ' files in memory');
     /* graceful scaling: warn as the in-memory file cap approaches or is hit */
     if (st.skipped.memcap) toast('Memory cap reached (~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB of text) — ' + st.skipped.memcap + ' file' + (st.skipped.memcap === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
     else if (st.skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
@@ -571,7 +571,7 @@ function openPreview() {
   /* pinned evidence — same helper the real request uses, so the preview cannot drift */
   var pinB = buildPinnedBlock();
   if (pinB) {
-    sec('PINNED EVIDENCE · ' + pinB.count + ' CITATION' + (pinB.count === 1 ? '' : 'S') + ' ≈' + fmtTok(pinB.tokens) + ' TOK (operator-pinned, uncached)');
+    sec('PINNED EVIDENCE · ' + pinB.count + ' CITATION' + (pinB.count === 1 ? '' : 'S') + ' ≈' + fmtTok(pinB.tokens) + ' TOK (pinned, uncached)');
     note('// excerpts of the citations pinned in the tray — sent with every question while pinned. unpin (or [ CLEAR ]) to stop.');
     var ppre = document.createElement('pre');
     ppre.className = 'mapview';

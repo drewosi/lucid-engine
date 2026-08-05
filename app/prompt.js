@@ -243,7 +243,7 @@ function buildPinnedBlock() {
     parts.push(t); used += tok; count++;
   }
   if (!parts.length) return null;
-  return { text: 'PINNED EVIDENCE — citations the operator pinned in the workbench. Treat them as the focus of this question and prefer citing these exact lines.\n\n' + parts.join('\n\n'), count: count, tokens: used };
+  return { text: 'PINNED EVIDENCE — citations the user pinned in the workbench. Treat them as the focus of this question and prefer citing these exact lines.\n\n' + parts.join('\n\n'), count: count, tokens: used };
 }
 
 function buildContextBlocks(q) {

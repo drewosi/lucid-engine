@@ -38,7 +38,7 @@ function syncModelNote() {
 var modebtn = $('modebtn'), modebtn2 = $('modebtn2');
 function setMode(m) {
   app.dataset.mode = m; lsSet(LS.mode, m);
-  var label = 'MODE: ' + (m === 'dark' ? 'CEREMONY' : 'DAYLIGHT');
+  var label = 'MODE: ' + (m === 'dark' ? 'DARK' : 'LIGHT');
   modebtn.textContent = label; modebtn2.textContent = label;
 }
 function flipMode() { setMode(app.dataset.mode === 'dark' ? 'light' : 'dark'); }

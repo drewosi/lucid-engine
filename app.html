@@ -35,7 +35,7 @@
   <!-- ============ TOPNAV — wordmark · sidebar toggle · readouts · provider/model · palette · exports · settings ============ -->
   <nav class="primary" aria-label="Primary">
     <div class="nav-in">
-      <a href="index.html" class="wordmark">MERIDIAN <span class="tag">WORKBENCH · FREE BETA</span></a>
+      <a href="index.html" class="wordmark">MERIDIAN <span class="tag">WORKBENCH</span></a>
       <button class="btn-icon mono" id="railbtn" type="button" aria-expanded="true" aria-controls="rail" title="Show / hide the context sidebar (Ctrl B)">◧ CONTEXT</button>
       <div class="nav-status">
         <span class="ctx-readout" id="ctxreadout" aria-live="off">CTX ≈ <b>0</b> tokens · <b>0</b> files</span>
@@ -58,7 +58,7 @@
         <button class="btn-icon mono nav-exp" id="exporthtml" type="button" title="Download the session as a self-contained HTML page — zero external assets">↓ HTML</button>
         <button class="btn-icon mono" id="keysbtn" type="button" title="Keyboard shortcuts (?)">? KEYS</button>
         <button class="btn-icon mono" id="setbtn" type="button" aria-expanded="false" aria-controls="drawer" title="Settings — provider, key, context engine, spend limit (Ctrl .)">⚙ SETTINGS</button>
-        <button class="btn-mode mono" id="modebtn" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
+        <button class="btn-mode mono" id="modebtn" type="button" aria-label="Toggle color mode">MODE: DARK</button>
       </div>
     </div>
   </nav>
@@ -71,7 +71,7 @@
           <h2 class="rail-hd">PROJECTS <span class="n" id="projcount"></span></h2>
           <div id="projlist"></div>
           <button class="btn-quiet acc" type="button" id="saveproj">[ SAVE PROJECT ]</button>
-          <p class="rail-note">// saved = selection + settings only, <b>never contents</b>. ⟳ = one-click disk reload (Chromium folder picker); other browsers re-drop the folder.</p>
+          <p class="rail-note">Saving keeps the selection and settings only, <b>never file contents</b>. ⟳ reloads from disk in one click (Chromium folder picker); other browsers re-drop the folder.</p>
           <p class="rail-note" id="projnote" hidden></p>
         </div>
 
@@ -85,7 +85,7 @@
           <input type="file" id="dirpick" webkitdirectory multiple hidden aria-label="Pick a project folder">
           <input type="file" id="filepick" multiple hidden aria-label="Pick files">
         </div>
-        <p class="rail-note">// files are read into this tab's memory only. nothing is uploaded to us — <b>we run no servers</b>. selected files are sent to your chosen model provider with each question, under your key. in LOCAL mode nothing is sent at all.</p>
+        <p class="rail-note">Files are read into this tab's memory only; nothing is uploaded to us. Selected files are sent to your chosen provider with each question, under your key. In LOCAL mode nothing is sent at all.</p>
         <div id="budget" hidden title="Estimated tokens vs the model's context window — the estimate is language-aware (code counts denser than prose)">
           <div class="budget-bar" id="budgetbar"><i></i></div>
           <div class="budget-txt"><span id="budgettxt">≈ 0 tokens selected</span><span id="budgetmax"></span></div>
@@ -124,17 +124,17 @@
       <div id="convo">
         <div class="convo-in">
           <div id="empty">
-            <h2>The workbench is live.</h2>
-            <p>Ask a question and the answer arrives with its trace — the reasoning steps, pinned to the exact files and lines they stand on.</p>
+            <h2>Load a project and ask a question.</h2>
+            <p>Answers arrive with a trace: reasoning steps pinned to the files and lines they cite.</p>
             <ol>
-              <li>Add your API key in <b>SETTINGS</b> — Anthropic, OpenAI, or a custom endpoint. It stays in this browser. Or pick <b>LOCAL</b>: no key, no AI — deterministic search over your loaded files.</li>
+              <li>Add your API key in <b>SETTINGS</b> (Anthropic, OpenAI, or a custom endpoint). It stays in this browser. Or pick <b>LOCAL</b> for deterministic search over your loaded files, with no key and no AI.</li>
               <li>Load a project folder into <b>CONTEXT</b> (optional, recommended).</li>
               <li>Ask. Expand any answer's evidence chips to inspect the cited lines.</li>
             </ol>
-            <p class="mono" style="margin-top:16px">// zero egress to us: your files and questions travel only from this browser to Anthropic's API.</p>
+            <p style="margin-top:16px">Your files and questions travel only from this browser to the provider you selected. In LOCAL mode nothing is sent at all.</p>
             <button class="btn btn-hairline" type="button" id="emptydemo" style="margin-top:14px">▶ Try a demo project — LOCAL, no key</button>
             <div class="empty-asks-wrap">
-              <div class="empty-asks-hd mono">// or ask the LOCAL engine — click to drop a question in the box:</div>
+              <div class="empty-asks-hd">Or ask the LOCAL engine — click to drop a question in the box:</div>
               <div id="emptyasks" class="empty-asks"></div>
             </div>
           </div>
@@ -143,7 +143,7 @@
 
       <div class="composer">
         <div class="composer-in">
-          <div id="statusline"><span id="status" role="status" aria-live="polite">CORE IDLE</span><span class="cost" id="costline"></span></div>
+          <div id="statusline"><span id="status" role="status" aria-live="polite">IDLE</span><span class="cost" id="costline"></span></div>
           <div id="pintray" hidden aria-label="Pinned evidence"></div>
           <form id="askform" class="comp-row">
             <label for="prompt" class="sr-only">Your question</label>
@@ -152,9 +152,9 @@
             <button class="btn btn-hairline" type="button" id="stopbtn" hidden>Stop</button>
           </form>
           <div class="comp-note">
-            <span class="kbd-hint">// enter to send · <button type="button" class="kbd-link mono" id="localmenubtn">▤ what can I ask</button> · ctrl-k commands · ctrl-e export · <button type="button" class="kbd-link mono" id="keymaphint">? keymap</button></span>
-            <span>// AI output can be wrong or incomplete — verify before you rely on it</span>
-            <span>// costs are estimates; your provider bills actuals — <a href="terms.html">terms</a> · <a href="privacy.html">privacy</a></span>
+            <span class="kbd-hint">enter to send · <button type="button" class="kbd-link mono" id="localmenubtn">▤ what can I ask</button> · ctrl-k commands · ctrl-e export · <button type="button" class="kbd-link mono" id="keymaphint">? keymap</button></span>
+            <span>AI output can be wrong or incomplete. Verify before you rely on it.</span>
+            <span>Costs are estimates; your provider bills actuals. <a href="terms.html">Terms</a> · <a href="privacy.html">privacy</a></span>
           </div>
         </div>
       </div>
@@ -202,7 +202,7 @@
         <button class="btn btn-hairline" type="button" id="custtest" title="Send a lightweight request to check reachability and CORS (EXPERIMENTAL)">Test endpoint</button>
       </div>
       <p class="note" id="custstate" aria-live="polite"></p>
-      <p class="note">// this page's CSP only permits requests to api.anthropic.com, api.openai.com and localhost — so remote custom endpoints (openrouter, a hosted vLLM…) are blocked here. use a localhost server, or self-host the workbench and add your endpoint's origin to connect-src in app.html.</p>
+      <p class="note">This page's security policy only permits requests to api.anthropic.com, api.openai.com, and localhost, so remote custom endpoints (OpenRouter, a hosted vLLM) are blocked here. Use a localhost server, or self-host the workbench and add your endpoint's origin to connect-src in app.html.</p>
     </div>
 
     <div id="keysec">
@@ -213,8 +213,8 @@
       <button class="btn btn-hairline" type="button" id="savekey">Save</button>
     </div>
     <div id="keystate" aria-live="polite"></div>
-    <p class="note">// stored in this browser's localStorage only, per provider. it is sent to exactly one place: the selected provider's API endpoint, with your requests. we never see it — there is no server on our side to see it with.</p>
-    <p class="note">// recommended: create a key in a dedicated workspace with a monthly spend limit. any script running on a page can read its own origin's localStorage — this page loads zero third-party scripts, but keeping the blast radius small is still good practice.</p>
+    <p class="note">Stored in this browser's localStorage only, one key per provider, and sent to exactly one place: the selected provider's API endpoint. We never see it; there is no server on our side to see it with.</p>
+    <p class="note">Recommended: create a key in a dedicated workspace with a monthly spend limit. This page loads no third-party scripts, but a spend-capped key keeps the worst case small.</p>
     <button class="btn-quiet" type="button" id="clearkey">[ CLEAR KEY ]</button>
     </div>
 
@@ -223,7 +223,7 @@
     <button class="btn-quiet acc mt-1.5" type="button" id="stricttracebtn" aria-pressed="false" title="Prepend a stricter trace instruction to every request — for models that don't reliably emit the meridian-trace block. Costs a few extra tokens per request.">[ FORCE STRICT TRACE: OFF ]</button>
 
     <h3>CONTEXT ENGINE</h3>
-    <p class="note">// FULL sends every checked file whole. SMART sends a project map plus the files most relevant to each question, packed into a token budget — use it for medium and large projects.</p>
+    <p class="note">FULL sends every checked file whole. SMART sends a project map plus the files most relevant to each question, packed into a token budget; use it for medium and large projects.</p>
     <div class="key-row">
       <label for="budgetin" class="sr-only">Smart context token budget</label>
       <input type="number" id="budgetin" min="4000" step="1000" placeholder="smart budget (tokens)">
@@ -232,7 +232,7 @@
     <p class="note" id="budgetstate" aria-live="polite"></p>
 
     <h3>SESSION SPEND LIMIT</h3>
-    <p class="note">// optional. when the estimated session total would cross this, Meridian asks before sending — it never hard-blocks. estimates only; your provider bills actuals. 0 or blank = off.</p>
+    <p class="note">Optional. When the estimated session total would cross this, Meridian asks before sending; it never hard-blocks. Estimates only; your provider bills actuals. 0 or blank = off.</p>
     <div class="key-row">
       <label for="spendin" class="sr-only">Session spend limit (USD)</label>
       <input type="number" id="spendin" min="0" step="0.5" placeholder="e.g. 5.00 (USD)">
@@ -241,7 +241,7 @@
     <p class="note" id="spendstate" aria-live="polite"></p>
 
     <h3>IGNORE PATTERNS</h3>
-    <p class="note">// one pattern per line; <b>*</b> matches anything (e.g. <b>*.test.ts</b>, <b>docs/*</b>). applied at ingest and saved with the project. lines starting with # are comments.</p>
+    <p class="note">One pattern per line; <b>*</b> matches anything (e.g. <b>*.test.ts</b>, <b>docs/*</b>). Applied at ingest and saved with the project. Lines starting with # are comments.</p>
     <label for="ignorein" class="sr-only">Ignore patterns</label>
     <textarea id="ignorein" rows="3" spellcheck="false" placeholder="*.test.ts&#10;docs/*"></textarea>
     <div class="key-row mt-2">
@@ -250,33 +250,33 @@
     </div>
 
     <h3>DISPLAY</h3>
-    <button class="btn-mode mono" id="modebtn2" type="button" aria-label="Toggle color mode">MODE: CEREMONY</button>
+    <button class="btn-mode mono" id="modebtn2" type="button" aria-label="Toggle color mode">MODE: DARK</button>
 
     <h3>LOCAL DATA</h3>
-    <p class="note">// everything meridian stores in this browser: your API key(s), model choice, color mode, context settings, sidebar layout, ignore patterns, the terms-acceptance record, saved-project metadata in IndexedDB (selection + settings — never file contents), and (on the landing page) your waitlist entry. loaded file contents and conversation live in memory only and vanish when the tab closes.</p>
+    <p class="note">Everything Meridian stores in this browser: your API key(s), model choice, color mode, context settings, sidebar layout, ignore patterns, the terms-acceptance record, and saved-project metadata in IndexedDB (selection and settings, never file contents). Loaded file contents and the conversation live in memory only and vanish when the tab closes.</p>
     <button class="btn-quiet" type="button" id="clearall">[ CLEAR ALL MERIDIAN DATA FROM THIS BROWSER ]</button>
 
     <h3>LEGAL</h3>
-    <p class="note"><a href="terms.html" style="border-bottom:1px solid var(--line-strong)">terms of service</a> · <a href="privacy.html" style="border-bottom:1px solid var(--line-strong)">privacy policy</a><br>// not affiliated with anthropic.</p>
+    <p class="note"><a href="terms.html" style="border-bottom:1px solid var(--line-strong)">terms of service</a> · <a href="privacy.html" style="border-bottom:1px solid var(--line-strong)">privacy policy</a><br>Not affiliated with Anthropic.</p>
   </div>
 
   <!-- FIRST-RUN MODAL -->
   <div class="veil" id="firstveil">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="fr-title" id="firstrun">
-      <div class="k mono">MERIDIAN // BEFORE YOU BEGIN</div>
-      <h2 id="fr-title">A real instrument, in free beta.</h2>
+      <div class="k mono">BEFORE YOU BEGIN</div>
+      <h2 id="fr-title">Meridian runs entirely in your browser.</h2>
       <ul>
-        <li><b>It runs entirely in your browser.</b> We operate no servers. Your files, questions, and key are never sent to us — the page loads no third-party scripts at all.</li>
-        <li><b>Bring your own API key.</b> Anthropic by default; OpenAI or a custom OpenAI-compatible endpoint in settings. Requests go directly from this browser to the provider under <b>your</b> account — usage is billed by the provider to you, at their rates. Prefer no API at all? The <b>LOCAL</b> engine answers by deterministic search over your loaded files — no key, no AI, zero network.</li>
-        <li><b>Your key stays local.</b> It is stored in this browser's localStorage and sent only to the selected provider's API endpoint. Use a spend-limited key.</li>
-        <li><b>AI output can be wrong.</b> Answers and traces are machine-generated and may be inaccurate or incomplete. They are not professional advice. Verify before you rely on them.</li>
+        <li><b>No servers.</b> We never receive your files, questions, or key; the page loads no third-party scripts.</li>
+        <li><b>Bring your own key.</b> Anthropic, OpenAI, or a custom endpoint. Requests go straight from this browser to the provider and are billed to your account. Prefer no key? The <b>LOCAL</b> engine answers by deterministic search over your loaded files, with zero network.</li>
+        <li><b>Keys stay local.</b> Stored in localStorage, sent only to the selected provider. Use a spend-limited key.</li>
+        <li><b>AI output can be wrong.</b> Answers and traces are machine-generated and may be inaccurate or incomplete. Verify before you rely on them.</li>
       </ul>
       <p>By continuing you agree to the <a class="leglink" href="terms.html">Terms of Service</a> and acknowledge the <a class="leglink" href="privacy.html">Privacy Policy</a>.</p>
-      <p class="mono" style="font-size:11.5px;color:var(--ink-3);letter-spacing:.04em">// new here? the demo loads a tiny sample project and answers it with the deterministic <b style="color:var(--ink-2)">LOCAL</b> engine — no key, no AI, nothing leaves this tab. See the trace and evidence chips before you commit anything.</p>
+      <p class="note">New here? The demo loads a small sample project and answers it with the <b>LOCAL</b> engine — no key required.</p>
       <div class="row">
-        <button class="btn btn-signal" type="button" id="fr-demo">▶ Try the demo — LOCAL, no key</button>
+        <button class="btn btn-signal" type="button" id="fr-demo">▶ Try the demo (no key)</button>
         <button class="btn btn-hairline" type="button" id="fr-accept">I understand — begin</button>
-        <a class="btn btn-hairline" href="index.html">Back to the front door</a>
+        <a class="btn btn-hairline" href="index.html">Back to the site</a>
       </div>
     </div>
   </div>
@@ -284,7 +284,7 @@
   <!-- CONTEXT SEND PREVIEW -->
   <div class="veil" id="prevveil">
     <div class="viewer" role="dialog" aria-modal="true" aria-label="Context send preview">
-      <div class="vh"><span>CONTEXT // SEND PREVIEW</span><span class="rng" id="prevstat"></span><button class="btn-icon mono" type="button" id="prevclose">ESC CLOSE</button></div>
+      <div class="vh"><span>SEND PREVIEW</span><span class="rng" id="prevstat"></span><button class="btn-icon mono" type="button" id="prevclose">ESC CLOSE</button></div>
       <div class="vb" id="prevbody" tabindex="0" style="padding:14px 18px"></div>
     </div>
   </div>
@@ -292,7 +292,7 @@
   <!-- SKIPPED-FILE REVIEW -->
   <div class="veil" id="skipveil">
     <div class="modal" role="dialog" aria-modal="true" aria-label="Skipped files">
-      <div class="k mono">CONTEXT // SKIPPED FILES</div>
+      <div class="k mono">SKIPPED FILES</div>
       <p class="note" id="skipsum"></p>
       <div id="skiplist"></div>
       <div class="row"><button class="btn btn-hairline" type="button" id="skipclose">Close</button></div>
@@ -311,8 +311,8 @@
   <!-- LOCAL QUESTION MENU -->
   <div class="veil" id="localmenuveil">
     <div class="modal modal-wide" role="dialog" aria-modal="true" aria-label="What you can ask the LOCAL engine">
-      <div class="k mono">MERIDIAN // ASK LOCALLY — no AI, no network</div>
-      <p class="note mono" style="color:var(--ink-3);font-size:11px;letter-spacing:.05em;margin:0 0 14px">// click a question to drop it in the composer — items with a &lt;placeholder&gt; want a name or path before you send. These work with an AI connected too (it grounds the answer on what the engine finds).</p>
+      <div class="k mono">ASK THE LOCAL ENGINE — no AI, no network</div>
+      <p class="note" style="margin:0 0 14px">Click a question to drop it in the composer. Items with a &lt;placeholder&gt; want a name or path before you send. These work with an AI connected too; it grounds the answer on what the engine finds.</p>
       <div id="localmenubody"></div>
       <div class="row"><button class="btn btn-hairline" type="button" id="localmenuclose">Close</button></div>
     </div>
@@ -321,7 +321,7 @@
   <!-- KEYMAP -->
   <div class="veil" id="keymapveil">
     <div class="modal" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
-      <div class="k mono">MERIDIAN // KEYMAP</div>
+      <div class="k mono">KEYBOARD SHORTCUTS</div>
       <table>
         <tr><td><kbd>ctrl k</kbd></td><td>command palette</td></tr>
         <tr><td><kbd>ctrl b</kbd></td><td>show / hide the context sidebar</td></tr>
@@ -332,7 +332,7 @@
         <tr><td><kbd>?</kbd></td><td>this keymap (outside inputs)</td></tr>
         <tr><td><kbd>esc</kbd></td><td>close the topmost layer</td></tr>
       </table>
-      <p class="note mono" style="color:var(--ink-3);font-size:11px;letter-spacing:.06em;margin:10px 0 0">// also: <kbd>ctrl k</kbd> palette lists every command · copy a single answer with <b style="color:var(--ink-2)">[ COPY ]</b> in its header · reset session cost from the <b style="color:var(--ink-2)">$</b> chip · arrow keys resize the sidebar when its handle is focused</p>
+      <p class="note" style="margin:10px 0 0">Also: the <kbd>ctrl k</kbd> palette lists every command · copy a single answer with <b>[ COPY ]</b> in its header · reset session cost from the <b>$</b> chip · arrow keys resize the sidebar when its handle is focused</p>
       <div class="row"><button class="btn btn-hairline" type="button" id="keymapclose">Close</button></div>
     </div>
   </div>
@@ -341,13 +341,12 @@
   <div id="sr-announce" aria-live="polite" class="sr-only"></div>
 
   <footer class="strip">
-    <span><b>MERIDIAN</b> // FREE BETA</span>
+    <span><b>MERIDIAN</b> — FREE BETA</span>
     <a href="terms.html">TERMS</a>
     <a href="privacy.html">PRIVACY</a>
-    <a href="index.html">FRONT DOOR</a>
+    <a href="index.html">HOME</a>
     <span class="opt">NOT AFFILIATED WITH ANTHROPIC</span>
-    <!-- TODO(drew): replace [ENTITY] with your legal name or company before public launch -->
-    <span class="opt">© 2026 [ENTITY]</span>
+    <span class="opt">© 2026 Drew Osipenko</span>
   </footer>
 
 </div>

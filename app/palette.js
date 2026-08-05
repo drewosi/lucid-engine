@@ -18,7 +18,7 @@ function clearConversation() {
   if (st.streaming && st.aborter) st.aborter.abort();
   st.history.length = 0; st.transcript.length = 0;
   convoIn.innerHTML = '';
-  setStatus('CORE IDLE — conversation cleared');
+  setStatus('IDLE — conversation cleared');
   toast('Conversation cleared — loaded files stay in memory.');
 }
 var ACTIONS = [
@@ -47,7 +47,7 @@ var ACTIONS = [
   { g: 'LOCAL', n: 'Find files without tests', k: '', f: function () { askLocal('untested'); } },
   { g: 'SETTINGS', n: 'Open settings', k: 'ctrl .', f: function () { openDrawer(true); } },
   { g: 'SETTINGS', n: 'Load the demo project (LOCAL)', k: '', f: function () { startDemo(); } },
-  { g: 'SETTINGS', n: 'Toggle ceremony / daylight', k: '', f: flipMode },
+  { g: 'SETTINGS', n: 'Toggle dark / light mode', k: '', f: flipMode },
   { g: 'SETTINGS', n: 'Show keymap', k: '?', f: openKeymap },
   { g: 'SETTINGS', n: 'Open the user guide (GitHub)', k: '', f: function () { window.open('https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md', '_blank', 'noopener'); } },
   { g: 'SETTINGS', n: 'Run self-tests (dev)', k: '', f: runAndShowSelfTests }

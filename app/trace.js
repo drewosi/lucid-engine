@@ -38,7 +38,7 @@ function addUserMsg(text) {
 function addAiMsg() {
   var d = document.createElement('div');
   d.className = 'msg msg-a';
-  d.innerHTML = '<div class="term-hd mono">MERIDIAN CORE — ' + esc(MODELS[st.model].label) + ' <span class="chip"><span></span>LIVE</span></div>'
+  d.innerHTML = '<div class="term-hd mono">' + esc(MODELS[st.model].label) + ' <span class="chip"><span></span>LIVE</span></div>'
     + '<div class="bd"><div class="txt"></div></div>';
   convoIn.appendChild(d); scrollEnd();
   return d;

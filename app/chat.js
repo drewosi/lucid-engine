@@ -140,7 +140,7 @@ function ask(q, key, opts) {
   /* Phase 2: show what Meridian deterministically FOUND before the model interprets it
      — separate layer, navigable evidence. Never allowed to break the streaming path. */
   try { if (st.groundMode && cb.ground) renderFound(msgEl, cb.ground); } catch (e) {}
-  setStatus('CORE REASONING — ' + MODELS[st.model].label + (cb.note ? ' · ' + cb.note : ''));
+  setStatus('REASONING — ' + MODELS[st.model].label + (cb.note ? ' · ' + cb.note : ''));
   var anthro = st.curProvider === 'anthropic';
   /* strict trace: on demand (RE-GROUND) or when the user enables Force Strict Trace */
   var strict = opts.strict || lsGet(LS.strictTrace) === '1';
@@ -303,7 +303,7 @@ function ask(q, key, opts) {
       st.history.push({ role: 'assistant', content: parsed.answer || '(empty)' });
       st.transcript.push({ q: q, answer: parsed.answer || '(empty)', trace: parsed.trace, model: MODELS[st.model].label, provider: PROVIDERS[st.curProvider].label, ts: Date.now() });
       attachCopy(msgEl, st.transcript.length - 1);
-      setStatus('CORE IDLE — response complete');
+      setStatus('IDLE — response complete');
       announce('Response complete.' + (parsed.trace ? ' Trace available.' : ''));
       scrollEnd();
     }
@@ -311,17 +311,17 @@ function ask(q, key, opts) {
   }).catch(function (err) {
     var line;
     if (err.name === 'AbortError') {
-      line = '// stopped by operator';
+      line = '// stopped';
       paint(true);
       renderTrace(msgEl, null);
       if (raw.trim()) {
         var pa = extractTrace(raw);
         st.history.push({ role: 'user', content: q });
         st.history.push({ role: 'assistant', content: pa.answer || '(stopped)' });
-        st.transcript.push({ q: q, answer: (pa.answer || '(stopped)') + '\n\n_(stopped by operator)_', trace: pa.trace, model: MODELS[st.model].label, provider: PROVIDERS[st.curProvider].label, ts: Date.now() });
+        st.transcript.push({ q: q, answer: (pa.answer || '(stopped)') + '\n\n_(stopped)_', trace: pa.trace, model: MODELS[st.model].label, provider: PROVIDERS[st.curProvider].label, ts: Date.now() });
         attachCopy(msgEl, st.transcript.length - 1);
       }
-      setStatus('STOPPED BY OPERATOR');
+      setStatus('STOPPED');
     } else if (err.httpStatus) {
       line = '// ' + httpErrorText(err.httpStatus, err.httpBody || '', err.retryAfter);
       if (err.httpStatus === 401) openDrawer(true);

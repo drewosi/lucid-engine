@@ -535,7 +535,7 @@ function getIndex() {
   setStatus('INDEXING — reading project structure…');
   st.projectIndex = buildIndex();
   st.indexDirty = false;
-  setStatus('CORE IDLE — ' + st.files.size + ' files in memory');
+  setStatus('IDLE — ' + st.files.size + ' files in memory');
   return st.projectIndex;
 }
 
