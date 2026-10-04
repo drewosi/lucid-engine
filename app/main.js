@@ -25,6 +25,7 @@ import { initLocalMenu, closeLocalMenu, localmenuveil } from './localmenu.js';
 import { runSelfTests, runAndShowSelfTests } from './selftest.js';
 import { initShare, closeShare, openShareFromHash, shareveil } from './share.js';
 import { initWorkspace } from './workspace.js';
+import { initAnalytics, closeAnalytics, anveil } from './analytics.js';
 
 /* frame-buster — a <meta> CSP cannot carry frame-ancestors, so refuse to run
    framed: hide the document and bounce the top window to this URL (setting a
@@ -46,6 +47,7 @@ initViewer();
 initExport();
 initPalette();
 initLocalMenu(); /* "what can I ask" catalog + empty-state starter chips */
+initAnalytics(); /* opt-in usage log: settings switches, own-endpoint field, the log panel */
 
 /* ============ GLOBAL KEYS ============ */
 document.addEventListener('keydown', function (e) {
@@ -77,6 +79,7 @@ document.addEventListener('keydown', function (e) {
     if (palOv.classList.contains('on')) { palClose(); return; }
     if (localmenuveil.classList.contains('on')) { closeLocalMenu(); return; }
     if (shareveil.classList.contains('on')) { closeShare(); return; }
+    if (anveil.classList.contains('on')) { closeAnalytics(); return; }
     if (keymapveil.classList.contains('on')) { closeKeymap(); return; }
     if (viewveil.classList.contains('on')) { closeViewer(); return; }
     if (prevveil.classList.contains('on')) { closePreview(); return; }

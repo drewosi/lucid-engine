@@ -65,7 +65,7 @@
     <h1>Privacy Policy</h1>
     <p class="updated">LAST UPDATED · 03 OCT 2026 · APPLIES TO drewosi.github.io/lucid-engine</p>
 
-    <p class="lede"><b>The short version:</b> Meridian runs entirely in your browser. We operate <b>no servers</b> and therefore <b>cannot see</b> your files, your questions, your AI conversations, or your API key. The only personal data that can ever reach us is an email you choose to send us. Everything else stays on your machine or travels directly between your browser and your chosen AI provider under your own account.</p>
+    <p class="lede"><b>The short version:</b> Meridian runs entirely in your browser. We operate <b>no servers</b> and therefore <b>cannot see</b> your files, your questions, your AI conversations, or your API key. The only personal data that can ever reach us is an email you choose to send us. Everything else stays on your machine or travels directly between your browser and your chosen AI provider under your own account. The workbench's usage log is opt-in, off by default, and stays in your browser unless you point it at a collector of your own.</p>
 
     <section>
       <h2><span class="idx">§01</span>Who we are</h2>
@@ -92,9 +92,11 @@
         <tr><td>meridian.model</td><td>Your chosen model.</td><td>Settings → clear-all button</td></tr>
         <tr><td>meridian.app.mode</td><td>Color mode preference (workbench).</td><td>Settings → clear-all button</td></tr>
         <tr><td>meridian.accepted</td><td>A timestamp recording that you accepted the terms on first run.</td><td>Settings → clear-all button</td></tr>
+        <tr><td>meridian.analytics</td><td>Whether the opt-in usage log is on, whether it also stores question text, and your own endpoint URL if you entered one (see §07). Off and blank unless you change them.</td><td>Settings → clear-all button</td></tr>
       </table>
       <p>The workbench settings panel includes a single button that removes every Meridian key from your browser, including any entry left in localStorage by an earlier version of the site. Loaded project files and conversation history are held in memory only and are gone when the tab closes.</p>
       <p>If you save a project or a multi-repo workspace, its record is kept in your browser's IndexedDB: the name you give it, repo names, file and token counts, the list of files you unticked, your ignore patterns and context settings, and, in Chromium browsers, a folder handle that the browser asks your permission to reuse. Never file contents: reloading a saved workspace asks you to pick each folder again. Delete a saved entry with its ✕, or everything with the clear-all button.</p>
+      <p>If you turn on the optional usage log (§07), its events are also kept in your browser's IndexedDB, in a separate database. It is off by default and holds nothing until you turn it on.</p>
     </section>
 
     <section>
@@ -123,13 +125,21 @@
     <section>
       <h2><span class="idx">§07</span>Cookies and analytics</h2>
       <p><b>We set no cookies.</b> There are no advertising trackers, no social pixels, no fingerprinting.</p>
-      <p>Analytics are <b>currently disabled</b>. If we ever enable them, it will be a cookieless, privacy-respecting counter, and this policy will say so first. The site is hosted on GitHub Pages; GitHub may log standard web-server data (such as IP addresses) to operate the service — see the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>. The workbench page loads no third-party assets or scripts at all: every request it makes goes to GitHub Pages (the page itself) or, when you ask a question, directly to your chosen model provider under your own key.</p>
+      <p><b>We run no analytics on this site and receive no usage data.</b> If that ever changes, this policy will say so first. The site is hosted on GitHub Pages; GitHub may log standard web-server data (such as IP addresses) to operate the service (see the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>). The workbench page loads no third-party assets or scripts at all: every request it makes goes to GitHub Pages (the page itself), directly to your chosen model provider under your own key when you ask a question, or, only if you set one up yourself, to your own analytics endpoint (below).</p>
+      <p><b>Opt-in usage log (workbench).</b> The workbench can keep a log of how you use it, for you. It is <b>off by default</b>, and while it is off nothing is recorded. When you turn it on in Settings, each event is stored in your browser's IndexedDB and nowhere else:</p>
+      <ul>
+        <li><b>Stored:</b> the time, the kind of question (for example "definition" or "import cycles"), the provider, whether the LOCAL engine or a model answered, how long the answer took, token counts if the provider reported them, how many repos were loaded and the question scope, the number of loaded files, and when you created a share link, saved a share bundle or added a repo.</li>
+        <li><b>Never stored:</b> code or file contents, file paths, or API keys.</li>
+        <li><b>Question text</b> is stored only if you also turn on a second switch, "Also store question text", which is off by default. It is cut to 300 characters, and anything that looks like a key is removed.</li>
+        <li><b>Export and delete:</b> the usage-log panel exports everything as JSON or CSV and has a "Clear all data" button. The settings clear-all button deletes the log as well.</li>
+      </ul>
+      <p><b>Your own endpoint (optional).</b> Settings has a URL field for people who run their own collector. It is blank by default. Only when you fill it in and the usage log is on does the workbench send the same events (question text only if you store it) to that URL. That is the only network request the usage log ever makes, and it goes to a server you chose, never to us: there is no collection server of ours in the code. Events from LOCAL mode are never sent. On the hosted site this page's security policy only allows a collector on your own machine (localhost). Whoever runs that endpoint is responsible for what happens to the data there.</p>
     </section>
 
     <section>
       <h2><span class="idx">§08</span>Your rights — GDPR (EEA/UK)</h2>
       <p>If you are in the EEA or UK: for any email correspondence you send us, Drew Osipenko is the data controller, processing on the basis of your consent (Art. 6(1)(a) GDPR), which you can withdraw at any time. You have the rights of access, rectification, erasure, restriction, portability, and objection, and the right to lodge a complaint with your supervisory authority.</p>
-      <p>To exercise any of them, email <a href="mailto:drewosipenko@gmail.com">drewosipenko@gmail.com</a>. Note that apart from email you send us, your data never reaches us — access and erasure are self-service via the clear buttons described in §03, and processing by your AI provider under your own account is governed by your relationship with that provider.</p>
+      <p>To exercise any of them, email <a href="mailto:drewosipenko@gmail.com">drewosipenko@gmail.com</a>. Note that apart from email you send us, your data never reaches us: access and erasure are self-service via the clear buttons described in §03 and the usage-log export and clear buttons in §07, and processing by your AI provider under your own account is governed by your relationship with that provider.</p>
     </section>
 
     <section>

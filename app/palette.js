@@ -12,6 +12,7 @@ import { runAndShowSelfTests } from './selftest.js';
 import { openShare } from './share.js';
 import { addRepo, setScope } from './workspace.js';
 import { isMulti } from './repos.js';
+import { openAnalytics } from './analytics.js';
 
 /* ============ COMMAND PALETTE (Ctrl/Cmd-K) ============
    Every palette action also exists as a visible control — the palette is
@@ -56,6 +57,7 @@ var ACTIONS = [
   { g: 'SETTINGS', n: 'Open settings', k: 'ctrl .', f: function () { openDrawer(true); } },
   { g: 'SETTINGS', n: 'Load the demo project (LOCAL)', k: '', f: function () { startDemo(); } },
   { g: 'SETTINGS', n: 'Toggle dark / light mode', k: '', f: flipMode },
+  { g: 'SETTINGS', n: 'View usage analytics (opt-in, this browser only)', k: '', f: openAnalytics },
   { g: 'SETTINGS', n: 'Show keymap', k: '?', f: openKeymap },
   { g: 'SETTINGS', n: 'Open the user guide (GitHub)', k: '', f: function () { window.open('https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md', '_blank', 'noopener'); } },
   { g: 'SETTINGS', n: 'Run self-tests (dev)', k: '', f: runAndShowSelfTests }

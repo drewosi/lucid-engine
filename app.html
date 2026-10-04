@@ -270,8 +270,24 @@
     <h3>DISPLAY</h3>
     <button class="btn-mode mono" id="modebtn2" type="button" aria-label="Toggle color mode">MODE: DARK</button>
 
+    <h3>USAGE ANALYTICS</h3>
+    <p class="note">Off by default. When on, Meridian keeps a log of how you use it in this browser's IndexedDB: when you asked, the kind of question, the provider, LOCAL or model, timings, token counts the provider reported, how many repos were loaded, and when you created a share or added a repo. Never code, file paths or API keys. Nothing is sent anywhere unless you fill in your own endpoint below.</p>
+    <div class="an-tgls">
+      <button class="btn-quiet acc" type="button" id="anbtn" aria-pressed="false" title="Keep a usage log in this browser. Off by default; when off, nothing is recorded.">[ USAGE ANALYTICS: OFF ]</button>
+      <button class="btn-quiet acc" type="button" id="antextbtn" aria-pressed="false" title="Also keep the text of each question in the log. Off by default.">[ ALSO STORE QUESTION TEXT: OFF ]</button>
+      <button class="btn-quiet acc" type="button" id="anopen" title="Totals, breakdowns, latency and recent events, with JSON / CSV export and clear">[ VIEW USAGE LOG ]</button>
+    </div>
+    <p class="note">Question text is a separate switch. When on, each question is stored as you typed it, cut to 300 characters, with anything that looks like a key removed.</p>
+    <p class="note"><b>Send events to my own endpoint</b> (optional, blank by default). For owners who self-host a collector. When this is filled in and analytics is on, the same events are POSTed as JSON to this URL (question text only if you store it). It is the only network request analytics ever makes; Meridian has no collection server of its own. Events from LOCAL mode are never sent. A failed send is dropped (the local log keeps it) and sending pauses before the next try. This page's security policy allows localhost only, so a remote collector needs a self-hosted copy with its origin added to connect-src.</p>
+    <div class="key-row">
+      <label for="anurl" class="sr-only">Your own analytics endpoint URL</label>
+      <input type="text" id="anurl" placeholder="blank = off, e.g. http://localhost:8787/events" autocomplete="off" spellcheck="false">
+      <button class="btn btn-hairline" type="button" id="anurlsave">Save</button>
+    </div>
+    <p class="note" id="anurlstate" aria-live="polite"></p>
+
     <h3>LOCAL DATA</h3>
-    <p class="note">Everything Meridian stores in this browser: your API key(s), model choice, color mode, context settings, sidebar layout, ignore patterns, the terms-acceptance record, and saved-project metadata in IndexedDB (selection and settings, never file contents). Loaded file contents and the conversation live in memory only and vanish when the tab closes.</p>
+    <p class="note">Everything Meridian stores in this browser: your API key(s), model choice, color mode, context settings, sidebar layout, ignore patterns, the terms-acceptance record, saved-project metadata in IndexedDB (selection and settings, never file contents) and, only if you turn it on, the usage log. Loaded file contents and the conversation live in memory only and vanish when the tab closes (question text is kept only if you switch on that usage-log option).</p>
     <button class="btn-quiet" type="button" id="clearall">[ CLEAR ALL MERIDIAN DATA FROM THIS BROWSER ]</button>
 
     <h3>LEGAL</h3>
@@ -368,6 +384,23 @@
         <button class="btn btn-signal" type="button" id="sharecopy">Copy link</button>
         <button class="btn btn-hairline" type="button" id="sharebundle" title="A .meridian file with the same contents as readable JSON. No size limit: send it as a file.">Download bundle</button>
         <button class="btn btn-hairline" type="button" id="shareclose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- USAGE ANALYTICS — opt-in, local-only log, rendered by app/analytics.js -->
+  <div class="veil" id="anveil">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="an-title">
+      <div class="k mono">USAGE ANALYTICS · THIS BROWSER ONLY</div>
+      <h2 id="an-title">How Meridian has been used here.</h2>
+      <p class="note" id="anstate" aria-live="polite"></p>
+      <div id="anbody"></div>
+      <p class="prev-note">// stored: time, question kind, provider, LOCAL or model, timings, token counts, repo count and scope, shares and repo adds. never code, file paths or keys. question text only if you switched it on.</p>
+      <div class="row">
+        <button class="btn btn-hairline" type="button" id="anjson">Export JSON</button>
+        <button class="btn btn-hairline" type="button" id="ancsv">Export CSV</button>
+        <button class="btn btn-hairline" type="button" id="anclear">Clear all data</button>
+        <button class="btn btn-hairline" type="button" id="anclose">Close</button>
       </div>
     </div>
   </div>

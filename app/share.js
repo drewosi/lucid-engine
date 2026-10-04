@@ -7,6 +7,7 @@ import { convoIn } from './trace.js';
 import { setProvider } from './shell.js';
 import { download } from './export.js';
 import { LOOSE, cleanLabel, isMulti, registerRepo, repoList, repoName, repoOf, scopeFilter, scopeRepo } from './repos.js';
+import { track } from './analytics.js';
 /* ============ SHARE (LINK + BUNDLE, NO SERVER) ============
    Packs a snapshot of the loaded project (paths, file text, last-modified
    times, and a display name; nothing else) into either
@@ -417,6 +418,7 @@ function copyShareLink() {
     $('sharelinkrow').hidden = false;
     copyText(m.url, 'Share link copied. Anyone who has it can read the ' + shareSel.size + ' file' + (shareSel.size === 1 ? '' : 's') + ' inside.');
     inp.focus(); inp.select();
+    track({ type: 'share_link', files: shareSel.size }); /* opt-in usage log: a count, never the link */
   }
   /* reuse the measurement when it is current, so the copy stays inside the click */
   if (shareLast && shareLast.paths.length === shareSel.size) {
@@ -431,6 +433,7 @@ function downloadBundle() {
   var payload = buildSharePayload(Array.from(shareSel));
   var fname = (payload.name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'project') + '.meridian';
   download(fname, 'application/json', bundleText(payload));
+  track({ type: 'share_bundle', files: payload.files.length });
   toast('Bundle saved as ' + fname + '. Anyone who has the file can read the ' + payload.files.length + ' file' + (payload.files.length === 1 ? '' : 's') + ' inside.');
 }
 function openShare() {

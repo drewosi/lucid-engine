@@ -435,6 +435,47 @@ removed from the address bar once loaded, so it isn't passed on by accident. Ask
 questions as usual, with **LOCAL** (no key) or your own key. Loading your own
 folder replaces it.
 
+### Usage analytics (opt-in, off by default)
+
+MERIDIAN can keep a log of how you use it, **in your browser only**. It is off
+until you turn it on, and while it is off nothing is recorded at all.
+
+- **Turn it on:** **⚙ SETTINGS → USAGE ANALYTICS → [ USAGE ANALYTICS: ON ]**.
+- **What is stored**, per event, in this browser's IndexedDB: the time, the kind of
+  question (the same intent the LOCAL engine routes by, like `def` or `cycles`),
+  the provider, whether LOCAL or a model answered, how long it took (time to the
+  first word and to the full answer), token counts if the provider reported them,
+  how many repos were loaded and the question scope, and when you created a share
+  link, saved a bundle or added a repo.
+- **What is never stored:** code, file paths or API keys.
+- **Question text** has its own switch, **[ ALSO STORE QUESTION TEXT ]**, also off
+  by default. When on, each question is kept as you typed it, cut to 300
+  characters, with anything that looks like a key removed.
+- **See it:** **[ VIEW USAGE LOG ]** (or `Ctrl-K` → "usage analytics") shows
+  totals, a breakdown by question kind and by provider, LOCAL vs model, median and
+  90th-percentile latency, and the most recent events.
+- **Export or delete it:** the same panel has **Export JSON**, **Export CSV** and
+  **Clear all data**. Turning analytics off keeps the existing log until you clear
+  it. The settings clear-all button deletes it too. The log keeps the latest
+  5,000 events.
+
+**Send events to my own endpoint (optional).** This field is blank by default and
+is meant for people who run their own copy of MERIDIAN and their own collector.
+When you fill it in and analytics is on, the same events are sent as JSON
+(`POST`, a small batch every few seconds) to that URL, with question text only if
+you store it. That is the only network request analytics ever makes. MERIDIAN has
+no collection server; the URL is yours or nothing.
+
+- Events from **LOCAL** mode are never sent, so LOCAL stays network-free.
+- If a send fails, that batch is dropped (it stays in your local log) and sending
+  pauses for a minute, then longer after each further failure, up to 30 minutes.
+  It never retries in a loop.
+- The hosted page's security policy only allows `localhost`, so on
+  drewosi.github.io a collector must run on your machine (e.g.
+  `http://localhost:8787/events`). For a remote collector, self-host and add its
+  origin to `connect-src` ([§13](#13-run-it-on-your-own-machine)). The collector
+  must allow browser CORS from the page's origin.
+
 **Session cost**: a live `$` estimate in the top bar tracks spend as answers
 stream (prompt-cache aware). Click the reset arrow to zero it. Estimates only;
 your provider bills the real amount.
@@ -494,10 +535,13 @@ tag, the app also runs a **frame-buster** and refuses to run inside an iframe.
 (Residual risk: no CSP directive restricts top-level navigation. CSP narrows
 the attack surface; it doesn't make key theft impossible.)
 
-**Self-tests.** A deterministic suite (**200+ checks**) exercises the index,
+**Self-tests.** A deterministic suite (**350+ checks**) exercises the index,
 smart packer, intent router, the analyses/instruments, the resolvers, the ingest
-caps, the bounded search, and the trace parser against a bundled multi-language
-fixture, with no network and no API. Run it three ways: the palette → **"Run self-tests
+caps, the bounded search, share links, workspaces, usage analytics (off by
+default, no writes while off, nothing sensitive stored, export, clear, no
+network with a blank endpoint) and the trace parser against a bundled
+multi-language fixture, with no network and no API. The run uses a scratch
+analytics store, so it never touches your real usage log. Run it three ways: the palette → **"Run self-tests
 (dev)"**, append **`?selftest`** to the URL, or call `__meridianSelfTest()` in the
 browser console. Headless in CI via `scripts/run-selftests.mjs` (GitHub Actions on
 every push/PR).
@@ -542,7 +586,8 @@ Self-hosting lifts that in one edit:
 
 Nothing else. Same files, same zero-dependency build (none), same behavior:
 `app.html` still loads **no third-party scripts** and makes no requests except
-to the providers you configured. Neither does the landing page.
+to the providers you configured (and, only if you set one, your own analytics
+endpoint). Neither does the landing page.
 
 ---
 
@@ -579,7 +624,8 @@ to the providers you configured. Neither does the landing page.
 - **Bring your own key.** Requests go directly from your browser to the provider's
   API under your account. Keys live in `localStorage` only, one per provider.
 - **Zero egress to us.** File contents and conversations exist in tab memory and
-  vanish on close. Saved projects and workspaces persist **metadata only**
+  vanish on close (unless you switch on storing question text in the usage log,
+  which keeps only your questions, in this browser). Saved projects and workspaces persist **metadata only**
   (repo names, counts, selection + settings) in IndexedDB.
 - **LOCAL uses no network at all.** And the workbench page loads **zero
   third-party scripts**.
@@ -587,6 +633,11 @@ to the providers you configured. Neither does the landing page.
   which never reaches any server (GitHub Pages included), but whoever holds the
   link or `.meridian` file can read the files in it. Keys and settings are never
   included. See [§10](#10-save-reload-export).
+- **Usage analytics are opt-in and local.** Off by default. When on, a usage log
+  (question kind, provider, timings, counts; never code, paths or keys; question
+  text only with its own switch) is kept in this browser's IndexedDB, and you can
+  export or clear it. Nothing is sent anywhere unless you enter your own endpoint,
+  and LOCAL-mode events are never sent. See [§10](#10-save-reload-export).
 
 That architecture is the privacy model: not a policy you have to trust, but how
 the thing is built.

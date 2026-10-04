@@ -10,6 +10,7 @@ import { INSTRUCTIONS, buildInvestigationBlock, buildPinnedBlock } from './promp
 import { openBundleFile, syncSharedUI } from './share.js';
 import { dropRepoFiles, hasRepo, isMulti, registerRepo, remapRoot, repoList, repoName, resetWorkspace, scopeFilter, scopeRepo, uniqueLabel, withScope } from './repos.js';
 import { afterWorkspaceIngest, pendingLabelFor, renderWorkspace } from './workspace.js';
+import { track } from './analytics.js';
 /* ============ CONTEXT ENGINE ============ */
 var SKIP_LIST_MAX = 500;
 function recordSkip(path, reason, size, ref) {
@@ -258,7 +259,11 @@ function claimLabel(name, forced, handle) {
     dropRepoFiles(forced);
     registerRepo(forced, handle);
     if (wasActive) st.ws.active = forced;
-  } else registerRepo(label, handle);
+  } else {
+    var joining = st.repos.length >= 1; /* beside a loaded repo, not a first load or a replace */
+    registerRepo(label, handle);
+    if (joining) track({ type: 'repo_added', repos: st.repos.length }); /* opt-in usage log: a count, never the name */
+  }
   return label;
 }
 /* how a picked/dropped folder joins: straight in when nothing is loaded (or a

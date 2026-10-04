@@ -505,6 +505,20 @@
   .share-ack { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: 13px; color: var(--ink); cursor: pointer; line-height: 1.5; }
   .share-ack input { accent-color: var(--accent); margin: 3px 0 0; flex: none; }
 
+  /* ============ USAGE ANALYTICS — settings switches + the log panel ============
+     Switches reuse the drawer's [ … : ON ] quiet buttons; the panel reuses the
+     stat grid, the preview rows and section heads. Tiles here are readouts. */
+  .an-tgls { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: 4px 0; }
+  .btn-quiet:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-quiet:disabled:hover { color: var(--ink-3); }
+  #anbody { margin-top: 12px; }
+  #anbody .stat-tile { cursor: default; }
+  #anbody .stat-tile:hover { background: var(--surface); }
+  #anbody .stat-tile:hover .sv { color: var(--ink); }
+  #anbody .prev-row .pt { font-size: 10.5px; color: var(--ink-2); }
+  #anbody .prev-note { color: var(--ink-3); overflow-wrap: anywhere; padding-left: 12px; }
+  #anveil .modal > .prev-note { margin-top: 14px; font-size: 10.5px; color: var(--ink-3); }
+
   /* ============ PROJECT INTELLIGENCE OVERVIEW (lives in the rail) ============ */
   #overview { border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); padding: 12px 12px 14px; margin: 22px 0 0; }
   .ov-hd { font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin-bottom: 12px; line-height: 1.6; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; }

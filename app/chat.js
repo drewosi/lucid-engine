@@ -4,7 +4,8 @@ import { $, announce, fmtTok, lsGet, setStatus, toast } from './helpers.js';
 import { curKeyLS, openDrawer } from './shell.js';
 import { estTokens, getBudget } from './smart-context.js';
 import { selectedTokens } from './ingest.js';
-import { askLocal } from './local.js';
+import { askLocal, classifyIntent } from './local.js';
+import { analyticsOn, track } from './analytics.js';
 import { addAiMsg, addUserMsg, atBottom, attachCopy, extractTrace, renderFound, renderRich, renderTrace, scrollEnd } from './trace.js';
 import { FENCE, INSTRUCTIONS, STRICT_SUFFIX, buildContextBlocks } from './prompt.js';
 /* ============ COST ============ */
@@ -135,6 +136,14 @@ function ask(q, key, opts) {
   st.streaming = true;
   sendbtn.hidden = true; stopbtn.hidden = false;
   st.aborter = new AbortController();
+  /* opt-in usage log: timings + reported tokens for this one request. The intent
+     is classified only while analytics is on; track() is a no-op otherwise. */
+  var an = { t0: performance.now(), tFirst: 0, tin: 0, tout: 0, provider: st.curProvider, model: st.model, intent: null };
+  if (analyticsOn()) { try { an.intent = classifyIntent(q).kind; } catch (e) { an.intent = 'other'; } }
+  function logQuestion(outcome) {
+    track({ type: 'question', engine: 'model', provider: an.provider, model: an.model, intent: an.intent, outcome: outcome,
+      latencyMs: an.tFirst ? an.tFirst - an.t0 : null, durationMs: performance.now() - an.t0, tokensIn: an.tin || null, tokensOut: an.tout || null, q: q });
+  }
 
   var cb = buildContextBlocks(q);
   /* Phase 2: show what Meridian deterministically FOUND before the model interprets it
@@ -253,9 +262,10 @@ function ask(q, key, opts) {
       if (eff.usage) {
         st.spent.in += eff.usage.in; st.spent.out += eff.usage.out;
         st.spent.cacheW += eff.usage.cacheW; st.spent.cacheR += eff.usage.cacheR;
+        an.tin += eff.usage.in + eff.usage.cacheW + eff.usage.cacheR; an.tout += eff.usage.out;
         renderCost();
       }
-      if (eff.text) { raw += eff.text; paint(false); }
+      if (eff.text) { if (!an.tFirst) an.tFirst = performance.now(); raw += eff.text; paint(false); }
       if (eff.stopReason) stopReason = eff.stopReason;
     }
     function pump() {
@@ -303,12 +313,14 @@ function ask(q, key, opts) {
       st.history.push({ role: 'assistant', content: parsed.answer || '(empty)' });
       st.transcript.push({ q: q, answer: parsed.answer || '(empty)', trace: parsed.trace, model: MODELS[st.model].label, provider: PROVIDERS[st.curProvider].label, ts: Date.now() });
       attachCopy(msgEl, st.transcript.length - 1);
+      logQuestion('ok');
       setStatus('IDLE — response complete');
       announce('Response complete.' + (parsed.trace ? ' Trace available.' : ''));
       scrollEnd();
     }
     return pump();
   }).catch(function (err) {
+    logQuestion(err.name === 'AbortError' ? 'stopped' : 'error');
     var line;
     if (err.name === 'AbortError') {
       line = '// stopped';
