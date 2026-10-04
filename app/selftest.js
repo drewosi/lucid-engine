@@ -1,7 +1,7 @@
 import { estTokens, packSmartContext, staticScore } from './smart-context.js';
 import { buildIndex, detectLang } from './indexer.js';
 import { invalidateAll, st } from './state.js';
-import { SAMPLE_PROJECT } from './demo.js';
+import { SAMPLE_PROJECT, wantsDemo } from './demo.js';
 import { classifyIntent } from './local.js';
 import { INTENTS, LOCAL_MENU, LOCAL_STARTERS, listOrphans, runInvestigation } from './intents.js';
 import { extractTrace } from './trace.js';
@@ -272,6 +272,16 @@ function workspaceFixture() {
     'beta/src/index.js': "import { startAlpha } from '@acme/alpha';\nexport function startBeta() { return startAlpha(); }",
     'beta/src/util.js': 'export function formatDate(d) { return "beta" + d; }\n// BETA_ONLY_MARKER'
   };
+}
+/* the landing page's demo link (app.html?demo): which URLs start the demo, and
+   that a #share= link is never shadowed by it */
+function demoLinkCases(ok) {
+  ok('demo link · ?demo starts the demo', wantsDemo('?demo', '') === true);
+  ok('demo link · ?demo=1 and a later ?x&demo param also work', wantsDemo('?demo=1', '') && wantsDemo('?x=1&demo', ''));
+  ok('demo link · no param, no demo', wantsDemo('', '') === false && wantsDemo('?selftest', '') === false);
+  ok('demo link · a longer param name is not a match', wantsDemo('?demolition', '') === false && wantsDemo('?nodemo', '') === false);
+  ok('demo link · a #share= link wins over ?demo', wantsDemo('?demo', '#share=v1.abc') === false);
+  ok('demo link · an unrelated hash does not block it', wantsDemo('?demo', '#top') === true);
 }
 function workspaceCases(ok) {
   var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty, bytes: st.totalBytes, skipList: st.skippedFiles, skipped: st.skipped,
@@ -997,6 +1007,7 @@ function runSelfTests() {
     ok('http · 529 overloaded', httpErrorText(529, '').indexOf('PROVIDER OVERLOADED') === 0);
     /* multi-repo workspace — self-contained scratch state, restored on exit */
     workspaceCases(ok);
+    demoLinkCases(ok);
   } catch (e) {
     ok('harness executed without throwing', false, String(e && e.message || e));
     restore();

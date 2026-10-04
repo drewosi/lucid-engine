@@ -85,7 +85,9 @@ That's the **LOCAL** engine, and it's the best place to start.
 1. Open the app: https://drewosi.github.io/lucid-engine/app.html
    (first visit shows a one-time welcome; accept to continue).
 2. Click **Load the demo project** (on the welcome screen, or press `Ctrl-K` and
-   type "demo"). A tiny sample project loads instantly.
+   type "demo"). A tiny sample project loads instantly. Shortcut: open
+   https://drewosi.github.io/lucid-engine/app.html?demo and the demo starts by
+   itself (on a first visit, accept the welcome with the demo button).
 3. The provider is already **LOCAL**: no key, no AI, no network. Type a question
    in the box at the bottom and press **Enter**:
    - `where is addTodo defined`

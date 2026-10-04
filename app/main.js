@@ -15,7 +15,7 @@ import { st } from './state.js';
 import { $ } from './helpers.js';
 import { initShell, syncProviderUI, openDrawer, drawer, rail, railbtn, toggleRail } from './shell.js';
 import { initIngest, setCtxMode, closePreview, closeSkipReview, prevveil, skipveil } from './ingest.js';
-import { initDemo } from './demo.js';
+import { initDemo, openDemoFromUrl } from './demo.js';
 import { initMemory } from './memory.js';
 import { initChat } from './chat.js';
 import { initViewer, closeViewer, viewveil } from './viewer.js';
@@ -91,6 +91,7 @@ document.addEventListener('keydown', function (e) {
 
 syncProviderUI();
 setCtxMode(st.ctxMode); /* also renders the budget */
+openDemoFromUrl();      /* app.html?demo: the landing page's demo link; ignored when a #share= link is present */
 openShareFromHash();    /* app.html#share=… — decoded in this tab, then the fragment is cleared */
 window.__meridianSelfTest = runSelfTests; /* L3: run from the console (async — returns a Promise of results) */
 if (/[?&]selftest\b/.test(location.search)) setTimeout(runAndShowSelfTests, 300);
