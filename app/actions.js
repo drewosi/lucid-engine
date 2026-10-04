@@ -1,6 +1,7 @@
 import { openViewer } from './viewer.js';
 import { st } from './state.js';
 import { fmtTok, toast } from './helpers.js';
+import { displayPath, resolveCitePath } from './repos.js';
 /* ============ PROPOSED ACTIONS (EXPERIMENTAL INSTRUMENT) ============
    The model may suggest read-only actions in its trace JSON. Nothing runs
    without an explicit click:
@@ -14,7 +15,7 @@ function actGlobToRe(g) {
 function evChip(resEl, label, path, line) {
   var b = document.createElement('button');
   b.type = 'button'; b.className = 'ev mono';
-  b.textContent = label;
+  b.textContent = label.indexOf(path) === 0 ? displayPath(path) + label.slice(path.length) : label; /* repo:path in a workspace */
   b.addEventListener('click', function () { openViewer(path, line || 1, line || 1); });
   resEl.appendChild(b);
   return b;
@@ -168,6 +169,7 @@ function renderActions(bd, actions) {
       run.addEventListener('click', function () { K.run(a, res); });
       row.appendChild(run);
     } else if (kind === 'open') {
+      a.command = resolveCitePath(a.command); /* a workspace "repo:path" or label-less path */
       var op = document.createElement('button');
       op.type = 'button'; op.className = 'ev mono' + (st.files.has(a.command) ? '' : ' dead');
       op.textContent = '[ OPEN ]';

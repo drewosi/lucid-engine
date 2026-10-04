@@ -4,6 +4,7 @@ import { dirOf, fileExt, getIndex } from './indexer.js';
 import { localSearchData, searchLimitNote } from './actions.js';
 import { makeFingerprint, projectSig } from './drift.js';
 import { fmtTok } from './helpers.js';
+import { isMulti, repoName, resolveCitePath, withFull, workspaceFacts } from './repos.js';
 /* ============ INTENT REGISTRY (DETERMINISTIC REASONING INSTANCES) ============
    The single source of truth for every deterministic reasoning instance the
    LOCAL engine knows. Each entry is one self-contained intent:
@@ -19,7 +20,7 @@ import { fmtTok } from './helpers.js';
    Adding a reasoning instance = adding ONE entry here. DOM-free by design so
    the registry is reusable from the grounding bridge and the self-tests.     */
 
-var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Dependency graph (cycles · hubs · orphans · broken imports · paths)', 'Code health (TODOs · env vars · duplicates · hotspots)', 'Exports & coverage gaps', 'Signals digest', 'Session drift', 'Evidence collection'];
+var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Dependency graph (cycles · hubs · orphans · broken imports · paths)', 'Code health (TODOs · env vars · duplicates · hotspots)', 'Exports & coverage gaps', 'Signals digest', 'Session drift', 'Cross-repo comparison', 'Evidence collection'];
 var CAP_MODEL = ['Architectural reasoning', 'Natural-language synthesis', 'Root-cause analysis', 'Refactoring recommendations'];
 
 function localEvidence(h) {
@@ -34,6 +35,7 @@ function evAt(file, line) { return { file: file, startLine: line, endLine: line,
 /* resolve a natural-language argument to a loaded file path (basename-aware) */
 function resolveToFile(arg) {
   if (!arg) return null;
+  arg = resolveCitePath(arg); /* accepts the workspace "repo:path" form */
   if (st.files.has(arg)) return arg;
   var base = arg.slice(arg.lastIndexOf('/') + 1).toLowerCase(), la = arg.toLowerCase();
   var exact = null, contains = null;
@@ -78,7 +80,7 @@ function pickSymbol(q, idx) {
 function pickPathish(q) {
   var bt = q.match(/`([^`]+)`/); if (bt) return bt[1].trim();
   var qq = q.match(/["“”']([^"“”']+)["“”']/); if (qq) return qq[1].trim();
-  var withExt = q.match(/[\w./-]*[\w-]\.[A-Za-z]{1,6}\b/); if (withExt) return withExt[0];
+  var withExt = q.match(/[\w./:-]*[\w-]\.[A-Za-z]{1,6}\b/); if (withExt) return withExt[0]; /* ':' keeps a "repo:path" whole */
   var withSlash = q.match(/[\w.-]+\/[\w./-]+/); if (withSlash) return withSlash[0];
   return pickSymbol(q);
 }
@@ -296,6 +298,49 @@ function testStem(p) {
 }
 function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
 
+/* the cross-repo investigation: per-repo stats, shared dependencies, repo links,
+   cross-repo imports and shared exported names, every row pinned to evidence */
+function workspaceRun(idx) {
+  if (!isMulti()) {
+    return { steps: [{ action: 'read the workspace', note: 'one project loaded', evidence: [], status: 'done' }], verdict: LOCAL_VERDICT(),
+      answer: 'Only one project is loaded, so there is nothing to compare across repos. Add another folder with **[ + ADD REPO ]** under WORKSPACE in the rail, then ask `workspace` again.' };
+  }
+  var f = workspaceFacts(idx), steps = [];
+  function names(rs) { return rs.map(function (r) { return '`' + repoName(r) + '`'; }).join(', '); }
+  var total = 0;
+  f.repos.forEach(function (r) { total += r.files; });
+  var entryEv = [];
+  f.repos.forEach(function (r) { r.entries.slice(0, 2).forEach(function (p) { entryEv.push(evAt(p, 1)); }); });
+  steps.push({ action: 'read each repo\'s index', note: plural(f.repos.length, 'repo') + ' · ' + plural(total, 'file'), evidence: entryEv.slice(0, 8), status: 'done' });
+  var depEv = [];
+  f.sharedDeps.slice(0, 4).forEach(function (d) { d.ev.forEach(function (e) { depEv.push(evAt(e.file, e.line)); }); });
+  f.links.slice(0, 4).forEach(function (l) { depEv.push(evAt(l.file, l.line)); });
+  steps.push({ action: 'compare dependency manifests', note: f.sharedDeps.length + ' shared ' + (f.sharedDeps.length === 1 ? 'dependency' : 'dependencies') + ' · ' + plural(f.links.length, 'repo link'), evidence: depEv.slice(0, 8), status: 'done' });
+  steps.push({ action: 'trace imports that cross repos', note: f.crossImports.length ? plural(f.crossImports.length, 'repo pair') : 'none resolved', evidence: f.crossImports.slice(0, 6).map(function (c) { return evAt(c.file, c.line); }), status: 'done' });
+  var nameEv = [];
+  f.sharedNames.slice(0, 4).forEach(function (n) { n.ev.forEach(function (e) { nameEv.push(evAt(e.file, e.line)); }); });
+  steps.push({ action: 'match exported names across repos', note: plural(f.sharedNames.length, 'name'), evidence: nameEv.slice(0, 8), status: 'done' });
+  var ans = '**Workspace:** ' + plural(f.repos.length, 'repo') + ', ' + plural(total, 'file') + '. Each repo has its own index; this answer reads them together.\n\n'
+    + '**Repos**\n' + f.repos.map(function (r) {
+      var langs = Object.keys(r.langs).filter(function (l) { return l !== 'other'; }).sort(function (a, b) { return r.langs[b] - r.langs[a]; }).slice(0, 3);
+      return '- `' + r.name + '`: ' + plural(r.files, 'file') + (langs.length ? ' · ' + langs.map(function (l) { return l + ' (' + r.langs[l] + ')'; }).join(', ') : '')
+        + ' · ' + plural(r.entries.length, 'entry point') + ' · ' + plural(r.tests, 'test file') + ' · ' + plural(r.symbols, 'symbol')
+        + (r.packages.length ? ' · publishes ' + r.packages.slice(0, 3).map(function (p) { return '`' + p + '`'; }).join(', ') : '');
+    }).join('\n') + '\n\n'
+    + '**Shared dependencies** (declared by 2+ repos): ' + (f.sharedDeps.length
+      ? f.sharedDeps.slice(0, 12).map(function (d) { return '`' + d.name + '` (' + names(d.repos) + ')'; }).join(', ') + (f.sharedDeps.length > 12 ? ', +' + (f.sharedDeps.length - 12) + ' more' : '')
+      : 'none found in package.json, requirements.txt, go.mod, Cargo.toml, composer.json or Gemfile') + '\n'
+    + (f.links.length ? '**Repo links** (a dependency another loaded repo publishes): ' + f.links.slice(0, 8).map(function (l) { return '`' + repoName(l.from) + '` → `' + repoName(l.to) + '` via `' + l.pkg + '`'; }).join(', ') + '\n' : '')
+    + '**Cross-repo imports:** ' + (f.crossImports.length
+      ? f.crossImports.slice(0, 8).map(function (c) { return '`' + repoName(c.from) + '` → `' + repoName(c.to) + '` ×' + c.count; }).join(', ')
+      : 'none resolved. Each repo\'s imports stay inside it, or point at packages that are not loaded here') + '\n'
+    + '**Exported in 2+ repos:** ' + (f.sharedNames.length
+      ? f.sharedNames.slice(0, 10).map(function (n) { return '`' + n.name + '` (' + names(n.repos) + ')'; }).join(', ')
+      : 'none') + '\n\n'
+    + 'For one repo\'s own `signals`, `cycles` or `orphans`, set [ ASK ] under WORKSPACE to that repo. Deterministic, from the index and the manifests; manifest parsing is line-based, so unusual formats can be missed.';
+  return { steps: steps, verdict: LOCAL_VERDICT(), answer: ans };
+}
+
 /* ---- The registry. Array order IS the natural-language routing cascade. ---- */
 var INTENTS = [
 
@@ -306,6 +351,12 @@ var INTENTS = [
         verdict: LOCAL_VERDICT(),
         answer: '**Meridian LOCAL engine** — deterministic project intelligence, no AI, no network.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n**Intentional limits:** the graph analyses (cycles, orphans, hubs, untested, path) read static import edges only — regex extraction per language, lines over 400 chars not indexed — so dynamic loading, DI and bundler wiring are invisible. Each analysis states its own caveats in its answer.\n\n' + LOCAL_HELP };
     } },
+
+  /* cross-repo comparison — routes only when 2+ repos are loaded, and always
+     reads the whole workspace, whatever the question scope says */
+  { kind: 'workspace', aliases: ['workspace', 'repos'], ground: 'workspace', helpCmd: '`workspace`', needsModel: false,
+    route: function (s, lo) { return isMulti() && /\b(workspace|repos|repositories|across (all |the |both |my )?(repos|projects)|cross-repo|between (the |both |my )?(repos|projects)|shared (dependencies|deps|packages))\b/.test(lo) ? { arg: '' } : null; },
+    run: function () { return withFull(function () { return workspaceRun(getIndex()); }); } },
 
   { kind: 'entries', aliases: ['entries', 'entrypoints'], ground: 'entry-point', helpCmd: '`entries`', needsModel: false,
     route: function (s, lo) { return /\b(entry ?points?|entrypoints?|main file|entry file)\b/.test(lo) ? { arg: '' } : null; },
@@ -934,7 +985,8 @@ var LOCAL_MENU = [
   ] },
   { group: 'INSTRUMENTS', items: [
     { label: 'Signals — what deserves attention', fill: 'signals' },
-    { label: 'Drift — what changed since last session', fill: 'drift' }
+    { label: 'Drift — what changed since last session', fill: 'drift' },
+    { label: 'Workspace: compare the loaded repos', fill: 'workspace' }
   ] }
 ];
 /* the empty-state starter set: broad, no-argument questions that give an

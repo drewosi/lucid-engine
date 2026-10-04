@@ -230,6 +230,14 @@
   .proj-row .px { background: none; border: none; color: var(--ink-3); cursor: pointer; font-family: inherit; font-size: 10.5px; padding: 0 2px; flex: none; }
   .proj-row .px:hover { color: var(--err); }
 
+  /* workspace repos — rows reuse .proj-row, the meter reuses the budget bar */
+  #wsshelf { margin: 18px 0 0; }
+  .proj-row .pn.on { color: var(--accent); }
+  .proj-row .pn.wait { color: var(--ink-3); cursor: default; }
+  .proj-row .btn-quiet { flex: none; padding: 0; }
+  #wsactions { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  #wscap { margin: 10px 0 0; }
+
   #ignorein { width: 100%; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; padding: 8px 10px; resize: vertical; box-sizing: border-box; }
   #ignorein:focus { outline: none; border-color: var(--accent); }
 
@@ -512,6 +520,12 @@
   .ov-cap { font-size: 10px; color: var(--ink-3); letter-spacing: .04em; margin-top: 8px; line-height: 1.8; }
   .ov-skip { font-size: 10.5px; color: var(--ink-2); letter-spacing: .04em; margin-top: 10px; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; }
   .ov-lim { font-size: 10px; color: var(--ink-3); letter-spacing: .04em; margin-top: 8px; line-height: 1.7; border-top: 1px dashed var(--line); padding-top: 8px; }
+  /* cross-repo block: one tile per repo, then per-repo and shared lines */
+  .ov-ws { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .ov-ws .stat-tile { min-width: 0; }
+  .ov-ws .stat-tile .sl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov-ws .stat-tile.on .sl { color: var(--accent); }
+  .ov-ws .ov-langs, .ov-ws .ov-cap { overflow-wrap: anywhere; line-height: 1.7; }
 
   /* verdict badge — KNOWN LOCALLY vs REQUIRES MODEL REASONING. The two states
      must read apart at a glance: tinted ground + colored edge, not edge alone. */
@@ -538,6 +552,8 @@
   .ev .kind { color: var(--ink-3); border: 1px solid var(--line-strong); border-radius: 2px; padding: 0 4px; font-size: 8.5px; letter-spacing: .08em; margin-right: 5px; }
   .ev .kind.inference { color: var(--accent); border-color: var(--accent); }
   .ev .kind.uncertain { color: var(--err); border-color: var(--err); }
+  /* repo label inside a chip, multi-repo workspaces only: ctx://web:src/app.js:12–14 */
+  .ev .repo { color: var(--ink); }
 
   /* Reduced motion */
   @media (prefers-reduced-motion: reduce) {

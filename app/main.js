@@ -24,6 +24,7 @@ import { initPalette, palOpen, palClose, palOv, openKeymap, closeKeymap, keymapv
 import { initLocalMenu, closeLocalMenu, localmenuveil } from './localmenu.js';
 import { runSelfTests, runAndShowSelfTests } from './selftest.js';
 import { initShare, closeShare, openShareFromHash, shareveil } from './share.js';
+import { initWorkspace } from './workspace.js';
 
 /* frame-buster — a <meta> CSP cannot carry frame-ancestors, so refuse to run
    framed: hide the document and bounce the top window to this URL (setting a
@@ -38,6 +39,7 @@ initShell();    /* provider + model from localStorage, theme, first-run veil, se
 initIngest();   /* pickers/dropzone/tree wiring, ground + strict-trace + budget/spend state, ignore patterns */
 initDemo();     /* first-run demo buttons */
 initMemory();   /* saved-projects list + save wiring */
+initWorkspace(); /* repo list, [ + ADD REPO ], question scope */
 initShare();    /* share modal, bundle picker, #share= hashchange */
 initChat();     /* composer + streaming controls + cost chip */
 initViewer();

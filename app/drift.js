@@ -1,5 +1,6 @@
 import { st } from './state.js';
 import { getIndex } from './indexer.js';
+import { isMulti, repoList } from './repos.js';
 /* ============ DRIFT WATCH (SESSION-OVER-SESSION) ============
    Compares this session's project index against a fingerprint stored the last
    time the same project was loaded. Fingerprints are METADATA ONLY — paths and
@@ -49,6 +50,8 @@ function driftPut(rec) {
    rather than imported, because importing memory.js from here would create the
    cycle memory → ingest → local → intents → drift → memory */
 function projectSig() {
+  /* a multi-repo workspace is identified by its sorted repo labels */
+  if (isMulti()) return 'workspace:' + repoList().map(function (r) { return r.label || '(loose)'; }).sort().join('+');
   var it = st.files.keys().next();
   if (it.done) return 'project';
   var p = it.value;

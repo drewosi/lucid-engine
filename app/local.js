@@ -3,6 +3,8 @@ import { dirOf, getIndex } from './indexer.js';
 import { CAP_LOCAL, CAP_MODEL, LOCAL_HELP, classifyIntent, computeSignals, listOrphans, pickSymbol, runInvestigation, symLookup } from './intents.js';
 import { addAiMsg, addUserMsg, attachCopy, renderRich, renderTrace, scrollEnd } from './trace.js';
 import { $, announce, fmtTok, setStatus } from './helpers.js';
+import { isMulti, repoList, repoName, scopeRepo, withScope } from './repos.js';
+import { renderWorkspaceOverview } from './workspace.js';
 /* ============ LOCAL ENGINE (NO API · NO AI) ============
    The deterministic project-intelligence engine. A question is routed by intent
    (classifyIntent), an investigation runs real operations over the project index
@@ -63,11 +65,21 @@ function askLocal(q) {
     trace = { steps: [{ action: 'check loaded context', note: 'no files in memory', evidence: [] }] };
     verdict = { local: true, text: 'KNOWN LOCALLY' };
   } else {
-    var intent = classifyIntent(q);
-    var inv = runInvestigation(q, intent);
+    /* the investigation runs inside the question scope (all repos, or the active one) */
+    var run = withScope(function () { var it = classifyIntent(q); return { intent: it, inv: runInvestigation(q, it) }; });
+    var inv = run.inv;
     answer = inv.answer;
     trace = { steps: inv.steps, actions: inv.actions || null };
     verdict = inv.verdict;
+    /* in a multi-repo workspace, disclose the scope as the first step — the
+       same pattern as the pinned-evidence scope step */
+    if (isMulti()) {
+      var sr = scopeRepo(), all = repoList().map(function (r) { return repoName(r.label); });
+      trace.steps = [sr === null || run.intent.kind === 'workspace'
+        ? { action: 'scope · all ' + all.length + ' repos', note: all.join(', '), evidence: [], status: 'done' }
+        : { action: 'scope · ' + repoName(sr) + ' only', note: 'not searched: ' + all.filter(function (n) { return n !== repoName(sr); }).join(', '), evidence: [], status: 'done' }
+      ].concat(trace.steps);
+    }
   }
 
   txtEl.innerHTML = renderRich(answer);
@@ -140,6 +152,8 @@ function renderOverview() {
     sk.appendChild(sb);
     ov.appendChild(sk);
   }
+  /* several repos loaded: per-repo stats and what they share */
+  renderWorkspaceOverview(ov, idx);
   /* honest machinery limits, stated once where orientation happens — each
      analysis repeats its own caveat in its answer */
   var lim = document.createElement('div');

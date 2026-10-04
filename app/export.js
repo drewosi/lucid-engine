@@ -2,6 +2,7 @@ import { st } from './state.js';
 import { getIndex } from './indexer.js';
 import { evExcerpt, exchangeMarkdown, renderRich } from './trace.js';
 import { $, esc, toast } from './helpers.js';
+import { citeText } from './repos.js';
 /* ============ EXPORT TRACES ============
    Exports the whole session — questions, answers, traces, and the ACTUAL
    cited lines pulled live from the loaded files — as Markdown or a
@@ -93,7 +94,7 @@ function buildExportHTML() {
           + (step.note ? '<div class="sd">' + esc(String(step.note)) + '</div>' : ''));
         (Array.isArray(step.evidence) ? step.evidence : []).forEach(function (ev) {
           if (!ev || typeof ev.file !== 'string') return;
-          h.push('<div class="evb mono">ctx://<code>' + esc(ev.file + ':' + ev.startLine + '–' + ev.endLine) + '</code>' + (ev.quote ? ' — “' + esc(String(ev.quote)) + '”' : '') + '</div>');
+          h.push('<div class="evb mono">ctx://<code>' + esc(citeText(ev.file, ev.startLine, ev.endLine)) + '</code>' + (ev.quote ? ' — “' + esc(String(ev.quote)) + '”' : '') + '</div>');
           var ex = evExcerpt(ev);
           if (ex) h.push('<pre class="ex mono">' + esc(ex) + '</pre>');
         });

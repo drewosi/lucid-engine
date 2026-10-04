@@ -89,6 +89,20 @@
           <input type="file" id="bundlepick" accept=".meridian,application/json" hidden aria-label="Open a shared .meridian bundle">
         </div>
         <p class="rail-note">Files are read into this tab's memory only; nothing is uploaded to us. Selected files are sent to your chosen provider with each question, under your key. In LOCAL mode nothing is sent at all.</p>
+        <!-- Workspace — one row per loaded repo, rendered by app/workspace.js renderWorkspace() -->
+        <div id="wsshelf" hidden>
+          <h2 class="rail-hd">WORKSPACE <span class="n" id="wscount"></span></h2>
+          <div id="wslist"></div>
+          <div id="wsactions">
+            <button class="btn-quiet acc" type="button" id="wsadd" title="Load another project folder beside this one. Each repo keeps its own files and index, labelled by its folder name.">[ + ADD REPO ]</button>
+            <button class="btn-quiet acc" type="button" id="wsscope" aria-pressed="false" hidden title="Ask across every repo at once, or only the active repo (click a repo's name to make it active)">[ ASK: ALL REPOS ]</button>
+          </div>
+          <div id="wscap" title="Everything loaded, all repos together, against the ingest caps">
+            <div class="budget-bar" id="wscapbar"><i></i></div>
+            <div class="budget-txt"><span id="wscaptxt"></span><span id="wscapmax"></span></div>
+          </div>
+          <p class="rail-note" id="wsnote"></p>
+        </div>
         <div id="budget" hidden title="Estimated tokens vs the model's context window — the estimate is language-aware (code counts denser than prose)">
           <div class="budget-bar" id="budgetbar"><i></i></div>
           <div class="budget-txt"><span id="budgettxt">≈ 0 tokens selected</span><span id="budgetmax"></span></div>
@@ -338,6 +352,7 @@
         <button class="btn-quiet acc" type="button" id="shareall">[ ALL ]</button>
         <button class="btn-quiet" type="button" id="sharenone">[ NONE ]</button>
       </div>
+      <p class="prev-note" id="sharerepos" hidden></p>
       <div id="sharelist"></div>
       <div id="sharesize">
         <div class="budget-bar" id="sharebar"><i></i></div>

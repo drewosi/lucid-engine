@@ -1,6 +1,7 @@
 import { st } from './state.js';
 import { fmtTok, lsGet } from './helpers.js';
 import { LS, MODELS } from './config.js';
+import { isMulti, repoOf, workspaceNote } from './repos.js';
 /* ============ SMART CONTEXT ENGINE ============
    Instead of sending every checked file whole (FULL mode), SMART mode:
      1. scores each file — type weight + recency + path depth + query relevance,
@@ -193,9 +194,19 @@ function packSmartContext(q, budgetTokens) {
     }
     scored.sort(function (a, b) { return b.s - a.s; });
   }
+  /* several repos in scope: the best-scoring file of every repo is guaranteed a
+     slot right after the pins, so a cross-repo question sees each repo */
+  var seats = [];
+  if (isMulti()) {
+    var seen = Object.create(null);
+    scored.forEach(function (x) { var r = repoOf(x.p); if (!seen[r] && !x.f.pin) { seen[r] = 1; seats.push(x); } });
+    if (seats.length < 2) seats = [];
+    seats.forEach(function (x) { x.why.push('best in repo'); });
+  }
   /* operator pins pack first (still budget-bounded) — the one explicit override */
   var pinnedFirst = scored.filter(function (x) { return x.f.pin; })
-    .concat(scored.filter(function (x) { return !x.f.pin; }));
+    .concat(seats)
+    .concat(scored.filter(function (x) { return !x.f.pin && seats.indexOf(x) === -1; }));
 
   /* greedy pack: whole small files, excerpts for big ones */
   var parts = [], used = 0, count = 0, included = [], packedSet = Object.create(null);
@@ -320,7 +331,8 @@ function buildProjectMap() {
     keyTxt.push('--- KEY FILE HEAD (' + (lines.length > n ? 'first ' + n + ' of ' + lines.length + ' lines' : n + ' lines') + '): ' + p + ' ---\n'
       + numberLines(lines.slice(0, n).join('\n'), 1));
   });
-  st.mapCache = 'PROJECT MAP — the full shape of the loaded project (' + paths.length + ' files, path ≈tokens). "◆ PACKAGE" marks a directory with its own build manifest; "◇" marks manifests, READMEs and entry points. Only a question-relevant subset of files is included in full after the map. If a mapped file you cannot see would answer better, say which one.\n\n'
+  var wn = workspaceNote();
+  st.mapCache = (wn ? wn + '\n\n' : '') + 'PROJECT MAP — the full shape of the loaded project (' + paths.length + ' files, path ≈tokens). "◆ PACKAGE" marks a directory with its own build manifest; "◇" marks manifests, READMEs and entry points. Only a question-relevant subset of files is included in full after the map. If a mapped file you cannot see would answer better, say which one.\n\n'
     + out.join('\n') + (keyTxt.length ? '\n\n' + keyTxt.join('\n\n') : '');
   st.mapDirty = false;
   return st.mapCache;

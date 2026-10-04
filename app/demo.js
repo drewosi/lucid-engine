@@ -4,6 +4,7 @@ import { afterIngest } from './ingest.js';
 import { $ } from './helpers.js';
 import { convoIn } from './trace.js';
 import { dismissFirstRun, setProvider } from './shell.js';
+import { resetWorkspace } from './repos.js';
 /* ---- first-run demo: a tiny bundled project answered by the LOCAL engine, so a
    new visitor sees a real trace + evidence chips before committing an API key.
    File contents are line arrays (no template literals / backticks) — a habit from
@@ -153,6 +154,7 @@ var SAMPLE_PROJECT = {
 var DEMO_QUESTIONS = ['signals', 'where is API_BASE_URL defined?', 'what imports store.js?'];
 
 function loadSampleProject() {
+  resetWorkspace(); /* the demo is one project: no repos */
   st.files.clear();
   st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
   st.totalBytes = 0;

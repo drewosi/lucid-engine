@@ -102,7 +102,8 @@ detail you can reach for when you need it.
 
 ## 3. The screen, explained
 
-- **Left sidebar ("the rail")**: load your project; tick which files are in play;
+- **Left sidebar ("the rail")**: load your project (or several, side by side, as a
+  **workspace**: see [§4](#work-across-several-repos)); tick which files are in play;
   and read the **PROJECT INTELLIGENCE** panel (live counts: files, directories,
   packages, entry points, tests, symbols, TODOs, orphans, signals). Each count is
   a button that runs the matching investigation. Collapse the rail with `Ctrl-B`;
@@ -126,8 +127,11 @@ Your files are read into **browser memory only**. Three ways:
   Access API, which also lets you **reload from disk in one click** later ([§10](#10-save-reload-export)).
 - **[ PICK FILES ]** to choose individual files.
 
-Load a folder while one is already open and MERIDIAN asks: **REPLACE** it or
-**ADD** to it (dropping loose files is always additive).
+Load a folder while one is already open and MERIDIAN asks: **REPLACE** it, or
+**ADD REPO** to load it beside the first one as a second repo (see
+[Work across several repos](#work-across-several-repos) below). If a repo with
+that folder's name is already loaded, the choice is **RELOAD** it from the new
+pick or add it as another repo. Dropping loose files is always additive.
 
 **What gets skipped automatically**
 
@@ -152,6 +156,46 @@ proposes common ones, but only globs that actually match a file you loaded.
 > `orphans`/`broken` answers disclose the skipped-line count so a missing edge is
 > never presented as a certainty. Reads run through a bounded 32-wide pool so the
 > caps hold even on one giant drop.
+
+### Work across several repos
+
+A **workspace** is several project folders loaded side by side: a frontend and
+its API, a service and the shared library it imports. Everything still lives in
+this tab's memory only.
+
+- **Add a repo.** Once a folder is loaded, a **WORKSPACE** block appears under the
+  drop zone. **[ + ADD REPO ]** picks another folder; dropping or picking a folder
+  and choosing **[ ADD REPO ]** does the same. Each repo keeps its own file set and
+  its own index.
+- **Repo labels.** Every path starts with its repo's name: `web/src/app.js`,
+  `api/src/app.js`. Two repos can hold the same relative path and never collide.
+  Two folders with the same name get distinct labels (`app`, `app-2`).
+- **Switch and scope.** Click a repo's name to make it the **active repo** (`▸`).
+  **[ ASK: ALL REPOS ]** sends every question to all repos at once; click it to
+  switch to **[ ASK: &lt;repo&gt; ONLY ]**, which narrows questions to the active
+  repo. The scope applies to the LOCAL engine and to AI providers alike: a scoped
+  question searches, indexes and sends that repo only. LOCAL answers state the
+  scope as their first trace step, and the budget line says `… only` while scoped.
+- **Ask across repos.** In ALL scope, SMART packing guarantees the best-scoring
+  file of every repo a slot, and the model is told which repos are loaded and
+  that each path begins with its repo label. Ask `workspace` (or "compare the
+  repos") for the deterministic cross-repo view: per-repo files, languages,
+  entry points, tests and symbols; dependencies declared by two or more repos;
+  **repo links** (one repo depends on a package another loaded repo publishes);
+  imports that resolve across repos; and names exported by more than one repo.
+  The same summary sits at the bottom of **PROJECT INTELLIGENCE**, with each
+  repo's signal count. Dependency matching reads `package.json`,
+  `requirements.txt`, `go.mod`, `Cargo.toml`, `composer.json` and `Gemfile`.
+- **Citations.** With several repos loaded, evidence chips read
+  `ctx://web:src/app.js:12–14` and open that file in that repo. Copied citations
+  use the same `repo:path:line` form. If a model cites a path without its repo
+  label and only one repo has that path, MERIDIAN maps it; if two repos have it,
+  the chip stays greyed out rather than guess.
+- **Unload a repo** with its **✕**. Nothing on disk is touched.
+- **The caps are shared.** The 8,000-file and ~300 MB limits cover the whole
+  workspace, not each repo. The meter under the repo list shows the total. A repo
+  added near the cap loads only partly, and **[ REVIEW SKIPPED ]** lists what was
+  left out.
 
 ---
 
@@ -233,6 +277,7 @@ REASONING** (an interpretation question; connect an AI for those).
 |---|---|
 | `signals` | A ranked digest of the top few things worth attention, each pinned to evidence |
 | `drift` | What changed since your **last session** (new/removed/reshaped files), from a local metadata fingerprint (paths & counts only, never contents) |
+| `workspace` | With 2+ repos loaded: per-repo stats, shared dependencies, repo links, cross-repo imports and names exported in more than one repo ("compare the repos" works too) |
 | `help` | The in-engine reference |
 
 **Languages understood:** JavaScript/TypeScript, Python, Go, Rust, Java, Ruby,
@@ -339,6 +384,16 @@ handle, so you can **reload from disk in one click** (after the browser
 re-confirms read permission). Other browsers restore settings and ask you to
 re-drop the folder.
 
+**Save a workspace.** With two or more repos loaded, **[ SAVE PROJECT ]** saves a
+workspace (marked `⧉` in the list): the repo names, each repo's file and token
+counts, the selection, ignore patterns, the active repo and the question scope,
+and folder handles where the browser provides them. Never file contents.
+Reloading it restores the settings and lists each repo under WORKSPACE with a
+**[ PICK ]** button (or **[ ⟳ RELOAD ]** when the browser remembers the folder;
+it asks for read permission first). Pick each folder again and its saved
+selection comes back. Dropping a folder whose name matches a waiting repo works
+too.
+
 **Export the session** as **Markdown** (`Ctrl-E`) or a self-contained **HTML** page
 (top bar / palette). Both carry the answers, traces, and the *actual cited lines*
 pulled from your files; the HTML has zero external assets. You can also copy a
@@ -366,6 +421,11 @@ which files go in, then either copy a **link** or download a **bundle**.
 - **Never included:** API keys, provider settings, the conversation, saved
   projects, or anything else MERIDIAN keeps in your browser.
 - You tick a box confirming you understand the above before either button works.
+- **Workspaces:** the files keep their repo labels, and the link or bundle also
+  lists those labels, so the recipient sees the same repos (read-only). By
+  default the panel ticks the files in the current question scope: every repo in
+  ALL scope, only the active repo when **[ ASK ]** is narrowed to it. **[ ALL ]**
+  ticks every repo.
 
 **Opening a share.** Open the link, or use **[ OPEN SHARED ]** in the rail (or drop
 the `.meridian` file on the drop zone). The project loads **read-only**, badged
@@ -519,8 +579,8 @@ to the providers you configured. Neither does the landing page.
 - **Bring your own key.** Requests go directly from your browser to the provider's
   API under your account. Keys live in `localStorage` only, one per provider.
 - **Zero egress to us.** File contents and conversations exist in tab memory and
-  vanish on close. Saved projects persist **metadata only** (selection + settings)
-  in IndexedDB.
+  vanish on close. Saved projects and workspaces persist **metadata only**
+  (repo names, counts, selection + settings) in IndexedDB.
 - **LOCAL uses no network at all.** And the workbench page loads **zero
   third-party scripts**.
 - **Share links and bundles contain your code.** The link's code sits after `#`,
@@ -545,7 +605,11 @@ the thing is built.
   1M). Too much context → the provider rejects the request; that's what SMART mode
   and the budget prevent.
 - **Trace**: MERIDIAN's shown work: numbered steps, each with clickable evidence.
-- **Evidence chip**: a `path:line` button that opens the cited source.
+- **Evidence chip**: a `path:line` button that opens the cited source
+  (`repo:path:line` when several repos are loaded).
+- **Workspace / repo**: several project folders loaded side by side; each one is a
+  repo, labelled by its folder name, with its own files and index.
+- **Scope**: whether a question goes to every repo (ALL) or only the active repo.
 - **Grounding**: running the deterministic investigation first and feeding its
   verified findings to the AI, so answers cite real lines.
 - **Entry point**: a file a program starts from (`index`, `main`, `app`,

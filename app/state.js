@@ -21,6 +21,12 @@ export var st = {
   lastDirHandle: null,
   pendingProject: null,
   shared: null,            /* {name, count, created, source} while a read-only shared project is open (share.js) */
+  /* workspace (repos.js / workspace.js) */
+  repos: [],               /* [{label, handle}] — each loaded folder; label = its files' first path segment */
+  ws: { active: '', scope: 'all' }, /* active repo label · question scope 'all' | 'repo' */
+  pendingWorkspace: null,  /* saved workspace record waiting for its folders to be re-picked */
+  wsCache: null,           /* repoList() cache — cleared by invalidateAll() */
+  scopeCache: Object.create(null), /* label -> {files, idx, ctx, map} per-repo caches for scoped questions */
   /* chat */
   history: [],
   transcript: [],
@@ -38,10 +44,13 @@ export var st = {
 
 /* selection changed (check/uncheck): context + map are stale, the index is
    selection-decoupled and survives */
-export function invalidateSelection() { st.contextDirty = true; st.mapDirty = true; }
+export function invalidateSelection() {
+  st.contextDirty = true; st.mapDirty = true;
+  for (var k in st.scopeCache) { st.scopeCache[k].ctxDirty = true; st.scopeCache[k].mapDirty = true; }
+}
 
-/* content changed (files added/removed/reloaded): everything is stale */
-export function invalidateAll() { invalidateSelection(); st.indexDirty = true; }
+/* content changed (files added/removed/reloaded): everything is stale, per-repo caches included */
+export function invalidateAll() { invalidateSelection(); st.indexDirty = true; st.wsCache = null; st.scopeCache = Object.create(null); }
 
 /* every path currently loaded, alphabetical — the shared iteration order */
 export function sortedPaths() { return Array.from(st.files.keys()).sort(); }

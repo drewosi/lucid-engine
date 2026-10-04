@@ -4,6 +4,7 @@ import { dirOf, getIndex } from './indexer.js';
 import { classifyIntent, pickSymbol, runInvestigation, symLookup } from './local.js';
 import { groundKinds } from './intents.js';
 import { fmtTok } from './helpers.js';
+import { inScopedCall, isMulti, repoList, repoName, scopeRepo, withScope, workspaceNote } from './repos.js';
 /* ============ PROMPT ASSEMBLY ============ */
 var FENCE = '```meridian-trace';
 var INSTRUCTIONS = [
@@ -43,7 +44,8 @@ function assembleContext() {
     if (!f.checked) return;
     parts.push('═══ FILE: ' + p + ' ═══\n' + numberLines(f.content, 1));
   });
-  st.contextCache = parts.length ? CTX_PREAMBLE + '\n\n' + parts.join('\n\n') : '';
+  var wn = workspaceNote(); /* several repos: name them and the label-first paths */
+  st.contextCache = parts.length ? (wn ? wn + '\n\n' : '') + CTX_PREAMBLE + '\n\n' + parts.join('\n\n') : '';
   st.contextDirty = false;
   return st.contextCache;
 }
@@ -107,6 +109,9 @@ function buildInvestigationContext(q, intent, inv) {
     + idx.packages.length + ' package' + (idx.packages.length === 1 ? '' : 's') + ' · '
     + idx.entries.length + ' entry point' + (idx.entries.length === 1 ? '' : 's') + ' · '
     + idx.tests.length + ' test file' + (idx.tests.length === 1 ? '' : 's'));
+  if (isMulti()) findings.push(inScopedCall()
+    ? 'workspace: scoped to one repository; other loaded repositories were not searched'
+    : 'workspace: ' + repoList().length + ' repositories in scope (' + repoList().map(function (r) { return repoName(r.label); }).join(', ') + '); every path starts with its repository label');
 
   /* symbols — the key symbol's definitions, straight from the index */
   var symbols = [];
@@ -246,7 +251,18 @@ function buildPinnedBlock() {
   return { text: 'PINNED EVIDENCE — citations the user pinned in the workbench. Treat them as the focus of this question and prefer citing these exact lines.\n\n' + parts.join('\n\n'), count: count, tokens: used };
 }
 
+/* one question's context, built inside the question scope: all repos, or the
+   active repo only (repos.js swaps that repo's files, index and caches in) */
 function buildContextBlocks(q) {
+  var cb = withScope(function () { return buildScopedBlocks(q); });
+  if (isMulti()) {
+    var sr = scopeRepo();
+    var sn = sr !== null ? 'REPO ' + repoName(sr).toUpperCase() + ' ONLY' : repoList().length + ' REPOS';
+    cb.note = cb.note ? cb.note + ' · ' + sn : sn;
+  }
+  return cb;
+}
+function buildScopedBlocks(q) {
   var groundBudget = Math.min(GROUND_MAX_TOK, Math.floor(getBudget() * 0.25));
   var invBlock = st.groundMode ? buildInvestigationBlock(q, groundBudget) : null;
   var pinBlock = buildPinnedBlock();

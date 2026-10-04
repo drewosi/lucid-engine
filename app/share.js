@@ -6,6 +6,7 @@ import { $, copyText, rememberFocus, returnFocus, setStatus, toast, trap } from 
 import { convoIn } from './trace.js';
 import { setProvider } from './shell.js';
 import { download } from './export.js';
+import { LOOSE, cleanLabel, isMulti, registerRepo, repoList, repoName, repoOf, scopeFilter, scopeRepo } from './repos.js';
 /* ============ SHARE (LINK + BUNDLE, NO SERVER) ============
    Packs a snapshot of the loaded project (paths, file text, last-modified
    times, and a display name; nothing else) into either
@@ -19,7 +20,12 @@ import { download } from './export.js';
    reach it (pinned by a self-test). The index is rebuilt on open; it is
    cheaper than shipping it. Opening either form loads a read-only SHARED
    project into tab memory: nothing is saved, drift is not recorded, and
-   loading your own folder replaces it.                                      */
+   loading your own folder replaces it.
+   Workspaces: paths already start with their repo label, so a share from
+   several repos also carries an optional `repos` list of those labels (labels
+   only, nothing else). The recipient gets the same repos, read-only. The
+   default selection follows the question scope: the active repo when [ ASK ]
+   is narrowed to it, every repo otherwise.                                  */
 
 var SHARE_LINK_MAX_CHARS = 32000;      /* whole-URL ceiling: conservative so links survive chat apps and email */
 var SHARE_FORMAT = 'meridian-share', SHARE_VERSION = 1;
@@ -28,7 +34,8 @@ var SHARE_MAX_FILES = 8000, SHARE_MAX_FILE_CHARS = 512 * 1024; /* the same caps 
 var SHARE_MAX_TOTAL = 64 * 1024 * 1024;  /* decoded ceiling; also stops a decompression bomb mid-stream */
 var BUNDLE_MAX_BYTES = 96 * 1024 * 1024;
 var SHARE_EST_RATIO = 0.33;              /* encoded chars per text char for typical source (deflate ≈4x, base64 +33%) */
-var PAYLOAD_FIELDS = ['format', 'v', 'name', 'created', 'files'];
+var PAYLOAD_FIELDS = ['format', 'v', 'name', 'created', 'files', 'repos'];
+var SHARE_MAX_REPOS = 32;
 var FILE_FIELDS = ['p', 'c', 'm'];
 var BUNDLE_NOTE = 'MERIDIAN shared project. This file contains source code in plain text: anyone who has it can read it. Open it in the MERIDIAN workbench with [ OPEN SHARED ] or drop it on the context panel.';
 /* likely-secret files start unticked: .env files, private keys, credential/secret/password files */
@@ -51,23 +58,34 @@ function shareError(code) {
 
 /* ---- payload ---- */
 function shareName() {
+  if (isMulti()) {
+    var sr = scopeRepo();
+    if (sr !== null) return repoName(sr);
+    return repoList().filter(function (r) { return !r.loose; }).map(function (r) { return r.label; }).join(' + ') || 'workspace';
+  }
   var it = st.files.keys().next();
   if (it.done) return 'project';
   var p = it.value;
   return p.indexOf('/') !== -1 ? p.slice(0, p.indexOf('/')) : (st.shared ? st.shared.name : 'project');
 }
-/* whitelist build: only path, text and mtime per file, plus a name and timestamp */
+/* whitelist build: only path, text and mtime per file, plus a name, a timestamp
+   and (workspaces only) the repo labels the shared paths start with */
 function buildSharePayload(paths, opts) {
   opts = opts || {};
-  var files = [];
+  var files = [], repos = [];
+  var multi = isMulti();
   paths.slice().sort().forEach(function (p) {
     var f = st.files.get(p);
     if (!f) return;
     var e = { p: p, c: f.content };
     if (f.mtime) e.m = f.mtime;
     files.push(e);
+    var r = multi ? repoOf(p) : LOOSE;
+    if (r !== LOOSE && repos.indexOf(r) === -1) repos.push(r);
   });
-  return { format: SHARE_FORMAT, v: SHARE_VERSION, name: String(opts.name || shareName()).slice(0, 60), created: opts.now != null ? opts.now : Date.now(), files: files };
+  var out = { format: SHARE_FORMAT, v: SHARE_VERSION, name: String(opts.name || shareName()).slice(0, 60), created: opts.now != null ? opts.now : Date.now(), files: files };
+  if (repos.length) out.repos = repos;
+  return out;
 }
 /* decoded input is untrusted: rebuild a clean copy, field by field */
 function validatePayload(o) {
@@ -90,7 +108,17 @@ function validatePayload(o) {
     files.push({ p: p, c: e.c, m: typeof e.m === 'number' && isFinite(e.m) && e.m > 0 ? e.m : 0 });
   }
   var name = typeof o.name === 'string' ? o.name.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 60) : '';
-  return { format: SHARE_FORMAT, v: o.v, name: name || 'shared project', created: typeof o.created === 'number' && isFinite(o.created) ? o.created : 0, files: files };
+  var out = { format: SHARE_FORMAT, v: o.v, name: name || 'shared project', created: typeof o.created === 'number' && isFinite(o.created) ? o.created : 0, files: files };
+  /* optional repo labels: kept only when clean and actually the first segment of a shared path */
+  if (Array.isArray(o.repos)) {
+    var tops = Object.create(null), repos = [];
+    files.forEach(function (f) { if (f.p.indexOf('/') !== -1) tops[f.p.slice(0, f.p.indexOf('/'))] = 1; });
+    o.repos.slice(0, SHARE_MAX_REPOS).forEach(function (r) {
+      if (typeof r === 'string' && r === cleanLabel(r) && tops[r] && repos.indexOf(r) === -1) repos.push(r);
+    });
+    if (repos.length) out.repos = repos;
+  }
+  return out;
 }
 
 /* ---- bytes: deflate-raw + base64url ---- */
@@ -184,7 +212,8 @@ function isSecretish(p) { return SECRETISH.test(p); }
    otherwise the checked files ranked by importance, greedily packed toward the
    limit using the measured compression ratio, shrinking until it really fits */
 function defaultSharePaths() {
-  var all = sortedPaths().filter(function (p) { return !isSecretish(p); });
+  var inScope = scopeFilter(); /* a workspace narrowed to one repo shares that repo */
+  var all = sortedPaths().filter(function (p) { return !isSecretish(p) && inScope(p); });
   return measureLink(all).then(function (m) {
     if (m.fits || !all.length) return all;
     var pool = all.filter(function (p) { return st.files.get(p).checked; });
@@ -211,7 +240,10 @@ function defaultSharePaths() {
 
 /* ---- bundles (.meridian): the same payload as readable JSON ---- */
 function bundleText(payload) {
-  return JSON.stringify({ format: payload.format, v: payload.v, note: BUNDLE_NOTE, name: payload.name, created: payload.created, files: payload.files }, null, 1);
+  var o = { format: payload.format, v: payload.v, note: BUNDLE_NOTE, name: payload.name, created: payload.created };
+  if (payload.repos) o.repos = payload.repos;
+  o.files = payload.files;
+  return JSON.stringify(o, null, 1);
 }
 function parseBundleText(text) {
   var obj;
@@ -234,7 +266,8 @@ function loadSharedPayload(payload, source) {
   clearContext();
   st.lastDirHandle = null; st.pendingProject = null;
   payloadEntries(payload).forEach(function (kv) { st.totalBytes += kv[1].content.length; st.files.set(kv[0], kv[1]); });
-  st.shared = { name: payload.name, count: payload.files.length, created: payload.created, source: source };
+  (payload.repos || []).forEach(function (r) { registerRepo(r, null); }); /* a shared workspace keeps its repos */
+  st.shared = { name: payload.name, count: payload.files.length, created: payload.created, source: source, repos: (payload.repos || []).length };
   var db = $('demobanner'); if (db) db.remove();
   afterIngest();
   syncSharedUI();
@@ -292,7 +325,7 @@ function renderShareBanner(errMsg) {
     var nm = document.createElement('b'); nm.textContent = st.shared.name; /* sender-controlled: text only, never markup */
     dt.appendChild(document.createTextNode('You are viewing '));
     dt.appendChild(nm);
-    dt.appendChild(document.createTextNode(': ' + st.shared.count + ' file' + (st.shared.count === 1 ? '' : 's') + ' someone shared with you'
+    dt.appendChild(document.createTextNode(': ' + st.shared.count + ' file' + (st.shared.count === 1 ? '' : 's') + (st.shared.repos >= 2 ? ' from ' + st.shared.repos + ' repos' : '') + ' someone shared with you'
       + (st.shared.created ? ' on ' + new Date(st.shared.created).toISOString().slice(0, 10) : '')
       + '. It lives in this tab only. Nothing was uploaded or saved, and closing the tab discards it. Ask about it with the LOCAL engine (no key) or your own key.'));
     var chips = document.createElement('div'); chips.className = 'demochips';
@@ -408,6 +441,14 @@ function openShare() {
   $('sharelist').innerHTML = '';
   $('sharetxt').textContent = 'LINK · choosing files that fit…';
   $('sharemax').textContent = ''; $('sharenote').textContent = '';
+  /* workspaces: say which repos the default covers, and that their labels travel */
+  var wsn = $('sharerepos'), sr = scopeRepo();
+  wsn.hidden = !isMulti();
+  if (isMulti()) {
+    wsn.textContent = sr !== null
+      ? '// questions are scoped to ' + repoName(sr) + ', so only its files start ticked. [ ALL ] adds every repo. repo labels travel with the files, so the recipient sees the same repos, read-only.'
+      : '// ' + repoList().length + ' repos loaded. each file keeps its repo label (repo/path), so the recipient sees the same repos, read-only.';
+  }
   rememberFocus();
   shareveil.classList.add('on');
   untrapShare = trap(shareveil.querySelector('.modal'));

@@ -94,6 +94,7 @@
         <tr><td>meridian.accepted</td><td>A timestamp recording that you accepted the terms on first run.</td><td>Settings → clear-all button</td></tr>
       </table>
       <p>The workbench settings panel includes a single button that removes every Meridian key from your browser, including any entry left in localStorage by an earlier version of the site. Loaded project files and conversation history are held in memory only and are gone when the tab closes.</p>
+      <p>If you save a project or a multi-repo workspace, its record is kept in your browser's IndexedDB: the name you give it, repo names, file and token counts, the list of files you unticked, your ignore patterns and context settings, and, in Chromium browsers, a folder handle that the browser asks your permission to reuse. Never file contents: reloading a saved workspace asks you to pick each folder again. Delete a saved entry with its ✕, or everything with the clear-all button.</p>
     </section>
 
     <section>
@@ -106,7 +107,7 @@
       <h2><span class="idx">§05</span>Share links and bundles</h2>
       <p>The workbench can share a loaded project in two ways, both without any server:</p>
       <ul>
-        <li><b>A share link.</b> Your browser compresses the files you tick (their paths, full text and last-modified times) plus a project name into the link itself, in the part after <b>#</b>. Browsers never send that part of an address in a request, so GitHub Pages never receives it, and neither do we.</li>
+        <li><b>A share link.</b> Your browser compresses the files you tick (their paths, full text and last-modified times) plus a project name, and for a multi-repo workspace the repo names, into the link itself, in the part after <b>#</b>. Browsers never send that part of an address in a request, so GitHub Pages never receives it, and neither do we.</li>
         <li><b>A bundle</b> (a <b>.meridian</b> file). The same data as readable JSON, for projects too big for a link. It goes wherever you send it.</li>
       </ul>
       <p><b>A link or bundle is the code itself.</b> Anyone who has it can read those files. So can any service it passes through: the chat app or email provider you paste it into stores the message, link included, and the address can stay in the browser history of whoever opens it. There is no server, so there is nothing we can revoke or expire: once sent, it works for as long as someone keeps it. Treat it exactly like sending the files.</p>
