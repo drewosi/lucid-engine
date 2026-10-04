@@ -63,7 +63,7 @@
   </nav>
   <main>
     <h1>Privacy Policy</h1>
-    <p class="updated">LAST UPDATED · 05 AUG 2026 · APPLIES TO drewosi.github.io/lucid-engine</p>
+    <p class="updated">LAST UPDATED · 03 OCT 2026 · APPLIES TO drewosi.github.io/lucid-engine</p>
 
     <p class="lede"><b>The short version:</b> Meridian runs entirely in your browser. We operate <b>no servers</b> and therefore <b>cannot see</b> your files, your questions, your AI conversations, or your API key. The only personal data that can ever reach us is an email you choose to send us. Everything else stays on your machine or travels directly between your browser and your chosen AI provider under your own account.</p>
 
@@ -103,39 +103,51 @@
     </section>
 
     <section>
-      <h2><span class="idx">§05</span>Email contact (the only data we can receive)</h2>
+      <h2><span class="idx">§05</span>Share links and bundles</h2>
+      <p>The workbench can share a loaded project in two ways, both without any server:</p>
+      <ul>
+        <li><b>A share link.</b> Your browser compresses the files you tick (their paths, full text and last-modified times) plus a project name into the link itself, in the part after <b>#</b>. Browsers never send that part of an address in a request, so GitHub Pages never receives it, and neither do we.</li>
+        <li><b>A bundle</b> (a <b>.meridian</b> file). The same data as readable JSON, for projects too big for a link. It goes wherever you send it.</li>
+      </ul>
+      <p><b>A link or bundle is the code itself.</b> Anyone who has it can read those files. So can any service it passes through: the chat app or email provider you paste it into stores the message, link included, and the address can stay in the browser history of whoever opens it. There is no server, so there is nothing we can revoke or expire: once sent, it works for as long as someone keeps it. Treat it exactly like sending the files.</p>
+      <p>Never included: API keys, provider settings, conversations, saved projects, or anything else Meridian keeps in your browser's storage. Files that look like secrets (.env files, private keys, credential files) start unticked, but you choose what goes in.</p>
+      <p>When someone opens a link or bundle, it is unpacked in their browser tab and held in memory only. It opens read-only, nothing about it is written to their browser's storage, and the <b>#</b> part is removed from the address bar once it has loaded.</p>
+    </section>
+
+    <section>
+      <h2><span class="idx">§06</span>Email contact (the only data we can receive)</h2>
       <p>The site has no forms. The only way personal data can reach us is if you email <a href="mailto:drewosipenko@gmail.com">drewosipenko@gmail.com</a>. If you do, we receive your address and whatever you write, use them only to reply to you, and delete them on request. No newsletters, no resale, no ad pixels.</p>
     </section>
 
     <section>
-      <h2><span class="idx">§06</span>Cookies and analytics</h2>
+      <h2><span class="idx">§07</span>Cookies and analytics</h2>
       <p><b>We set no cookies.</b> There are no advertising trackers, no social pixels, no fingerprinting.</p>
       <p>Analytics are <b>currently disabled</b>. If we ever enable them, it will be a cookieless, privacy-respecting counter, and this policy will say so first. The site is hosted on GitHub Pages; GitHub may log standard web-server data (such as IP addresses) to operate the service — see the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>. The workbench page loads no third-party assets or scripts at all: every request it makes goes to GitHub Pages (the page itself) or, when you ask a question, directly to your chosen model provider under your own key.</p>
     </section>
 
     <section>
-      <h2><span class="idx">§07</span>Your rights — GDPR (EEA/UK)</h2>
+      <h2><span class="idx">§08</span>Your rights — GDPR (EEA/UK)</h2>
       <p>If you are in the EEA or UK: for any email correspondence you send us, Drew Osipenko is the data controller, processing on the basis of your consent (Art. 6(1)(a) GDPR), which you can withdraw at any time. You have the rights of access, rectification, erasure, restriction, portability, and objection, and the right to lodge a complaint with your supervisory authority.</p>
       <p>To exercise any of them, email <a href="mailto:drewosipenko@gmail.com">drewosipenko@gmail.com</a>. Note that apart from email you send us, your data never reaches us — access and erasure are self-service via the clear buttons described in §03, and processing by your AI provider under your own account is governed by your relationship with that provider.</p>
     </section>
 
     <section>
-      <h2><span class="idx">§08</span>Your rights — California (CCPA/CPRA)</h2>
+      <h2><span class="idx">§09</span>Your rights — California (CCPA/CPRA)</h2>
       <p>We do not sell or share personal information as those terms are defined in the CCPA/CPRA, and we collect no sensitive personal information. California residents may request access to or deletion of the only personal information we could hold (an email you sent us) at the contact address above. We do not discriminate against anyone for exercising privacy rights.</p>
     </section>
 
     <section>
-      <h2><span class="idx">§09</span>Children</h2>
+      <h2><span class="idx">§10</span>Children</h2>
       <p>Meridian is not directed at children and we do not knowingly collect personal information from anyone under 16. If you believe a child has submitted an email address, contact us and we will delete it.</p>
     </section>
 
     <section>
-      <h2><span class="idx">§10</span>Changes</h2>
+      <h2><span class="idx">§11</span>Changes</h2>
       <p>If this policy changes, the new version will be posted here with an updated date, and the change history is public in the <a href="https://github.com/drewosi/lucid-engine">site's git repository</a>.</p>
     </section>
 
     <section>
-      <h2><span class="idx">§11</span>Contact</h2>
+      <h2><span class="idx">§12</span>Contact</h2>
       <p><a href="mailto:drewosipenko@gmail.com">drewosipenko@gmail.com</a></p>
     </section>
   </main>

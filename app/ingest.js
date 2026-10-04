@@ -7,6 +7,7 @@ import { renderOverview } from './local.js';
 import { recordSession as recordSessionDrift } from './drift.js';
 import { LS, MODELS } from './config.js';
 import { INSTRUCTIONS, buildInvestigationBlock, buildPinnedBlock } from './prompt.js';
+import { openBundleFile, syncSharedUI } from './share.js';
 /* ============ CONTEXT ENGINE ============ */
 var SKIP_LIST_MAX = 500;
 function recordSkip(path, reason, size, ref) {
@@ -226,7 +227,9 @@ function afterIngest() {
     else if (st.skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
     else if (st.files.size >= Math.floor(MAX_FILES * 0.9)) toast('Approaching the ' + MAX_FILES + '-file cap (' + st.files.size + ' loaded) — large repos may hit it; ignore patterns help.');
     maybeAutoSmart();
-    recordSessionDrift(); /* last: renderOverview above has already rebuilt the index */
+    /* last: renderOverview above has already rebuilt the index. A shared
+       project is someone else's snapshot — nothing about it is persisted. */
+    if (!st.shared) recordSessionDrift();
   };
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { setTimeout(finish, 0); });
   else setTimeout(finish, 0);
@@ -236,9 +239,11 @@ var dz = $('dropzone');
 /* Prefer the File System Access API when available — its directory handle can be
    persisted to IndexedDB, enabling one-click project reload later. */
 function pickHandler(input) {
+  var list = Array.prototype.slice.call(input.files || []);
+  if (list.length === 1 && /\.meridian$/i.test(list[0].name)) { input.value = ''; openBundleFile(list[0]); return; }
+  if (st.shared) clearContext(); /* your own files replace a shared snapshot, never mix into it */
   st.lastDirHandle = null;
   beginBatch();
-  var list = Array.prototype.slice.call(input.files || []);
   /* the picker hands us a flat FileList with no directory objects to skip, so
      ignored dirs would otherwise be counted once per file (drop/FSA count them
      once per directory). Pre-filter here and tally each distinct ignored dir
@@ -265,6 +270,7 @@ function clearContext() {
   $('skipnote').hidden = true;
   $('skiprevrow').hidden = true;
   updateSkipBadge();
+  st.shared = null; syncSharedUI();
 }
 
 /* ---- project tree ----
@@ -716,7 +722,7 @@ function __setCapsForTest(o) {
   return prev;
 }
 
-export { IGNORE_DIRS, __setCapsForTest, afterIngest, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, maybeAutoSmart, openPreview, openSkipReview, prevveil, recordSkip, renderBudget, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
+export { IGNORE_DIRS, __setCapsForTest, afterIngest, clearContext, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, maybeAutoSmart, openPreview, openSkipReview, prevveil, recordSkip, renderBudget, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
 
 export function initIngest() {
   st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
@@ -739,8 +745,14 @@ export function initIngest() {
     } else if (e.dataTransfer.files) {
       for (var j = 0; j < e.dataTransfer.files.length; j++) files.push(e.dataTransfer.files[j]);
     }
+    /* a single dropped .meridian file is a share bundle, not source to ingest */
+    if (entries.length === 1 && entries[0].isFile && /\.meridian$/i.test(entries[0].name)) {
+      entries[0].file(openBundleFile, function () { toast('Could not read that bundle file.'); });
+      return;
+    }
+    if (!entries.length && files.length === 1 && /\.meridian$/i.test(files[0].name)) { openBundleFile(files[0]); return; }
     function run(replace) {
-      if (replace) clearContext();
+      if (replace || st.shared) clearContext(); /* your own files replace a shared snapshot */
       beginBatch();
       /* collect the whole tree first (cheap), then read through the bounded pool */
       var pool = [];
@@ -752,7 +764,7 @@ export function initIngest() {
     /* a whole folder dropped onto an already-loaded project is ambiguous — ask
        instead of silently merging (dismissing the toast = no-op; loose-file
        drops stay silently additive) */
-    if (hasDir && st.files.size) {
+    if (hasDir && st.files.size && !st.shared) {
       toast('Folder dropped onto a loaded project — replace it, or add to it?', [
         { label: '[ REPLACE ]', fn: function () { run(true); } },
         { label: '[ ADD ]', fn: function () { run(false); } }
@@ -769,13 +781,13 @@ export function initIngest() {
     if (window.showDirectoryPicker) {
       window.showDirectoryPicker({ mode: 'read' }).then(function (h) {
         function run(replace) {
-          if (replace) clearContext();
+          if (replace || st.shared) clearContext();
           st.lastDirHandle = h;
           beginBatch();
           return walkHandle(h, h.name + '/').then(afterIngest);
         }
         /* same replace-or-add choice as the dropzone when a project is loaded */
-        if (st.files.size) {
+        if (st.files.size && !st.shared) {
           toast('Folder picked with a project already loaded — replace it, or add to it?', [
             { label: '[ REPLACE ]', fn: function () { run(true); } },
             { label: '[ ADD ]', fn: function () { run(false); } }

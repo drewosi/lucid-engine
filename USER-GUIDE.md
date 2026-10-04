@@ -344,6 +344,37 @@ re-drop the folder.
 pulled from your files; the HTML has zero external assets. You can also copy a
 single exchange with its **[ COPY ]** button.
 
+### Share a project (no server)
+
+Click **[ SHARE ]** under the file tree (or `Ctrl-K` → "Share project"). You pick
+which files go in, then either copy a **link** or download a **bundle**.
+
+- **The link carries the code itself.** Your browser compresses the ticked files
+  (paths, full text, last-modified times) and a project name into the part of the
+  address after `#`. Browsers never send that part to a server, so GitHub Pages
+  never receives it, and neither do we. **Anyone who has the link can read those
+  files**, and so can the chat app or inbox you paste it into. There is no server,
+  so a link can't be revoked or expired.
+- **Links have a size limit: 32,000 characters.** The panel shows the live size
+  against the limit. Everything is ticked by default when it fits; otherwise
+  **[ FIT TO LINK ]** picks the most important files that do (READMEs, manifests,
+  entry points first). Files that look like secrets (`.env`, private keys,
+  credential files) always start unticked.
+- **Too big for a link? Download a bundle.** A `.meridian` file holds the same
+  data as readable JSON (open it in a text editor to see exactly what's inside)
+  and has no size limit. Send it as a file.
+- **Never included:** API keys, provider settings, the conversation, saved
+  projects, or anything else MERIDIAN keeps in your browser.
+- You tick a box confirming you understand the above before either button works.
+
+**Opening a share.** Open the link, or use **[ OPEN SHARED ]** in the rail (or drop
+the `.meridian` file on the drop zone). The project loads **read-only**, badged
+`SHARED · READ-ONLY`: it lives in that tab's memory only, isn't saved (save
+project is blocked), and leaves nothing in browser storage. The `#share=…` part is
+removed from the address bar once loaded, so it isn't passed on by accident. Ask
+questions as usual, with **LOCAL** (no key) or your own key. Loading your own
+folder replaces it.
+
 **Session cost**: a live `$` estimate in the top bar tracks spend as answers
 stream (prompt-cache aware). Click the reset arrow to zero it. Estimates only;
 your provider bills the real amount.
@@ -473,6 +504,9 @@ to the providers you configured. Neither does the landing page.
 - **An orphan/broken result looks wrong.** It traces *static* imports only; runtime
   wiring can't be seen (and the answer says so). Also check whether the target file
   was even loaded.
+- **"This share link is damaged or incomplete."** The link was cut short, usually
+  by a chat app or email client. Ask the sender to resend it, or to send a
+  `.meridian` bundle instead. Nothing is loaded from a broken link.
 - **The answer had no trace.** Some models don't follow the format; use
   **[ RE-GROUND & RETRY ]** or enable **Force Strict Trace** in Settings.
 
@@ -489,6 +523,10 @@ to the providers you configured. Neither does the landing page.
   in IndexedDB.
 - **LOCAL uses no network at all.** And the workbench page loads **zero
   third-party scripts**.
+- **Share links and bundles contain your code.** The link's code sits after `#`,
+  which never reaches any server (GitHub Pages included), but whoever holds the
+  link or `.meridian` file can read the files in it. Keys and settings are never
+  included. See [§10](#10-save-reload-export).
 
 That architecture is the privacy model: not a policy you have to trust, but how
 the thing is built.

@@ -172,6 +172,8 @@ function renderProjects() {
 function initMemory() {
   $('saveproj').addEventListener('click', function () {
     if (!st.files.size) { toast('Load a project first.'); return; }
+    /* a shared snapshot is not on this disk and has nothing to reload from */
+    if (st.shared) { toast('Shared projects are read-only and are not saved. Ask the sender for a .meridian bundle to keep a copy.'); return; }
     var name = window.prompt('Save project as:', guessProjectName());
     if (name === null) return;
     name = name.trim().slice(0, 60) || 'project';

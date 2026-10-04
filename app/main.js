@@ -23,6 +23,7 @@ import { initExport, exportTraces } from './export.js';
 import { initPalette, palOpen, palClose, palOv, openKeymap, closeKeymap, keymapveil } from './palette.js';
 import { initLocalMenu, closeLocalMenu, localmenuveil } from './localmenu.js';
 import { runSelfTests, runAndShowSelfTests } from './selftest.js';
+import { initShare, closeShare, openShareFromHash, shareveil } from './share.js';
 
 /* frame-buster — a <meta> CSP cannot carry frame-ancestors, so refuse to run
    framed: hide the document and bounce the top window to this URL (setting a
@@ -37,6 +38,7 @@ initShell();    /* provider + model from localStorage, theme, first-run veil, se
 initIngest();   /* pickers/dropzone/tree wiring, ground + strict-trace + budget/spend state, ignore patterns */
 initDemo();     /* first-run demo buttons */
 initMemory();   /* saved-projects list + save wiring */
+initShare();    /* share modal, bundle picker, #share= hashchange */
 initChat();     /* composer + streaming controls + cost chip */
 initViewer();
 initExport();
@@ -72,6 +74,7 @@ document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape') {
     if (palOv.classList.contains('on')) { palClose(); return; }
     if (localmenuveil.classList.contains('on')) { closeLocalMenu(); return; }
+    if (shareveil.classList.contains('on')) { closeShare(); return; }
     if (keymapveil.classList.contains('on')) { closeKeymap(); return; }
     if (viewveil.classList.contains('on')) { closeViewer(); return; }
     if (prevveil.classList.contains('on')) { closePreview(); return; }
@@ -83,6 +86,7 @@ document.addEventListener('keydown', function (e) {
 
 syncProviderUI();
 setCtxMode(st.ctxMode); /* also renders the budget */
+openShareFromHash();    /* app.html#share=… — decoded in this tab, then the fragment is cleared */
 window.__meridianSelfTest = runSelfTests; /* L3: run from the console (async — returns a Promise of results) */
 if (/[?&]selftest\b/.test(location.search)) setTimeout(runAndShowSelfTests, 300);
 console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— Engine v0.6 · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');

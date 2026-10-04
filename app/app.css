@@ -376,8 +376,7 @@
   .modal p, .modal li { font-size: 13.5px; color: var(--ink-2); }
   .modal p b, .modal li b { color: var(--ink); font-weight: 500; }
   .modal ul { padding-left: 18px; display: grid; gap: 8px; margin: 12px 0 18px; }
-  .modal .row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
-  .modal a.leglink { color: var(--ink); border-bottom: 1px solid var(--line-strong); }
+  .modal .row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }  .modal a.leglink { color: var(--ink); border-bottom: 1px solid var(--line-strong); }
   .modal a.leglink:hover { color: var(--accent); border-color: var(--accent); }
   /* LOCAL question menu — the "what can I ask" catalog */
   .modal.modal-wide { width: min(680px, 94vw); }
@@ -481,6 +480,22 @@
   .demochip { background: var(--paper); border: 1px solid var(--line-strong); color: var(--ink-2); border-radius: 3px; padding: 6px 11px; font-size: 11.5px; letter-spacing: .02em; cursor: pointer; font-family: inherit; }
   .demochip:hover { border-color: var(--accent); color: var(--ink); }
   .demoacts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .demobanner.err { border-color: var(--err); }
+  .demobanner.err .dm { color: var(--err); }
+
+  /* ============ SHARE — read-only status chip (rail) + share modal ============
+     The shared-project banner reuses .demobanner; the file list reuses the
+     tree's .file-row template and the size meter reuses the budget bar. */
+  #sharednote { margin: 0 0 12px; }
+  .sharechip { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; margin-right: 8px; border: 1px solid var(--accent); border-radius: 3px; color: var(--accent); letter-spacing: .12em; white-space: nowrap; }
+  .share-tools { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-top: 4px; }
+  .share-hd { font-size: 10px; letter-spacing: .14em; color: var(--ink-3); margin-right: auto; }
+  #sharelist { max-height: 30vh; overflow-y: auto; margin-top: 6px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  #sharelist .file-row { padding-left: 2px; }
+  #sharelist .file-row.secret .tk { color: var(--err); }
+  #sharesize { margin: 12px 0 6px; }
+  .share-ack { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: 13px; color: var(--ink); cursor: pointer; line-height: 1.5; }
+  .share-ack input { accent-color: var(--accent); margin: 3px 0 0; flex: none; }
 
   /* ============ PROJECT INTELLIGENCE OVERVIEW (lives in the rail) ============ */
   #overview { border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); padding: 12px 12px 14px; margin: 22px 0 0; }

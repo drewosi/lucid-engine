@@ -124,4 +124,4 @@ function initExport() {
   $('exportmd').addEventListener('click', function () { exportTraces('md'); });
   $('exporthtml').addEventListener('click', function () { exportTraces('html'); });
 }
-export { exportTraces, initExport };
+export { download, exportTraces, initExport };

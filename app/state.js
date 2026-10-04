@@ -20,6 +20,7 @@ export var st = {
   /* project memory */
   lastDirHandle: null,
   pendingProject: null,
+  shared: null,            /* {name, count, created, source} while a read-only shared project is open (share.js) */
   /* chat */
   history: [],
   transcript: [],

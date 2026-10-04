@@ -9,6 +9,7 @@ import { startDemo } from './demo.js';
 import { askLocal } from './local.js';
 import { openLocalMenu } from './localmenu.js';
 import { runAndShowSelfTests } from './selftest.js';
+import { openShare } from './share.js';
 
 /* ============ COMMAND PALETTE (Ctrl/Cmd-K) ============
    Every palette action also exists as a visible control — the palette is
@@ -32,6 +33,8 @@ var ACTIONS = [
   { g: 'CONTEXT', n: 'Select no files', k: '', f: function () { $('selnone').click(); } },
   { g: 'CONTEXT', n: 'Unload project', k: '', f: function () { $('clearctx').click(); } },
   { g: 'PROJECTS', n: 'Save project (tree + settings)', k: '', f: function () { $('saveproj').click(); } },
+  { g: 'PROJECTS', n: 'Share project (link or .meridian bundle)', k: '', f: openShare },
+  { g: 'PROJECTS', n: 'Open a shared bundle (.meridian)', k: '', f: function () { $('bundlepick').click(); } },
   { g: 'CONVERSE', n: 'Focus composer', k: '', f: function () { promptEl.focus(); } },
   { g: 'CONVERSE', n: 'Stop streaming', k: '', f: function () { if (st.aborter) st.aborter.abort(); } },
   { g: 'CONVERSE', n: 'Clear conversation', k: '', f: clearConversation },
