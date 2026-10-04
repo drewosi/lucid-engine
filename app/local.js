@@ -3,7 +3,7 @@ import { dirOf, getIndex } from './indexer.js';
 import { CAP_LOCAL, CAP_MODEL, LOCAL_HELP, classifyIntent, computeSignals, listOrphans, pickSymbol, runInvestigation, symLookup } from './intents.js';
 import { addAiMsg, addUserMsg, attachCopy, renderRich, renderTrace, scrollEnd } from './trace.js';
 import { $, announce, fmtTok, setStatus } from './helpers.js';
-import { isMulti, repoList, repoName, scopeRepo, withScope } from './repos.js';
+import { displayText, isMulti, repoList, repoName, scopeRepo, withScope } from './repos.js';
 import { renderWorkspaceOverview } from './workspace.js';
 import { track } from './analytics.js';
 /* ============ LOCAL ENGINE (NO API · NO AI) ============
@@ -71,8 +71,9 @@ function askLocal(q) {
     var run = withScope(function () { var it = classifyIntent(q); return { intent: it, inv: runInvestigation(q, it) }; });
     var inv = run.inv;
     kind = run.intent.kind;
-    answer = inv.answer;
-    trace = { steps: inv.steps, actions: inv.actions || null };
+    /* several repos: answer prose and step notes read repo:path, like the chips */
+    answer = displayText(inv.answer);
+    trace = { steps: inv.steps.map(function (s) { return Object.assign({}, s, { note: displayText(s.note) }); }), actions: inv.actions || null };
     verdict = inv.verdict;
     /* in a multi-repo workspace, disclose the scope as the first step — the
        same pattern as the pinned-evidence scope step */

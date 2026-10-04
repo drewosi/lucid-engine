@@ -1,5 +1,5 @@
 import { sortedPaths, st } from './state.js';
-import { GROUND_EXCERPT_PAD, GROUND_EXCERPT_TOK, GROUND_MAX_CITES, GROUND_MAX_EVIDENCE, GROUND_MAX_TOK, buildProjectMap, estTokens, getBudget, numberLines, packSmartContext } from './smart-context.js';
+import { GROUND_EXCERPT_PAD, GROUND_EXCERPT_TOK, GROUND_MAX_CITES, GROUND_MAX_EVIDENCE, GROUND_MAX_TOK, MAP_MAX_FRAC, estTokens, fitProjectMap, getBudget, numberLines, packSmartContext } from './smart-context.js';
 import { dirOf, getIndex } from './indexer.js';
 import { classifyIntent, pickSymbol, runInvestigation, symLookup } from './local.js';
 import { groundKinds } from './intents.js';
@@ -275,25 +275,34 @@ function buildScopedBlocks(q) {
     if (invBlock) fblocks.push({ type: 'text', text: invBlock.text });
     return { blocks: fblocks, note: (invBlock || pinBlock) ? gNote.replace(/^ · /, '') : null, ground: invBlock };
   }
-  var map = buildProjectMap();
+  /* one ceiling for the whole send: map, pinned + grounding, selected files, the
+     instruction block and the conversation so far all come out of the budget */
+  var budget = getBudget();
+  var overhead = estTokens(INSTRUCTIONS + STRICT_SUFFIX) + estTokens(q || '');
+  for (var hi = 0; hi < st.history.length; hi++) overhead += estTokens(String(st.history[hi].content || ''));
+  var map = fitProjectMap(Math.floor(budget * MAP_MAX_FRAC));
   if (!map) {
     /* no file checked ≠ no grounding: the FOUND panel renders from `ground`, so the
        model must receive the same block — an empty send under a FOUND chip would lie */
     var nblocks = [];
     if (pinBlock) nblocks.push({ type: 'text', text: pinBlock.text });
     if (invBlock) nblocks.push({ type: 'text', text: invBlock.text });
-    return { blocks: nblocks, note: (invBlock || pinBlock) ? gNote.replace(/^ · /, '') : null, ground: invBlock };
+    var nplan = { budget: budget, map: '', mapTok: 0, groundTok: groundTok, overhead: overhead, fileTok: 0, total: groundTok + overhead,
+      packed: { text: '', count: 0, total: 0, tokens: 0, included: [], notPacked: [] } };
+    return { blocks: nblocks, note: (invBlock || pinBlock) ? gNote.replace(/^ · /, '') : null, ground: invBlock, pin: pinBlock, plan: nplan };
   }
-  /* grounding + pinned are counted against the one budget so the total stays bounded */
-  var packed = packSmartContext(q, Math.max(4000, getBudget() - groundTok));
+  var selHead = 'SELECTED FILES — the subset most relevant to this question. ' + CTX_PREAMBLE + ' Excerpted files keep true line numbers; omitted ranges are marked.\n\n';
+  var mapTok = estTokens(map), headTok = estTokens(selHead);
+  var packed = packSmartContext(q, Math.max(0, budget - mapTok - groundTok - overhead - headTok));
   /* cache the stable map block; pinned + grounding + packed subset vary per question */
   var blocks = [{ type: 'text', text: map, cache_control: { type: 'ephemeral' } }];
   if (pinBlock) blocks.push({ type: 'text', text: pinBlock.text });
   if (invBlock) blocks.push({ type: 'text', text: invBlock.text });
-  if (packed.text) {
-    blocks.push({ type: 'text', text: 'SELECTED FILES — the subset most relevant to this question. ' + CTX_PREAMBLE + ' Excerpted files keep true line numbers; omitted ranges are marked.\n\n' + packed.text });
-  }
-  var mapTok = estTokens(map);
-  return { blocks: blocks, note: 'SMART CTX ' + packed.count + '/' + packed.total + ' FILES ≈ ' + fmtTok(packed.tokens + mapTok + groundTok) + ' TOK' + gNote, ground: invBlock };
+  if (packed.text) blocks.push({ type: 'text', text: selHead + packed.text });
+  /* the preview reads this plan, so what it shows is what is sent */
+  var fileTok = packed.text ? headTok + packed.tokens : 0;
+  var plan = { budget: budget, map: map, mapTok: mapTok, groundTok: groundTok, overhead: overhead, fileTok: fileTok, packed: packed,
+    total: mapTok + groundTok + overhead + fileTok };
+  return { blocks: blocks, note: 'SMART CTX ' + packed.count + '/' + packed.total + ' FILES ≈ ' + fmtTok(plan.total) + ' TOK' + gNote, ground: invBlock, pin: pinBlock, plan: plan };
 }
 export { FENCE, INSTRUCTIONS, STRICT_SUFFIX, buildContextBlocks, buildInvestigationBlock, buildPinnedBlock };

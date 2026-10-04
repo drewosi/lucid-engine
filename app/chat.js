@@ -73,12 +73,15 @@ function preSendOK() {
 
 function httpErrorText(status, body, retryAfter) {
   var detail = '';
-  try { detail = JSON.parse(body).error.message || ''; } catch (e) {}
+  /* OpenAI-style { error: { message } }, or a bare string (LM Studio and other local servers) */
+  try { var pe = JSON.parse(body).error; detail = (typeof pe === 'string' ? pe : pe && pe.message) || ''; } catch (e) { detail = String(body || '').slice(0, 300); }
   if (status === 401) return 'KEY REJECTED (401) — check it in settings.';
   if (status === 403) return 'FORBIDDEN (403) — this key cannot use this model. ' + detail;
   if (status === 404) return 'MODEL NOT FOUND (404) — ' + detail;
   if (status === 429) return 'RATE LIMITED (429) — ' + (retryAfter ? 'retry in ' + retryAfter + 's. ' : 'slow down or raise your provider limits. ') + detail;
-  if (status === 400 && /token|context|length/i.test(detail)) return 'CONTEXT TOO LARGE (400) — deselect some files and retry.';
+  if (status === 400 && /token|context|length/i.test(detail)) return st.ctxMode === 'smart'
+    ? 'CONTEXT TOO LARGE (400): the request is bigger than the model accepts. Token counts here are estimates, so lower the SMART budget in settings (below the context length the model is loaded with) and retry.'
+    : 'CONTEXT TOO LARGE (400): deselect some files, or switch to SMART, and retry.';
   if (status === 400) return 'BAD REQUEST (400) — ' + detail;
   if (status === 529 || status >= 500) return 'PROVIDER OVERLOADED (' + status + ') — retry in a moment.';
   return 'HTTP ' + status + ' — ' + detail;

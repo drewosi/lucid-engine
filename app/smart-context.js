@@ -213,10 +213,13 @@ function packSmartContext(q, budgetTokens) {
   for (var k = 0; k < pinnedFirst.length && count < SMART_MAX_FILES; k++) {
     var remaining = budgetTokens - used;
     if (remaining < 400) break;
-    var e = pinnedFirst[k], body, tok, whole;
+    var e = pinnedFirst[k], body = null, tok, whole;
     if (e.f.tokens <= WHOLE_FILE_MAX && e.f.tokens <= remaining) {
-      body = numberLines(e.f.content, 1); tok = e.f.tokens; whole = true;
-    } else {
+      /* count what is sent (header + line-number prefixes), not the bare file */
+      body = numberLines(e.f.content, 1); tok = estTokens('═══ FILE: ' + e.p + ' ═══\n' + body, e.p); whole = true;
+      if (tok > remaining) body = null;
+    }
+    if (body === null) {
       var ex = excerptFile(e.f, terms, Math.min(remaining, Math.max(1500, WHOLE_FILE_MAX / 2)), e.p);
       if (ex.tokens > remaining) continue;
       body = ex.text; tok = ex.tokens; whole = false;
@@ -337,6 +340,63 @@ function buildProjectMap() {
   st.mapDirty = false;
   return st.mapCache;
 }
+
+/* the map within a token cap: the full map when it fits, otherwise a condensed
+   one (directories collapsed to a shallower depth, then key-file heads dropped,
+   then the listing capped). Deterministic for a given project + cap, so the
+   cached-prefix behavior of the map block is kept. */
+var MAP_MAX_FRAC = 0.2; /* share of the SMART budget the project map may use */
+var fitMemo = { src: null, cap: 0, out: '' };
+function fitProjectMap(maxTok) {
+  var full = buildProjectMap();
+  if (!full || estTokens(full) <= maxTok) return full;
+  if (fitMemo.src === full && fitMemo.cap === maxTok) return fitMemo.out;
+  var paths = [];
+  st.files.forEach(function (f, p) { if (f.checked) paths.push(p); });
+  paths.sort();
+  var pkgs = detectPackages(paths), pkgByDir = {};
+  pkgs.forEach(function (pk) { pkgByDir[pk.dir] = pk; });
+  var heads = [], keys = pickKeyFiles(paths, pkgs);
+  keys.slice(0, 3).forEach(function (p) {
+    var lines = st.files.get(p).content.split('\n'), n = Math.min(20, lines.length);
+    heads.push('--- KEY FILE HEAD (first ' + n + ' of ' + lines.length + ' lines): ' + p + ' ---\n' + numberLines(lines.slice(0, n).join('\n'), 1));
+  });
+  var wn = workspaceNote();
+  function render(depth, withHeads, maxRows) {
+    var agg = Object.create(null);
+    paths.forEach(function (p) {
+      var segs = p.split('/'); segs.pop();
+      var key = segs.slice(0, depth).join('/') || '.';
+      var g = agg[key] || (agg[key] = { files: 0, tok: 0, subs: Object.create(null) });
+      g.files++; g.tok += st.files.get(p).tokens;
+      if (segs.length > depth) g.subs[segs[depth]] = 1;
+    });
+    var rows = Object.keys(agg).sort(), hidden = null;
+    if (rows.length > maxRows) {
+      var keep = rows.slice().sort(function (a, b) { return agg[b].files - agg[a].files; }).slice(0, maxRows), kept = Object.create(null);
+      keep.forEach(function (k) { kept[k] = 1; });
+      hidden = { dirs: 0, files: 0 };
+      rows = rows.filter(function (k) { if (kept[k]) return true; hidden.dirs++; hidden.files += agg[k].files; return false; });
+    }
+    var out = rows.map(function (k) {
+      var g = agg[k], ns = Object.keys(g.subs).length, pkg = pkgByDir[k];
+      return (k === '.' ? './' : k + '/') + '  ' + g.files + ' file' + (g.files === 1 ? '' : 's') + ' ≈' + fmtTok(g.tok) + ' tok'
+        + (ns ? ' · ' + ns + ' subdir' + (ns === 1 ? '' : 's') : '') + (pkg ? '  ◆ PACKAGE' + (pkg.name ? ': ' + pkg.name : '') : '');
+    });
+    if (hidden) out.push('… ' + hidden.dirs + ' smaller directories (' + hidden.files + ' files) not listed');
+    return (wn ? wn + '\n\n' : '') + 'PROJECT MAP (condensed): ' + paths.length + ' files is too many to list within the context budget, so directories are collapsed to '
+      + depth + ' level' + (depth === 1 ? '' : 's') + ' deep (directory ≈tokens · file count). "◆ PACKAGE" marks a directory with its own build manifest. Only a question-relevant subset of files is included in full after the map. If a directory you cannot see would answer better, say which one.\n\n'
+      + out.join('\n') + (withHeads && heads.length ? '\n\n' + heads.join('\n\n') : '');
+  }
+  var ladder = [[3, true, 400], [2, true, 400], [1, true, 400], [2, false, 200], [1, false, 200], [1, false, 80], [1, false, 30], [1, false, 10]];
+  var best = '';
+  for (var i = 0; i < ladder.length; i++) {
+    best = render(ladder[i][0], ladder[i][1], ladder[i][2]);
+    if (estTokens(best) <= maxTok) break;
+  }
+  fitMemo = { src: full, cap: maxTok, out: best };
+  return best;
+}
 function getBudget() {
   var cap = MODELS[st.model] ? MODELS[st.model].ctx : 200000;
   var v = parseInt(lsGet(LS.ctxbudget), 10);
@@ -344,4 +404,4 @@ function getBudget() {
   return Math.min(v, cap);
 }
 
-export { AUTO_SMART_FRAC, CONFIG_NAMES, DOCS_PATH, ENTRY_NAMES, GROUND_EXCERPT_PAD, GROUND_EXCERPT_TOK, GROUND_MAX_CITES, GROUND_MAX_EVIDENCE, GROUND_MAX_TOK, README_NAMES, TEST_PATH, buildProjectMap, detectPackages, estTokens, getBudget, numberLines, packSmartContext, queryTerms, staticScore };
+export { AUTO_SMART_FRAC, CONFIG_NAMES, DOCS_PATH, ENTRY_NAMES, GROUND_EXCERPT_PAD, GROUND_EXCERPT_TOK, GROUND_MAX_CITES, GROUND_MAX_EVIDENCE, GROUND_MAX_TOK, MAP_MAX_FRAC, README_NAMES, TEST_PATH, buildProjectMap, detectPackages, estTokens, fitProjectMap, getBudget, numberLines, packSmartContext, queryTerms, staticScore };

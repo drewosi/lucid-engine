@@ -64,12 +64,44 @@ var STOP_INTENT = Object.assign(Object.create(null), { where: 1, what: 1, which:
    falls back to bare query terms these are skipped in favor of the real noun
    ("who uses the store" must pick `store`, not the verb `uses`) */
 var PICK_SKIP = Object.assign(Object.create(null), { uses: 1, use: 1, used: 1, using: 1, call: 1, calls: 1, called: 1, calling: 1, import: 1, imports: 1, imported: 1, importing: 1, depend: 1, depends: 1, depended: 1, reference: 1, references: 1, referenced: 1 });
+/* question grammar — never the symbol a question is about, even when the project
+   happens to define a symbol with that name (Godot defines `where`). A grammar
+   word is only picked when it is the one explicitly named: "where is where defined". */
+var GRAMMAR = Object.assign(Object.create(null), STOP_INTENT, PICK_SKIP, { how: 1, why: 1, when: 1, whom: 1, whose: 1, was: 1, were: 1, be: 1, been: 1, did: 1, done: 1,
+  a: 1, an: 1, of: 1, to: 1, in: 1, on: 1, at: 1, by: 1, from: 1, into: 1, or: 1, it: 1, its: 1, me: 1, my: 1, i: 1, you: 1, can: 1, could: 1, would: 1, should: 1,
+  we: 1, us: 1, our: 1, your: 1, they: 1, them: 1, there: 1, here: 1, any: 1, some: 1, not: 1, no: 1,
+  define: 1, defines: 1, declare: 1, declares: 1, declaration: 1, location: 1, located: 1, locate: 1, live: 1, lives: 1, implemented: 1, get: 1, gets: 1,
+  variable: 1, var: 1, const: 1, type: 1, struct: 1, enum: 1, interface: 1, called: 1, invoked: 1, invokes: 1 });
+var KIND_WORDS = '(?:(?:the|a|an)\\s+)?(?:(?:function|method|class|symbol|variable|const|constant|type|struct|enum|interface|field|property|signal)\\s+)?';
+var IDENT = '([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)';
+/* positional slots, strongest first: "is X defined", "where is X", "define X",
+   "who calls X", "references to X", "find X". The first slot holding a
+   non-grammar word names the symbol; `is X defined` accepts any X but a pronoun. */
+var SLOT_RES = [
+  new RegExp('\\b(?:is|are|was)\\s+' + KIND_WORDS + IDENT + '\\s+(?:defined|declared|implemented|created|set|used|called|referenced|imported)\\b', 'i'),
+  new RegExp('\\bwhere(?:\'s|\\s+is|\\s+are|\\s+was|\\s+does|\\s+do)?\\s+' + KIND_WORDS + IDENT, 'i'),
+  new RegExp('\\b(?:define[sd]?|declares?|definition\\s+of|declaration\\s+of)\\s+' + KIND_WORDS + IDENT, 'i'),
+  new RegExp('\\b(?:who|what|which)\\s+(?:calls|uses|references|invokes|imports|depends\\s+on)\\s+' + KIND_WORDS + IDENT, 'i'),
+  new RegExp('\\b(?:references?|refs|callers|usages?|uses|call\\s+sites?)\\s+(?:to|of|for)\\s+' + KIND_WORDS + IDENT, 'i'),
+  new RegExp('\\b(?:find|locate|show)\\s+' + KIND_WORDS + IDENT, 'i')
+];
+var PRONOUN = Object.assign(Object.create(null), { it: 1, this: 1, that: 1, them: 1, they: 1, the: 1, a: 1, an: 1 });
+function slotSymbol(q) {
+  for (var i = 0; i < SLOT_RES.length; i++) {
+    var m = q.match(SLOT_RES[i]);
+    if (!m) continue;
+    var w = m[1], lw = w.toLowerCase();
+    if (i === 0 ? !PRONOUN[lw] : !GRAMMAR[lw]) return w;
+  }
+  return '';
+}
 /* pick the most identifier-like token from a question (for def/refs/symbols) */
 function pickSymbol(q, idx) {
   var bt = q.match(/`([^`]+)`/); if (bt) return bt[1].trim();
   var qq = q.match(/["“”']([^"“”']+)["“”']/); if (qq) return qq[1].trim();
+  var slot = slotSymbol(q); if (slot) return slot;
   var toks = q.match(/[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/g) || [];
-  if (idx) { for (var i = 0; i < toks.length; i++) { if (symLookup(toks[i], idx).length) return toks[i]; } }
+  if (idx) { for (var i = 0; i < toks.length; i++) { if (!GRAMMAR[toks[i].toLowerCase()] && symLookup(toks[i], idx).length) return toks[i]; } }
   var fancy = toks.filter(function (t) { return (/[A-Z]/.test(t) || t.indexOf('_') !== -1 || t.indexOf('.') !== -1 || /\d/.test(t)) && !STOP_INTENT[t.toLowerCase()]; });
   if (fancy.length) return fancy.sort(function (a, b) { return b.length - a.length; })[0];
   var terms = queryTerms(q);
@@ -874,10 +906,14 @@ var INTENTS = [
       steps.push({ action: 'look up “' + arg + '” in the symbol index', note: defs.length + ' definition' + (defs.length === 1 ? '' : 's'), evidence: defs.slice(0, 8).map(function (d) { return evAt(d.file, d.line); }), status: 'done' });
       var refs = localSearchData(arg, 'refs');
       steps.push({ action: 'scan for references', note: refs.hits.length + ' reference' + (refs.hits.length === 1 ? '' : 's'), evidence: refs.hits.slice(0, 6).map(localEvidence), status: 'done' });
-      var actions = [{ kind: 'refs', command: arg, why: 'list every reference to ' + arg }];
+      var actions = defs.length ? [{ kind: 'refs', command: arg, why: 'list every reference to ' + arg }]
+        : [{ kind: 'search', command: arg, why: 'plain text search for ' + arg + ' (finds it in docs, comments and code blocks too)' }];
       var ans = defs.length
         ? '`' + arg + '` is defined in ' + defs.length + ' place' + (defs.length === 1 ? '' : 's') + ':\n\n' + defs.slice(0, 8).map(function (d) { return '- `' + d.file + '` line ' + d.line + ' (' + d.kind + ')'; }).join('\n') + '\n\nEvidence chips open each definition at its exact line.'
-        : 'No indexed definition named `' + arg + '`. It may be an external symbol, a dynamic name, or spelled differently. The reference scan above shows where the term appears.';
+        : 'No indexed definition named `' + arg + '`. It may be external, generated at runtime, spelled differently, or only written in a doc or code sample the index does not read. '
+          + (refs.hits.length ? 'The name does appear in ' + plural(refs.filesHit, 'file') + ' (see the reference scan above).'
+            : refs.aborted || refs.timedOut ? 'The reference scan stopped early on this large project, so it may still appear.' : 'The name does not appear as a whole word in any loaded file.')
+          + ' Run the text search below to look for it anywhere.';
       return { steps: steps, verdict: LOCAL_VERDICT(), actions: actions, answer: ans };
     } },
 

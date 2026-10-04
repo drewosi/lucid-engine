@@ -195,6 +195,14 @@ function displayPath(p) {
   return r === LOOSE ? p : r + ':' + p.slice(r.length + 1);
 }
 function citeText(file, a, b) { return displayPath(file) + ':' + a + '–' + b; }
+/* the same "repo:path" form for answer prose: every "label/…" path that starts a
+   word or a `code` span is rewritten. Unchanged for one project; URLs untouched. */
+function displayText(s) {
+  if (!isMulti() || !s) return s;
+  var labels = repoList().filter(function (r) { return !r.loose; }).map(function (r) { return escRe(r.label); });
+  if (!labels.length) return s;
+  return s.replace(new RegExp('(^|[\\s`(“"\'])(' + labels.join('|') + ')/(?=[\\w.])', 'g'), '$1$2:');
+}
 /* map a cited path to a loaded one: the "repo:path" display form, or a bare
    repo-relative path that exists in exactly one repo. Ambiguous or unknown
    paths come back unchanged (their chips stay unverifiable, honestly). */
@@ -340,5 +348,5 @@ function workspaceFacts(idx) {
   return { repos: list.map(function (r) { return stats[r.label]; }), sharedDeps: sharedDeps, links: links, crossImports: crossImports, sharedNames: sharedNames };
 }
 
-export { LOOSE, activeRepo, citeText, cleanLabel, displayPath, dropRepoFiles, fullFiles, hasRepo, inScopedCall, isMulti, manifestDeps, registerRepo, relOf, remapRoot,
+export { LOOSE, activeRepo, citeText, cleanLabel, displayPath, displayText, dropRepoFiles, fullFiles, hasRepo, inScopedCall, isMulti, manifestDeps, registerRepo, relOf, remapRoot,
   repoList, repoName, repoOf, resetWorkspace, resolveCitePath, scopeFilter, scopeRepo, uniqueLabel, withFull, withRepo, withScope, workspaceFacts, workspaceNote };

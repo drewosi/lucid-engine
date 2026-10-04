@@ -1,19 +1,19 @@
 import { estTokens, packSmartContext, staticScore } from './smart-context.js';
-import { buildIndex, detectLang } from './indexer.js';
+import { buildIndex, detectLang, getIndex } from './indexer.js';
 import { invalidateAll, st } from './state.js';
 import { SAMPLE_PROJECT, wantsDemo } from './demo.js';
 import { classifyIntent } from './local.js';
-import { INTENTS, LOCAL_MENU, LOCAL_STARTERS, listOrphans, runInvestigation } from './intents.js';
+import { INTENTS, LOCAL_MENU, LOCAL_STARTERS, listOrphans, pickSymbol, runInvestigation, symLookup } from './intents.js';
 import { extractTrace } from './trace.js';
 import { httpErrorText, parseStreamEvent, splitSseEvents } from './chat.js';
 import { __setCapsForTest, ignoredDirPrefix, ingestFile, runIngestPool } from './ingest.js';
 import { localSearchData } from './actions.js';
-import { buildContextBlocks } from './prompt.js';
-import { app, esc, lsDel, lsGet, lsSet, rememberFocus, returnFocus, toast, trap } from './helpers.js';
+import { INSTRUCTIONS, buildContextBlocks } from './prompt.js';
+import { app, esc, fmtTok, lsDel, lsGet, lsSet, rememberFocus, returnFocus, toast, trap } from './helpers.js';
 import { LS } from './config.js';
 import { BUNDLE_NOTE, FILE_FIELDS, PAYLOAD_FIELDS, SHARE_LINK_MAX_CHARS, bundleText, buildSharePayload, createShareLink, decodeShareData,
   defaultSharePaths, encodeShareData, isSecretish, measureLink, parseBundleText, payloadEntries, readBundleFile } from './share.js';
-import { citeText, displayPath, dropRepoFiles, isMulti, registerRepo, remapRoot, repoList, repoOf, resetWorkspace, resolveCitePath, scopeRepo, uniqueLabel, withScope } from './repos.js';
+import { citeText, displayPath, displayText, dropRepoFiles, isMulti, registerRepo, remapRoot, repoList, repoOf, resetWorkspace, resolveCitePath, scopeRepo, uniqueLabel, withScope } from './repos.js';
 import { claimLabel, selectedTokens } from './ingest.js';
 import { buildSaveRecord } from './memory.js';
 import { evidenceChip } from './trace.js';
@@ -283,6 +283,72 @@ function demoLinkCases(ok) {
   ok('demo link · a #share= link wins over ?demo', wantsDemo('?demo', '#share=v1.abc') === false);
   ok('demo link · an unrelated hash does not block it', wantsDemo('?demo', '#top') === true);
 }
+/* "where is X defined" on a project that defines a symbol named `where` (real
+   Godot + GDScript reports): the named identifier must win over grammar words,
+   and a name missing from the index is said to be missing, never swapped */
+function symbolPickCases(ok) {
+  var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty };
+  var F = {
+    'src/where.js': 'export const where = 1;\nexport function main() { return where; }',
+    'tools/gles3_builders.py': 'import os\n\n\nclass GLES3HeaderStruct:\n    pass',
+    'notes.txt': 'connect the _on_talk_submitted handler in the talk scene'
+  };
+  function inv(q) { var it = classifyIntent(q); return { it: it, r: runInvestigation(q, it) }; }
+  try {
+    st.files = new Map();
+    Object.keys(F).forEach(function (p) { st.files.set(p, stEntry(p, F[p])); });
+    invalidateAll();
+    var idx = getIndex();
+    ok('pick · fixture defines a symbol named `where`', symLookup('where', idx).length === 1);
+    var a = inv('where is GLES3HeaderStruct defined');
+    ok('pick · named identifier beats the grammar word "where"', a.it.arg === 'GLES3HeaderStruct' && /tools\/gles3_builders\.py` line 4 \(class\)/.test(a.r.answer), a.it.arg + ' · ' + a.r.answer.split('\n')[0]);
+    var b = inv('where is _on_talk_submitted defined');
+    ok('pick · a name missing from the index is reported missing', b.it.arg === '_on_talk_submitted' && /No indexed definition named `_on_talk_submitted`/.test(b.r.answer)
+      && b.r.answer.indexOf('src/where.js') === -1, b.it.arg + ' · ' + b.r.answer.split('\n')[0]);
+    ok('pick · the missing case offers the text search', (b.r.actions || []).some(function (x) { return x.kind === 'search' && x.command === '_on_talk_submitted'; }));
+    var c = inv('where is ghostFn defined in main');
+    ok('pick · the "where is X" slot wins over a later indexed word', c.it.arg === 'ghostFn' && /No indexed definition named `ghostFn`/.test(c.r.answer), c.it.arg);
+    ok('pick · grammar words never picked from the index', pickSymbol('where is it', idx) !== 'where' && pickSymbol('find the definition', idx) !== 'where', pickSymbol('where is it', idx));
+    ok('pick · "who calls X" / "find X" slots', pickSymbol('who calls main', idx) === 'main' && pickSymbol('find GLES3HeaderStruct', idx) === 'GLES3HeaderStruct'
+      && pickSymbol('where is the class GLES3HeaderStruct', idx) === 'GLES3HeaderStruct');
+    var d = inv('where is where defined');
+    ok('pick · an explicitly named grammar-word symbol still resolves', d.it.arg === 'where' && /src\/where\.js/.test(d.r.answer), d.it.arg);
+  } finally {
+    st.files = keep.files; st.projectIndex = keep.idx; st.indexDirty = keep.dirty;
+    invalidateAll();
+  }
+}
+/* SMART on a huge project (8000-file Godot report): map + grounding + packed
+   files + instructions must fit the configured budget, and the totals the
+   preview reads (cb.plan) are the totals of what is sent */
+function smartBudgetCases(ok) {
+  var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty, ctxMode: st.ctxMode, groundMode: st.groundMode, pins: st.pinnedEv,
+    history: st.history, budget: lsGet(LS.ctxbudget), mapCache: st.mapCache, mapDirty: st.mapDirty };
+  try {
+    st.files = new Map(); st.pinnedEv = []; st.history = [];
+    var body = new Array(40).join('  int value_x = compute_thing(alpha, beta) + offset;\n');
+    for (var i = 0; i < 3000; i++) {
+      var p = 'engine/mod' + (i % 30) + '/sub' + (i % 7) + '/deep' + (i % 5) + '/file' + i + '.cpp';
+      st.files.set(p, stEntry(p, 'void fn_' + i + '() {\n' + body + '}\n'));
+    }
+    invalidateAll();
+    lsSet(LS.ctxbudget, '20000');
+    st.ctxMode = 'smart'; st.groundMode = true;
+    var q = 'where is fn_12 used';
+    var cb = buildContextBlocks(q);
+    var sent = cb.blocks.reduce(function (a, b) { return a + estTokens(b.text); }, 0) + estTokens(INSTRUCTIONS) + estTokens(q);
+    ok('smart-ctx · whole send fits the budget on a huge project', sent <= 20000, '≈' + sent + ' tok sent vs 20000 budget');
+    ok('smart-ctx · huge project map is condensed', /condensed/.test(cb.blocks[0].text) && estTokens(cb.blocks[0].text) < 20000 * 0.25, '≈' + estTokens(cb.blocks[0].text) + ' tok map');
+    ok('smart-ctx · plan totals match the send', !!cb.plan && cb.plan.total <= 20000 && Math.abs(cb.plan.total - sent) <= sent * 0.1
+      && (cb.note || '').indexOf(fmtTok(cb.plan.total)) !== -1, cb.plan ? cb.plan.total + ' vs ' + sent + ' · ' + cb.note : 'no plan');
+    ok('smart-ctx · files still pack under the shrunk budget', cb.plan && cb.plan.packed.count > 0, cb.plan ? cb.plan.packed.count + ' files' : '');
+  } finally {
+    if (keep.budget === null) lsDel(LS.ctxbudget); else lsSet(LS.ctxbudget, keep.budget);
+    st.files = keep.files; st.projectIndex = keep.idx; st.indexDirty = keep.dirty; st.ctxMode = keep.ctxMode; st.groundMode = keep.groundMode;
+    st.pinnedEv = keep.pins; st.history = keep.history;
+    invalidateAll();
+  }
+}
 function workspaceCases(ok) {
   var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty, bytes: st.totalBytes, skipList: st.skippedFiles, skipped: st.skipped,
     ctxMode: st.ctxMode, groundMode: st.groundMode, pins: st.pinnedEv };
@@ -299,7 +365,8 @@ function workspaceCases(ok) {
   try {
     /* one project, no repos: nothing changes for single-project users */
     resetWorkspace();
-    ok('workspace · single project stays unlabelled', !isMulti() && citeText('src/x.js', 1, 2) === 'src/x.js:1–2' && displayPath('src/x.js') === 'src/x.js');
+    ok('workspace · single project stays unlabelled', !isMulti() && citeText('src/x.js', 1, 2) === 'src/x.js:1–2' && displayPath('src/x.js') === 'src/x.js'
+      && displayText('`alpha/src/x.js` line 2') === '`alpha/src/x.js` line 2');
     load();
     /* add / remove */
     ok('workspace · two repos registered with live counts', isMulti() && repoList().length === 2 && repoList()[0].files === 4 && repoList()[1].files === 3,
@@ -369,6 +436,12 @@ function workspaceCases(ok) {
     ok('intent · workspace finds the repo link + cross-repo import', /`beta` → `alpha` via `@acme\/alpha`/.test(wsInv.answer) && /`beta` → `alpha` ×1/.test(wsInv.answer));
     ok('intent · workspace finds names exported in both repos', /`formatDate` \(`alpha`, `beta`\)/.test(wsInv.answer));
     ok('intent · workspace evidence points at real files', wsInv.steps.some(function (s) { return (s.evidence || []).some(function (e) { return e.file === 'beta/package.json' && e.startLine > 1; }); }));
+    /* LOCAL answer text reads repo:path like the chips, never the internal repo/path */
+    var wdef = inv('where is formatDate defined');
+    var wdefText = displayText(wdef.answer);
+    ok('workspace · LOCAL answer text shows repo:path', wdefText.indexOf('`alpha:src/util.js`') !== -1 && wdefText.indexOf('`beta:src/util.js`') !== -1
+      && wdefText.indexOf('alpha/src/util.js') === -1 && wdefText.indexOf('beta/src/util.js') === -1, wdefText.split('\n').slice(2, 4).join(' '));
+    ok('workspace · display leaves non-path text and URLs alone', displayText('`alpha` and `beta` share https://x.io/alpha/y') === '`alpha` and `beta` share https://x.io/alpha/y');
     st.ws.scope = 'repo'; st.ws.active = 'beta';
     var wsScoped = withScope(function () { return inv('workspace'); });
     ok('intent · workspace reads every repo even when scoped', /`alpha`/.test(wsScoped.answer) && /2 repos/.test(wsScoped.answer));
@@ -1005,6 +1078,18 @@ function runSelfTests() {
     ok('http · 429 uses retry-after', httpErrorText(429, '', '12').indexOf('retry in 12s') !== -1);
     ok('http · 400 context too large', httpErrorText(400, JSON.stringify({ error: { message: 'prompt exceeds context length' } })).indexOf('CONTEXT TOO LARGE') === 0);
     ok('http · 529 overloaded', httpErrorText(529, '').indexOf('PROVIDER OVERLOADED') === 0);
+    /* LM Studio-style 400: the error is a bare string, not { message } */
+    var lmBody = JSON.stringify({ error: 'Trying to keep the first 130985 tokens when context the overflows. However, the model is loaded with context length of 32768' });
+    var ctxSaved = st.ctxMode;
+    st.ctxMode = 'smart';
+    var lmSmart = httpErrorText(400, lmBody);
+    st.ctxMode = 'full';
+    var lmFull = httpErrorText(400, lmBody);
+    st.ctxMode = ctxSaved;
+    ok('http · 400 over-context (string error) hints at the SMART budget', lmSmart.indexOf('CONTEXT TOO LARGE') === 0 && /lower the SMART budget in settings/.test(lmSmart), lmSmart);
+    ok('http · 400 over-context in FULL hints at fewer files or SMART', lmFull.indexOf('CONTEXT TOO LARGE') === 0 && /SMART/.test(lmFull) && !/budget/.test(lmFull), lmFull);
+    symbolPickCases(ok);
+    smartBudgetCases(ok);
     /* multi-repo workspace — self-contained scratch state, restored on exit */
     workspaceCases(ok);
     demoLinkCases(ok);

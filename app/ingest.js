@@ -1,12 +1,12 @@
 import { invalidateAll, invalidateSelection, sortedPaths, st } from './state.js';
-import { AUTO_SMART_FRAC, buildProjectMap, estTokens, getBudget, packSmartContext, staticScore } from './smart-context.js';
+import { AUTO_SMART_FRAC, estTokens, getBudget, staticScore } from './smart-context.js';
 import { detectLang } from './indexer.js';
 import { $, fmtTok, lsDel, lsGet, lsSet, rememberFocus, returnFocus, setStatus, toast, trap } from './helpers.js';
 import { applyPendingProject, renderProjects, walkHandle } from './memory.js';
 import { renderOverview } from './local.js';
 import { recordSession as recordSessionDrift } from './drift.js';
 import { LS, MODELS } from './config.js';
-import { INSTRUCTIONS, buildInvestigationBlock, buildPinnedBlock } from './prompt.js';
+import { INSTRUCTIONS, buildContextBlocks, buildInvestigationBlock, buildPinnedBlock } from './prompt.js';
 import { openBundleFile, syncSharedUI } from './share.js';
 import { dropRepoFiles, hasRepo, isMulti, registerRepo, remapRoot, repoList, repoName, resetWorkspace, scopeFilter, scopeRepo, uniqueLabel, withScope } from './repos.js';
 import { afterWorkspaceIngest, pendingLabelFor, renderWorkspace } from './workspace.js';
@@ -579,7 +579,7 @@ function closeSkipReview() {
 
 /* ---- context send preview ----
    Shows exactly what the next question will send, computed by the SAME
-   functions the request uses (buildProjectMap / packSmartContext /
+   functions the request uses (buildContextBlocks /
    assembleContext) — the preview cannot drift from reality. */
 var prevveil = $('prevveil'), untrapPrev = null;
 /* the preview runs inside the question scope, exactly like the real request */
@@ -630,14 +630,17 @@ function buildPreview() {
     note(sr !== null ? '// scope: ' + repoName(sr) + ' only. the other repos stay loaded but are not sent. switch [ ASK ] under WORKSPACE to include them.'
                      : '// scope: all ' + repoList().length + ' repos. every file is sent under its repo label (repo/path), with a workspace note naming the repos.');
   }
+  /* SMART: the request's own plan (buildContextBlocks), so the totals here are the send's */
+  var cb = smart ? buildContextBlocks(q) : null;
   if (smart) {
-    var map = buildProjectMap();
-    var packed = packSmartContext(q, getBudget());
-    var mapTok = estTokens(map);
-    $('prevstat').textContent = 'SMART · ' + packed.count + '/' + packed.total + ' FILES · ≈' + fmtTok(packed.tokens + mapTok) + ' TOK';
+    var plan = cb.plan, map = plan.map, packed = plan.packed, mapTok = plan.mapTok;
+    $('prevstat').textContent = 'SMART · ' + packed.count + '/' + packed.total + ' FILES · ≈' + fmtTok(plan.total) + ' TOK';
     note(q ? '// packed for the question currently in the composer: “' + q.slice(0, 80) + (q.length > 80 ? '…' : '') + '”'
            : '// no question typed — packed by importance and recency alone. type a question first for a query-aware preview.');
-    note('// budget ≈' + fmtTok(getBudget()) + ' tokens · instructions block adds ≈' + fmtTok(estTokens(INSTRUCTIONS)) + ' more.');
+    note('// budget ≈' + fmtTok(plan.budget) + ' tokens for the whole send · this send ≈' + fmtTok(plan.total) + ': map ≈' + fmtTok(mapTok)
+      + ', files ≈' + fmtTok(plan.fileTok) + ', grounding and pins ≈' + fmtTok(plan.groundTok)
+      + ', instructions and conversation ≈' + fmtTok(plan.overhead) + '. estimates; a model\'s own tokenizer can count more.');
+    if (plan.total > plan.budget) note('// over budget: the map, grounding and conversation alone exceed it. raise the budget in settings or clear the conversation.');
     sec('BLOCK 1 — PROJECT MAP ≈' + fmtTok(mapTok) + ' TOK (cached between questions)');
     var pre = document.createElement('pre');
     pre.className = 'mapview';
@@ -684,7 +687,7 @@ function buildPreview() {
     if (sel.count > shown) note('// … ' + (sel.count - shown) + ' more files not listed here (all are sent).');
   }
   /* pinned evidence — same helper the real request uses, so the preview cannot drift */
-  var pinB = buildPinnedBlock();
+  var pinB = cb ? cb.pin : buildPinnedBlock();
   if (pinB) {
     sec('PINNED EVIDENCE · ' + pinB.count + ' CITATION' + (pinB.count === 1 ? '' : 'S') + ' ≈' + fmtTok(pinB.tokens) + ' TOK (pinned, uncached)');
     note('// excerpts of the citations pinned in the tray — sent with every question while pinned. unpin (or [ CLEAR ]) to stop.');
@@ -695,7 +698,7 @@ function buildPreview() {
   }
   /* grounding block — same helper the real request uses, so the preview cannot drift */
   if (st.groundMode) {
-    var invB = buildInvestigationBlock(q);
+    var invB = cb ? cb.ground : buildInvestigationBlock(q);
     if (invB) {
       sec('GROUNDING — MERIDIAN EVIDENCE PACK · ' + invB.count + ' ITEM' + (invB.count === 1 ? '' : 'S') + ' ≈' + fmtTok(estTokens(invB.text)) + ' TOK (per question, uncached)');
       note(q ? '// deterministic findings + attributed source excerpts for the composed question — sent after the cached context so the model reasons on verified path:line evidence.'
