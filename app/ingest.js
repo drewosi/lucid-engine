@@ -37,7 +37,17 @@ function skipSummary(c) {
 var IGNORE_DIRS = ['.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', 'target', 'vendor', '__pycache__', '.venv', 'venv', 'coverage', '.cache', '.idea', '.vscode',
                    'obj', '.gradle', 'pods', '.tox', '.mypy_cache', '.pytest_cache', '.terraform', '_build', '.dart_tool'];
 var BIN_EXT = /\.(png|jpe?g|gif|webp|avif|ico|icns|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|m4[av]|mov|avi|mkv|webm|ogg|wav|flac|zip|gz|bz2|xz|7z|rar|tar|jar|war|class|pyc|pyo|o|a|so|dylib|dll|exe|bin|dat|db|sqlite3?|pdf|doc[x]?|xls[x]?|ppt[x]?|ds_store|lockb|wasm)$/i;
-var MAX_FILE = 512 * 1024, MAX_FILES = 8000;
+var MAX_FILE = 512 * 1024;
+/* the file-count cap is a user setting (settings → FILE CAP, LS.maxfiles);
+   anything that is not a positive whole number falls back to the default */
+var DEFAULT_MAX_FILES = 8000, MAX_FILES = DEFAULT_MAX_FILES;
+function validMaxFiles(v) {
+  var s = v == null ? '' : String(v).trim();
+  return /^\d+$/.test(s) && Number(s) > 0 && Number.isSafeInteger(Number(s));
+}
+function parseMaxFiles(v) { return validMaxFiles(v) ? Number(String(v).trim()) : DEFAULT_MAX_FILES; }
+/* (re)read the saved setting into the live cap; returns it */
+function loadMaxFiles() { MAX_FILES = parseMaxFiles(lsGet(LS.maxfiles)); return MAX_FILES; }
 /* aggregate cap — 8000 × 512KB is ~4GB, a tab-killer long before the file-count
    cap fires. Measured in text length (≈bytes for source), tracked in st.totalBytes. */
 var MAX_TOTAL = 300 * 1024 * 1024;
@@ -508,7 +518,7 @@ function renderBudget() {
 
 /* ---- skipped-file review + include-back ---- */
 var skipveil = $('skipveil'), untrapSkip = null;
-var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE', 'read-error': 'READ ERROR — COULD NOT LOAD', 'over-cap': 'OVER THE ' + MAX_FILES + '-FILE CAP', 'mem-cap': 'OVER THE MEMORY CAP' };
+var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE', 'read-error': 'READ ERROR — COULD NOT LOAD', 'over-cap': 'OVER THE FILE CAP', 'mem-cap': 'OVER THE MEMORY CAP' };
 function openSkipReview() {
   var list = $('skiplist');
   list.innerHTML = '';
@@ -523,7 +533,7 @@ function openSkipReview() {
     if (!rows || !rows.length) return;
     var hd = document.createElement('div');
     hd.className = 'skip-grp';
-    hd.textContent = SKIP_LABEL[g] + ' — ' + rows.length + (g === 'oversized' ? ' (>' + (MAX_FILE / 1024) + 'KB)' : '');
+    hd.textContent = (g === 'over-cap' ? 'OVER THE ' + MAX_FILES + '-FILE CAP' : SKIP_LABEL[g]) + ' — ' + rows.length + (g === 'oversized' ? ' (>' + (MAX_FILE / 1024) + 'KB)' : '');
     list.appendChild(hd);
     rows.slice(0, 200).forEach(function (s) {
       var row = document.createElement('div');
@@ -772,6 +782,11 @@ function syncSpendState() {
   $('spendin').value = v > 0 ? v : '';
   $('spendstate').textContent = v > 0 ? '// limit: $' + v.toFixed(2) + ' per session — you’ll be warned before crossing it.' : '// no spend limit set.';
 }
+
+function syncMaxFilesState() {
+  $('maxfilesin').value = MAX_FILES !== DEFAULT_MAX_FILES ? MAX_FILES : '';
+  $('maxfilesstate').textContent = '// file cap: ' + MAX_FILES + ' files' + (MAX_FILES === DEFAULT_MAX_FILES ? ' (default).' : ' (custom; default ' + DEFAULT_MAX_FILES + ').');
+}
 /* ---- ignore patterns (glob-lite: * matches anything) ---- */
 var ignoreRes = [];
 function compileIgnore(txt) {
@@ -836,7 +851,7 @@ function __setCapsForTest(o) {
 /* the ingest caps, for the workspace meter (they cover every repo together) */
 function capInfo() { return { maxFiles: MAX_FILES, maxTotal: MAX_TOTAL, maxFile: MAX_FILE }; }
 
-export { IGNORE_DIRS, __setCapsForTest, afterIngest, capInfo, claimLabel, clearContext, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, loadHandle, maybeAutoSmart, openPreview, openSkipReview, pickFolder, prevveil, recordSkip, refreshSkipUI, renderBudget, renderTree, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
+export { DEFAULT_MAX_FILES, IGNORE_DIRS, __setCapsForTest, afterIngest, capInfo, loadMaxFiles, parseMaxFiles, claimLabel, clearContext, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, loadHandle, maybeAutoSmart, openPreview, openSkipReview, pickFolder, prevveil, recordSkip, refreshSkipUI, renderBudget, renderTree, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
 
 export function initIngest() {
   st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
@@ -955,6 +970,16 @@ export function initIngest() {
     syncSpendState();
   });
   syncSpendState();
+  $('savemaxfiles').addEventListener('click', function () {
+    var raw = $('maxfilesin').value.trim();
+    if (!raw && $('maxfilesin').validity && $('maxfilesin').validity.badInput) { toast('File cap must be a positive whole number. Kept ' + MAX_FILES + '.'); }
+    else if (!raw) { lsDel(LS.maxfiles); loadMaxFiles(); toast('File cap reset to the default (' + DEFAULT_MAX_FILES + ' files).'); }
+    else if (!validMaxFiles(raw)) { toast('File cap must be a positive whole number. Kept ' + MAX_FILES + '.'); }
+    else { lsSet(LS.maxfiles, String(Number(raw))); loadMaxFiles(); toast('File cap set to ' + MAX_FILES + ' files. It applies to the next folder you load.'); }
+    syncMaxFilesState(); refreshSkipUI(); renderWorkspace();
+  });
+  loadMaxFiles();
+  syncMaxFilesState();
   $('saveignore').addEventListener('click', function () {
     setIgnoreText($('ignorein').value);
     var removed = 0;

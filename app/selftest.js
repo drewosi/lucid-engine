@@ -6,7 +6,7 @@ import { classifyIntent } from './local.js';
 import { INTENTS, LOCAL_MENU, LOCAL_STARTERS, listOrphans, pickSymbol, runInvestigation, symLookup } from './intents.js';
 import { extractTrace } from './trace.js';
 import { httpErrorText, parseStreamEvent, splitSseEvents } from './chat.js';
-import { __setCapsForTest, ignoredDirPrefix, ingestFile, runIngestPool } from './ingest.js';
+import { DEFAULT_MAX_FILES, __setCapsForTest, capInfo, ignoredDirPrefix, ingestFile, loadMaxFiles, parseMaxFiles, runIngestPool } from './ingest.js';
 import { localSearchData } from './actions.js';
 import { INSTRUCTIONS, buildContextBlocks } from './prompt.js';
 import { app, esc, fmtTok, lsDel, lsGet, lsSet, rememberFocus, returnFocus, toast, trap } from './helpers.js';
@@ -149,7 +149,7 @@ function ingestCases(ok) {
       ok('ingest · pool enforces the file cap mid-batch', st.files.size === capFiles, st.files.size + ' vs cap ' + capFiles);
       ok('ingest · over-cap counted + reviewable', st.skipped.over - overBase === 4
         && st.skippedFiles.some(function (s) { return s.reason === 'over-cap'; }), 'over Δ=' + (st.skipped.over - overBase));
-      __setCapsForTest({ maxFiles: 8000, maxTotal: st.totalBytes + 3 });
+      __setCapsForTest({ maxFiles: DEFAULT_MAX_FILES, maxTotal: st.totalBytes + 3 });
       var memBase = st.skipped.memcap;
       return runIngestPool([
         { path: 'pool/m0.txt', getFile: function () { return Promise.resolve(new File(['abcdefgh'], 'm0.txt')); } },
@@ -161,6 +161,43 @@ function ingestCases(ok) {
       });
     });
   });
+}
+/* FILE CAP setting — the saved LS.maxfiles value drives the real ingest guard.
+   Runs on its own scratch files map pre-filled to one below the cap, so a
+   20,000-file cap is exercised without reading 20,000 Blobs. The saved setting
+   is put back in finally; restore() puts the live caps back. */
+function fileCapCases(ok) {
+  var savedLS = lsGet(LS.maxfiles), keepFiles = st.files, keepBytes = st.totalBytes;
+  var keepCaps = __setCapsForTest({ maxTotal: 300 * 1024 * 1024 }); /* undo the memory-cap case's tiny ceiling */
+  function capRun(cap) {
+    lsSet(LS.maxfiles, String(cap));
+    loadMaxFiles();
+    st.files = new Map(); st.totalBytes = 0;
+    for (var i = 0; i < cap - 1; i++) st.files.set('capfill/' + i, { content: '', checked: true });
+    var overBase = st.skipped.over, items = [];
+    for (var k = 0; k < 3; k++) (function (n) {
+      items.push({ path: 'capnew/f' + n + '.txt', getFile: function () { return Promise.resolve(new File(['cap' + n], 'f' + n + '.txt')); } });
+    })(k);
+    return runIngestPool(items, 1).then(function () {
+      ok('file cap · custom ' + cap + ' honored by ingest', capInfo().maxFiles === cap && st.files.size === cap && st.skipped.over - overBase === 2,
+        'size ' + st.files.size + ' · over Δ=' + (st.skipped.over - overBase));
+    });
+  }
+  function done() {
+    st.files = keepFiles; st.totalBytes = keepBytes;
+    __setCapsForTest(keepCaps);
+    if (savedLS === null) lsDel(LS.maxfiles); else lsSet(LS.maxfiles, savedLS);
+  }
+  try {
+    lsDel(LS.maxfiles);
+    ok('file cap · default is 8,000 when unset', DEFAULT_MAX_FILES === 8000 && loadMaxFiles() === 8000 && capInfo().maxFiles === 8000, String(capInfo().maxFiles));
+    var bad = ['0', '-5', '-1', 'abc', '', '   ', '2.5', '1e4', '12abc', 'NaN', '99999999999999999999'];
+    var leaked = bad.filter(function (v) { lsSet(LS.maxfiles, v); return loadMaxFiles() !== 8000; });
+    ok('file cap · invalid saved values (0, negative, non-numeric, empty) fall back to 8,000', !leaked.length, leaked.join(' | '));
+    ok('file cap · parse rejects junk + null, accepts whole numbers', parseMaxFiles(null) === 8000 && parseMaxFiles(undefined) === 8000 && parseMaxFiles(0) === 8000
+      && parseMaxFiles(-3) === 8000 && parseMaxFiles(' 2000 ') === 2000 && parseMaxFiles(20000) === 20000);
+  } catch (e) { done(); return Promise.reject(e); }
+  return capRun(2000).then(function () { return capRun(20000); }).then(done, function (e) { done(); throw e; });
 }
 /* share links + bundles — real CompressionStream round-trips over the scratch
    fixture. A sentinel key is planted in the conversation and, only when that
@@ -1129,6 +1166,8 @@ function runSelfTests() {
   /* the ingest cases are async (real Blob reads) — run them, then restore state */
   return ingestCases(ok).catch(function (e) {
     ok('ingest harness executed without throwing', false, String(e && e.message || e));
+  }).then(function () {
+    return fileCapCases(ok).catch(function (e) { ok('file cap harness executed without throwing', false, String(e && e.message || e)); });
   }).then(function () {
     return shareCases(ok).catch(function (e) { ok('share harness executed without throwing', false, String(e && e.message || e)); });
   }).then(function () {

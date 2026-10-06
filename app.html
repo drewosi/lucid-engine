@@ -258,6 +258,15 @@
     </div>
     <p class="note" id="spendstate" aria-live="polite"></p>
 
+    <h3>FILE CAP</h3>
+    <p class="note">The most files Meridian loads into memory at once, across every repo in the workspace. Default 8,000. A higher cap uses more memory, and the ~300 MB text cap still applies. Takes effect on the next folder you load. Blank = default.</p>
+    <div class="key-row">
+      <label for="maxfilesin" class="sr-only">File cap (number of files)</label>
+      <input type="number" id="maxfilesin" min="1" step="1" placeholder="e.g. 20000 (default 8000)">
+      <button class="btn btn-hairline" type="button" id="savemaxfiles">Set</button>
+    </div>
+    <p class="note" id="maxfilesstate" aria-live="polite"></p>
+
     <h3>IGNORE PATTERNS</h3>
     <p class="note">One pattern per line; <b>*</b> matches anything (e.g. <b>*.test.ts</b>, <b>docs/*</b>). Applied at ingest and saved with the project. Lines starting with # are comments.</p>
     <label for="ignorein" class="sr-only">Ignore patterns</label>

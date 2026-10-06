@@ -142,11 +142,18 @@ pick or add it as another repo. Dropping loose files is always additive.
 | dot-folders (except `.github`) | tooling noise |
 | binaries (images, fonts, archives, compiled files) | not source |
 | files > **512 KB** | oversized |
-| anything past **8,000 files** or **~300 MB** total | memory caps that keep the tab alive |
+| anything past the **file cap** (8,000 files by default) or **~300 MB** total | memory caps that keep the tab alive |
 
 Everything skipped is **counted and attributed**. Open **[ REVIEW SKIPPED ]** to
 see the list grouped by reason, and click **[ INCLUDE ]** on any one file to pull
 it in anyway (true binaries stay out).
+
+**File cap.** Up to 8,000 files by default, adjustable in Settings under
+**FILE CAP**. Enter a positive whole number and click **Set**; leave it blank to
+go back to 8,000. Anything else (0, a negative number, text) is rejected. The new
+cap applies to the next folder you load. A higher cap uses more memory, and the
+~300 MB text cap still applies. Shared links and bundles are held to the same cap
+when you open them.
 
 **Ignore patterns.** In Settings, add glob-style filters (one per line, `*` is
 wildcard) to skip more, e.g. `*.min.js`, `*.map`, `*.lock`. **[ Suggest ]**
@@ -193,7 +200,7 @@ this tab's memory only.
   label and only one repo has that path, MERIDIAN maps it; if two repos have it,
   the chip stays greyed out rather than guess.
 - **Unload a repo** with its **✕**. Nothing on disk is touched.
-- **The caps are shared.** The 8,000-file and ~300 MB limits cover the whole
+- **The caps are shared.** The file cap (8,000 by default) and ~300 MB limits cover the whole
   workspace, not each repo. The meter under the repo list shows the total. A repo
   added near the cap loads only partly, and **[ REVIEW SKIPPED ]** lists what was
   left out.

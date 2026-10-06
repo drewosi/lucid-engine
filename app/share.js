@@ -1,7 +1,7 @@
 import { st, sortedPaths } from './state.js';
 import { estTokens, staticScore } from './smart-context.js';
 import { detectLang } from './indexer.js';
-import { afterIngest, clearContext } from './ingest.js';
+import { afterIngest, capInfo, clearContext } from './ingest.js';
 import { $, copyText, rememberFocus, returnFocus, setStatus, toast, trap } from './helpers.js';
 import { convoIn } from './trace.js';
 import { setProvider } from './shell.js';
@@ -31,7 +31,7 @@ import { track } from './analytics.js';
 var SHARE_LINK_MAX_CHARS = 32000;      /* whole-URL ceiling: conservative so links survive chat apps and email */
 var SHARE_FORMAT = 'meridian-share', SHARE_VERSION = 1;
 var SHARE_HASH = '#share=', SHARE_DATA_PREFIX = 'v1.';
-var SHARE_MAX_FILES = 8000, SHARE_MAX_FILE_CHARS = 512 * 1024; /* the same caps a folder load enforces */
+var SHARE_MAX_FILE_CHARS = 512 * 1024; /* the same caps a folder load enforces; the file count is the FILE CAP setting, capInfo().maxFiles */
 var SHARE_MAX_TOTAL = 64 * 1024 * 1024;  /* decoded ceiling; also stops a decompression bomb mid-stream */
 var BUNDLE_MAX_BYTES = 96 * 1024 * 1024;
 var SHARE_EST_RATIO = 0.33;              /* encoded chars per text char for typical source (deflate ≈4x, base64 +33%) */
@@ -46,13 +46,14 @@ var SHARE_ERRORS = {
   corrupt: 'This share link is damaged or incomplete. Chat apps and email sometimes cut long links short. Ask the sender to send it again, or to send a .meridian bundle file instead.',
   version: 'This share was made by a newer version of MERIDIAN. Reload the page to get the latest version, then open it again.',
   invalid: 'This share does not contain a readable MERIDIAN project.',
-  toobig: 'This share is bigger than MERIDIAN opens (512 KB per file, 8,000 files, 64 MB in total).',
+  toobig: function () { return 'This share is bigger than MERIDIAN opens (512 KB per file, ' + capInfo().maxFiles.toLocaleString('en-US') + ' files, 64 MB in total). The file cap is adjustable in settings.'; },
   toolong: 'Too big for a link. Untick some files, or download a .meridian bundle instead.',
   unsupported: 'This browser cannot compress or decompress share links (it lacks CompressionStream). Try a current Chrome, Edge, Firefox or Safari.',
   bundle: 'That file is not a MERIDIAN share bundle (.meridian).'
 };
 function shareError(code) {
-  var e = new Error(SHARE_ERRORS[code] || SHARE_ERRORS.corrupt);
+  var m = SHARE_ERRORS[code] || SHARE_ERRORS.corrupt;
+  var e = new Error(typeof m === 'function' ? m() : m);
   e.code = code; e.friendly = e.message;
   return e;
 }
@@ -94,7 +95,7 @@ function validatePayload(o) {
   if (typeof o.v !== 'number') throw shareError('invalid');
   if (o.v > SHARE_VERSION) throw shareError('version');
   if (!Array.isArray(o.files) || !o.files.length) throw shareError('invalid');
-  if (o.files.length > SHARE_MAX_FILES) throw shareError('toobig');
+  if (o.files.length > capInfo().maxFiles) throw shareError('toobig');
   var seen = new Set(), files = [], total = 0;
   for (var i = 0; i < o.files.length; i++) {
     var e = o.files[i];
