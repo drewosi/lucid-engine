@@ -37,30 +37,197 @@ var LOWVALUE_PATH = /(\.min\.|\.lock$|-lock\.|\.snap$|\.map$|\.d\.ts$|\bfixtures
    Python test_*.py prefix, tests/ or spec/ directories, Java FooTest / C# FooTests */
 var TEST_PATH = /(\.test\.|\.spec\.|_test\.|_spec\.|\/test_[^\/]*\.py$|\btests?\/|\bspec\/|\b__tests__\b|tests?\.(java|cs|kt|swift|php)$)/i;
 
-/* language-aware token estimate — code tokenizes denser than prose, so one
-   chars-per-token divisor per family beats a flat /4 */
-var TOK_DIV = Object.assign(Object.create(null), { js: 3.2, jsx: 3.2, ts: 3.2, tsx: 3.2, mjs: 3.2, cjs: 3.2, java: 3.2, c: 3.2, h: 3.2, cc: 3.2, cpp: 3.2, hpp: 3.2, cs: 3.2, rs: 3.2, swift: 3.2, kt: 3.2, scala: 3.2,
-                py: 3.5, go: 3.5, rb: 3.5, php: 3.5, sh: 3.5, bash: 3.5, lua: 3.5, ex: 3.5, exs: 3.5,
-                json: 3.0, yml: 3.0, yaml: 3.0, toml: 3.0, xml: 3.0, html: 3.0, css: 3.0, scss: 3.0, less: 3.0, svg: 3.0,
-                md: 4.0, mdx: 4.0, txt: 4.0, rst: 4.0 });
-function tokDiv(path) {
-  if (path) {
-    var nm = path.slice(path.lastIndexOf('/') + 1);
-    var ex = nm.indexOf('.') === -1 ? '' : nm.slice(nm.lastIndexOf('.') + 1).toLowerCase();
-    if (TOK_DIV[ex]) return TOK_DIV[ex];
-  }
-  return 3.6;
+/* Token estimate — one function for every count the app shows or budgets.
+   Calibrated against the Qwen3.5-9B tokenizer (GPT-style BPE: one token per
+   digit, short operator runs, a newline of its own, spaces mostly absorbed
+   into the next piece). A flat chars/token divisor undercounted C/C++ because
+   those files — and the "123│" line-number prefixes SMART actually sends —
+   are full of one-character tokens. The scan below counts that way.
+   EST_BIAS_PCT is a deliberate overestimate on top of the scan, not a
+   substitute for it. +8% is the pad that kept every measured C/C++ file
+   (raw and with the "123│" prefixes SMART sends), plus JS, Python, GDScript
+   demos, Markdown and JSON, at or above the Qwen3.5-9B tokenizer. The scan
+   already sits high on one-character tokens, so the measured overshoot is
+   wider than 8% — especially on C/C++. A larger pad would only have covered
+   a few Godot GDScript test scripts with smashed identifiers. The path
+   argument is accepted so existing callers keep working; the count comes
+   from the text. */
+var EST_BIAS_PCT = 108;
+/* '$' '{' '}' '@' '|' ':' and tab do not fuse into the following word.
+   ':' is the exception that matters: a colon glued to a letter ("m:match",
+   ":property") is its own token unless the pair is a very common type name.
+   Counting it separate is the high side of that coin-flip. '(' '.' '_' usually fuse. */
+var FUSE_BREAK = Object.assign(Object.create(null), { '$': 1, '{': 1, '}': 1, '@': 1, '|': 1, ':': 1, '\t': 1 });
+/* endings of long English words that stay one token; a 12+ letter lowercase
+   run with none of these is a handle or a smashed identifier */
+var COMMON_ENDING = ['tion', 'sion', 'ment', 'ness', 'able', 'ible', 'ence', 'ance', 'ity', 'ing', 'ly', 'ous', 'ive', 'ate', 'ent', 'ant', 'ers', 'ies'];
+function isLetterCP(cp) {
+  if (cp < 128) return (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122);
+  return cp >= 192 && /\p{L}/u.test(String.fromCharCode(cp));
 }
-/* Token estimate. For small files a token-ish regex count tracks real BPE more
-   closely than chars/divisor; for large files chars/divisor is faster and the
-   per-language divisor is well-calibrated (see README calibration note). */
-function estTokens(text, path) {
-  var byChar = Math.ceil(text.length / tokDiv(path));
-  if (text.length < 5000) {
-    var byTok = (text.match(/\w+|[^\s\w]/g) || []).length;
-    return Math.ceil((byChar + byTok) / 2);
+function isUpperCP(cp) {
+  if (cp < 128) return cp >= 65 && cp <= 90;
+  return /\p{Lu}/u.test(String.fromCharCode(cp));
+}
+function isLowerCP(cp) {
+  if (cp < 128) return cp >= 97 && cp <= 122;
+  return /\p{Ll}/u.test(String.fromCharCode(cp));
+}
+function isDigitCP(cp) {
+  if (cp < 128) return cp >= 48 && cp <= 57;
+  return /\p{N}/u.test(String.fromCharCode(cp));
+}
+function commonLongWord(s) {
+  for (var i = 0; i < COMMON_ENDING.length; i++) {
+    var suf = COMMON_ENDING[i];
+    if (s.length >= suf.length && s.slice(-suf.length) === suf) return true;
   }
-  return byChar;
+  return false;
+}
+function camelParts(s) {
+  var parts = [], start = 0, i;
+  for (i = 1; i < s.length; i++) {
+    var prev = s.charCodeAt(i - 1), cur = s.charCodeAt(i);
+    if (isUpperCP(cur) && isLowerCP(prev)) { parts.push(s.slice(start, i)); start = i; }
+    else if (isUpperCP(prev) && isLowerCP(cur) && i - start > 1) { parts.push(s.slice(start, i - 1)); start = i - 1; }
+  }
+  parts.push(s.slice(start));
+  return parts;
+}
+function onePiece(s) {
+  var L = s.length, i, hi = false;
+  if (!L) return 0;
+  for (i = 0; i < L; i++) if (s.charCodeAt(i) > 127) hi = true;
+  if (hi) return Math.max(2, (L + 1) >> 1);
+  var allUp = true;
+  for (i = 0; i < L; i++) if (!isUpperCP(s.charCodeAt(i))) { allUp = false; break; }
+  if (L >= 4 && allUp) return Math.max(2, Math.ceil(L / 3));
+  var title = L >= 4 && isUpperCP(s.charCodeAt(0));
+  if (title) for (i = 1; i < L; i++) if (!isLowerCP(s.charCodeAt(i))) { title = false; break; }
+  if (title) return Math.max(2, Math.ceil(L / 3));
+  if (L <= 14) return 1;
+  return 1 + Math.ceil((L - 14) / 6);
+}
+function wordYield(leading, letters, dense) {
+  var base = 0, parts, i, lower = true;
+  if (dense && letters) base = Math.max(1, Math.ceil(letters.length / 3));
+  else {
+    parts = letters ? camelParts(letters) : [];
+    for (i = 0; i < parts.length; i++) base += onePiece(parts[i]);
+    if (letters) {
+      for (i = 0; i < letters.length; i++) {
+        var cp = letters.charCodeAt(i);
+        if (cp > 127 || !isLowerCP(cp)) { lower = false; break; }
+      }
+      if (lower && letters.length >= 12 && !commonLongWord(letters)) base = Math.max(base, Math.ceil(letters.length / 3));
+    }
+    /* '.' before 4+ letters usually fails to fuse (".else", ".notest", ".gd" is
+       shorter and handled as its own miss). '_' before a long run splits too. */
+    if (leading === '.' && letters.length >= 4) base++;
+    else if (leading === '_' && letters.length >= 8) base++;
+  }
+  if (leading && (FUSE_BREAK[leading] || leading.charCodeAt(0) > 127 || (dense && leading === '/'))) base++;
+  if (base <= 0 && leading) base = 1;
+  return letters || leading ? Math.max(1, base) : 0;
+}
+function punctYield(L) {
+  if (L <= 0) return 0;
+  if (L <= 3) return 1;
+  return Math.ceil(L / 2);
+}
+/* raw scan, before the bias. One pass, no allocations beyond the words themselves. */
+function rawTokens(text) {
+  var n = text.length, i = 0, tok = 0, url = false;
+  while (i < n) {
+    var c = text.charCodeAt(i), ch = text.charAt(i);
+    if ((c === 39 || c === 0x2019) && i + 1 < n) {
+      var tail = text.slice(i + 1, i + 3).toLowerCase(), sufs = ['re', 've', 'll', 's', 't', 'm', 'd'], hit = 0;
+      for (var si = 0; si < sufs.length; si++) {
+        var suf = sufs[si];
+        if (tail.slice(0, suf.length) === suf) {
+          var after = i + 1 + suf.length;
+          if (after >= n || !isLetterCP(text.charCodeAt(after))) { tok++; i = after; hit = 1; break; }
+        }
+      }
+      if (hit) continue;
+    }
+    var lead = '', j = i;
+    if (!isLetterCP(c) && c !== 10 && c !== 13 && !isDigitCP(c) && i + 1 < n && isLetterCP(text.charCodeAt(i + 1))) {
+      lead = ch; j = i + 1;
+    }
+    if (j < n && isLetterCP(text.charCodeAt(j))) {
+      var k = j;
+      while (k < n && isLetterCP(text.charCodeAt(k))) k++;
+      tok += wordYield(lead, text.slice(j, k), url || lead === '@');
+      i = k;
+      continue;
+    }
+    if (isDigitCP(c)) { tok++; i++; continue; }
+    if (c === 32 && i + 1 < n) {
+      var ncp = text.charCodeAt(i + 1);
+      if (!isLetterCP(ncp) && !isDigitCP(ncp) && ncp !== 32 && ncp !== 9 && ncp !== 10 && ncp !== 13) {
+        j = i + 1;
+        while (j < n) {
+          var pj = text.charCodeAt(j);
+          if (isLetterCP(pj) || isDigitCP(pj) || pj === 32 || pj === 9 || pj === 10 || pj === 13) break;
+          j++;
+        }
+        var plen = j - (i + 1), pstart = i + 1, nl = false;
+        while (j < n && (text.charCodeAt(j) === 10 || text.charCodeAt(j) === 13)) { j++; nl = true; }
+        tok += punctYield(plen) + (nl ? 1 : 0);
+        if (text.slice(pstart, pstart + plen).indexOf('://') !== -1) url = true;
+        if (nl) url = false;
+        i = j;
+        continue;
+      }
+    }
+    if (!isLetterCP(c) && !isDigitCP(c) && c !== 32 && c !== 9 && c !== 10 && c !== 13) {
+      j = i;
+      while (j < n) {
+        var qj = text.charCodeAt(j);
+        if (isLetterCP(qj) || isDigitCP(qj) || qj === 32 || qj === 9 || qj === 10 || qj === 13) break;
+        j++;
+      }
+      var plen2 = j - i, pstart2 = i, nl2 = false;
+      while (j < n && (text.charCodeAt(j) === 10 || text.charCodeAt(j) === 13)) { j++; nl2 = true; }
+      tok += punctYield(plen2) + (nl2 ? 1 : 0);
+      if (text.slice(pstart2, pstart2 + plen2).indexOf('://') !== -1) url = true;
+      if (nl2) url = false;
+      i = j;
+      continue;
+    }
+    if (c === 32 || c === 9 || c === 10 || c === 13) {
+      url = false;
+      j = i;
+      var hasNl = false;
+      while (j < n) {
+        var wj = text.charCodeAt(j);
+        if (wj !== 32 && wj !== 9 && wj !== 10 && wj !== 13) break;
+        if (wj === 10 || wj === 13) hasNl = true;
+        j++;
+      }
+      if (!hasNl && j < n) {
+        var nxt = text.charCodeAt(j);
+        if (isLetterCP(nxt) || (!isDigitCP(nxt) && nxt !== 32 && nxt !== 9 && nxt !== 10 && nxt !== 13)) {
+          var run = j - i;
+          if (run > 1) { tok++; i = j - 1; continue; }
+          if (text.charAt(i) === ' ') { i = j; continue; }
+          tok++; i = j; continue;
+        }
+      }
+      tok++;
+      i = j;
+      continue;
+    }
+    tok++; i++;
+  }
+  return tok;
+}
+function estTokens(text, path) {
+  if (!text) return 0;
+  var raw = rawTokens(text);
+  if (!raw) return 0;
+  return Math.ceil(raw * EST_BIAS_PCT / 100);
 }
 
 /* query-independent importance, computed once per file at ingest */
@@ -98,7 +265,6 @@ function numberLines(text, startLineNo) {
 /* Line-number-true excerpt: file head + windows around query-term hits.
    Omitted ranges are marked so the model never cites lines it cannot see. */
 function excerptFile(f, terms, maxTokens, path) {
-  var div = tokDiv(path);
   var lines = f.content.split('\n');
   var keep = {}, HEAD = 50, WIN = 20, hits = 0, i;
   for (i = 0; i < Math.min(HEAD, lines.length); i++) keep[i] = 1;
@@ -116,17 +282,29 @@ function excerptFile(f, terms, maxTokens, path) {
       }
     }
   }
-  var out = [], chars = 0, budget = maxTokens * div, last = -1, truncated = false;
+  /* provisional char cap, then trim with estTokens so the returned count is
+     the same number the budget spends. Digits and the line-number bar are
+     about one token each, so 3 chars/token still overshoots and gets trimmed. */
+  var out = [], chars = 0, charCap = Math.max(200, maxTokens * 3), last = -1, truncated = false;
   for (var n = 0; n < lines.length; n++) {
     if (!keep[n]) continue;
-    if (chars > budget) { truncated = true; break; }
+    if (chars > charCap) { truncated = true; break; }
     if (n > last + 1) out.push('··· lines ' + (last + 2) + '–' + n + ' omitted ···');
     var row = (n + 1) + '│' + lines[n];
     out.push(row); chars += row.length + 1;
     last = n;
   }
   if (truncated || last < lines.length - 1) out.push('··· lines ' + (last + 2) + '–' + lines.length + ' omitted ···');
-  return { text: out.join('\n'), tokens: Math.ceil(chars / div) + 10 };
+  var text = out.join('\n'), tokens = estTokens(text, path), guard = 0;
+  while (out.length > 1 && tokens > maxTokens && guard++ < out.length + 2) {
+    var trailer = out[out.length - 1].indexOf('omitted') !== -1;
+    if (trailer && out.length > 2) out.splice(out.length - 2, 1);
+    else out.pop();
+    text = out.join('\n');
+    tokens = estTokens(text, path);
+  }
+  if (tokens > maxTokens) return { text: '', tokens: maxTokens + 1 };
+  return { text: text, tokens: tokens };
 }
 
 /* query intent — a debugging question wants tests; an onboarding question wants docs */

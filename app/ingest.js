@@ -639,7 +639,7 @@ function buildPreview() {
            : '// no question typed — packed by importance and recency alone. type a question first for a query-aware preview.');
     note('// budget ≈' + fmtTok(plan.budget) + ' tokens for the whole send · this send ≈' + fmtTok(plan.total) + ': map ≈' + fmtTok(mapTok)
       + ', files ≈' + fmtTok(plan.fileTok) + ', grounding and pins ≈' + fmtTok(plan.groundTok)
-      + ', instructions and conversation ≈' + fmtTok(plan.overhead) + '. estimates; a model\'s own tokenizer can count more.');
+      + ', instructions and conversation ≈' + fmtTok(plan.overhead) + '. estimates run high of a model\'s own tokenizer, so this budget is a ceiling; the provider bills actual counts.');
     if (plan.total > plan.budget) note('// over budget: the map, grounding and conversation alone exceed it. raise the budget in settings or clear the conversation.');
     sec('BLOCK 1 — PROJECT MAP ≈' + fmtTok(mapTok) + ' TOK (cached between questions)');
     var pre = document.createElement('pre');

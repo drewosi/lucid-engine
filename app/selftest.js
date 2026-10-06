@@ -1,4 +1,4 @@
-import { estTokens, packSmartContext, staticScore } from './smart-context.js';
+import { estTokens, numberLines, packSmartContext, staticScore } from './smart-context.js';
 import { buildIndex, detectLang, getIndex } from './indexer.js';
 import { invalidateAll, st } from './state.js';
 import { SAMPLE_PROJECT, wantsDemo } from './demo.js';
@@ -321,6 +321,33 @@ function symbolPickCases(ok) {
 /* SMART on a huge project (8000-file Godot report): map + grounding + packed
    files + instructions must fit the configured budget, and the totals the
    preview reads (cb.plan) are the totals of what is sent */
+/* Canonical estimate. Reference lengths are Qwen3.5-9B token counts (no special
+   tokens) for these exact strings. The estimate must be at least that count and
+   not a runaway (more than double), on C/C++ — including the line-number prefix
+   SMART sends — plus JS, Python, GDScript, markdown and JSON. */
+function estBiasCases(ok) {
+  ok('est · empty is zero', estTokens('') === 0 && estTokens('', 'a.cpp') === 0);
+  var cpp = 'int main() {\n  int mask = 0x0062;\n  if (mask == 0) return 1;\n  return mask;\n}\n';
+  ok('est · path does not change the count', estTokens(cpp, 'a.cpp') === estTokens(cpp, 'a.md') && estTokens(cpp) === estTokens(cpp, 'a.cpp'));
+  /* five digits are five tokens before the pad; ceil(5 * 108 / 100) is 6 */
+  ok('est · each digit is a token, then the bias', estTokens('12345') === 6, String(estTokens('12345')));
+  var samples = [
+    ['C/C++', cpp, 'src/main.cpp', 38],
+    ['numbered C/C++', numberLines(cpp, 1), 'src/main.cpp', 50],
+    ['JS', 'export function addTodo(title) {\n  const id = Date.now();\n  return { id: id, title: title, done: false };\n}\n', 'src/add.js', 34],
+    ['Python', 'def helper(name: str) -> int:\n    return len(name) + 1\n', 'pkg/helper.py', 19],
+    ['GDScript', 'extends Node\n\nfunc _ready() -> void:\n\tvar count := 3\n\tprint(count)\n', 'player.gd', 21],
+    ['markdown', '# Title\n\nA short paragraph about the project, with a [link](https://example.com).\n', 'README.md', 21],
+    ['JSON', '{"name":"lucid","version":"1.2.3","deps":{"left":"1.0.0"}}\n', 'package.json', 25]
+  ];
+  var fails = [];
+  samples.forEach(function (row) {
+    var est = estTokens(row[1], row[2]);
+    if (est < row[3] || est > row[3] * 2) fails.push(row[0] + ' est ' + est + ' ref ' + row[3]);
+  });
+  ok('est · at or above the tokenizer on C/C++, JS, Python, GDScript, markdown, JSON', fails.length === 0,
+    fails.join('; ') || samples.map(function (row) { return row[0] + ' ' + estTokens(row[1], row[2]) + '>=' + row[3]; }).join(' · '));
+}
 function smartBudgetCases(ok) {
   var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty, ctxMode: st.ctxMode, groundMode: st.groundMode, pins: st.pinnedEv,
     history: st.history, budget: lsGet(LS.ctxbudget), mapCache: st.mapCache, mapDirty: st.mapDirty };
@@ -1089,6 +1116,7 @@ function runSelfTests() {
     ok('http · 400 over-context (string error) hints at the SMART budget', lmSmart.indexOf('CONTEXT TOO LARGE') === 0 && /lower the SMART budget in settings/.test(lmSmart), lmSmart);
     ok('http · 400 over-context in FULL hints at fewer files or SMART', lmFull.indexOf('CONTEXT TOO LARGE') === 0 && /SMART/.test(lmFull) && !/budget/.test(lmFull), lmFull);
     symbolPickCases(ok);
+    estBiasCases(ok);
     smartBudgetCases(ok);
     /* multi-repo workspace — self-contained scratch state, restored on exit */
     workspaceCases(ok);

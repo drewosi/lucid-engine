@@ -373,7 +373,9 @@ shell command.
 > down) + recency (file *and* directory) + path depth + query-keyword hits.
 > Debug-worded questions boost test files; onboarding-worded questions boost docs.
 > The winners are greedily packed into the budget. Token counts are estimates
-> (~±15–20% vs a real tokenizer); your provider bills the actual counts.
+> and run high of a real tokenizer (an 8% pad on a scan that already counts
+> digits and line-number prefixes as their own tokens, so C/C++ lands further
+> above), so the budget is a ceiling; your provider bills the actual counts.
 
 ---
 
