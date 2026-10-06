@@ -188,7 +188,7 @@
 
   <section class="lede">
     <h1>Ask your codebase. <span class="thin">We never get a copy.</span></h1>
-    <p>Meridian is a code workbench that runs entirely in the browser. It loads a project into the tab's memory, indexes it, and answers questions with citations that open the exact file and line. <b>There is no Meridian server.</b> Questions go straight from the browser to the model provider you already use, under your own key and terms, and the <b>LOCAL mode sends nothing at all</b>.</p>
+    <p>Meridian is a browser-only code workbench. It indexes a project in tab memory and answers questions with citations that open the cited file and line. <b>There is no Meridian server.</b> Questions go straight from the browser to the model provider you already use, under your own key and terms, and <b>LOCAL mode sends nothing at all</b>.</p>
   </section>
 
   <div class="sec-head">
@@ -199,13 +199,13 @@
     <div class="pillar">
       <div class="pk mono">B1</div>
       <h3>No new vendor holding your code</h3>
-      <p>No backend, no accounts, no database. Code goes to the provider your company already approved, or nowhere in LOCAL mode. Nothing to audit on our side.</p>
+      <p>No backend, accounts or database. Code goes to the provider your company already approved, or nowhere in LOCAL mode. Nothing runs on our side: the product is the static source, which you can review or self-host at a pinned commit.</p>
       <span class="note mono">static files · zero egress to us</span>
     </div>
     <div class="pillar">
       <div class="pk mono">B2</div>
       <h3>Answers a reviewer can check</h3>
-      <p>Every answer carries a trace: chips that open the cited file at the cited line. LOCAL answers come from the index with no model. Sessions export as Markdown or HTML.</p>
+      <p>Each answer carries a trace: chips that open the cited file at the cited line. LOCAL answers come from the index with no model. Sessions export as Markdown or HTML.</p>
       <span class="note mono">file:line evidence · exportable traces</span>
     </div>
     <div class="pillar">
@@ -246,9 +246,9 @@
 
   <dl class="spec">
     <div><dt>WHERE CODE LIVES</dt><dd>In the browser tab's memory, gone when it closes. Saved projects and workspaces keep <b>metadata only</b> (names, counts, selection, settings) in that browser's IndexedDB.</dd></div>
-    <div><dt>WHAT LEAVES, AND WHEN</dt><dd>Only when you ask a model a question: the question, ticked files and short excerpts the local index found go <b>directly to your provider</b>. PREVIEW SEND shows the exact payload. LOCAL mode sends nothing.</dd></div>
+    <div><dt>WHAT LEAVES, AND WHEN</dt><dd>Only when you ask a model a question: the question, ticked files, earlier turns and line-numbered excerpts the local index found (from any loaded file, ticked or not, with GROUND on) go <b>directly to your provider</b>. SMART adds a project map. PREVIEW SEND shows the exact payload. LOCAL sends nothing.</dd></div>
     <div><dt>OUR SERVERS</dt><dd>None. Static files on GitHub Pages: no accounts, no database, no telemetry to us. GitHub may log standard request data when the page loads.</dd></div>
-    <div><dt>MODEL PROVIDER</dt><dd>Anthropic, OpenAI or any OpenAI-compatible endpoint, under <b>your key, agreement, region and data terms</b>. Local models (LM Studio, Ollama) work on the hosted page; for a gateway or regional endpoint, self-host the static files.</dd></div>
+    <div><dt>MODEL PROVIDER</dt><dd>Anthropic, OpenAI or any OpenAI-compatible endpoint, under <b>your key, agreement, region and data terms</b>. Local models (LM Studio, Ollama) work on the hosted page with CORS enabled for this site (see the user guide). For a gateway or regional endpoint, self-host.</dd></div>
     <div><dt>API KEYS</dt><dd>In that browser's localStorage, one per provider, sent only to that provider. Never in share links, bundles, exports or the usage log.</dd></div>
     <div><dt>SHARE LINKS AND BUNDLES</dt><dd>The code travels inside the link, after the #, which browsers never send to a server. Anyone holding it can read it, and it can't be revoked. Secret-looking files start unticked.</dd></div>
     <div><dt>USAGE ANALYTICS</dt><dd>Off by default; nothing recorded while off. When on: stored in the browser, no code, paths or keys, question text only with a second switch. JSON/CSV export. Optional send to your own endpoint only.</dd></div>

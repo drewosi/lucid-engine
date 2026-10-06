@@ -6,7 +6,7 @@
 <link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>MERIDIAN — Privacy Policy</title>
+<title>MERIDIAN: Privacy Policy</title>
 <meta name="description" content="Privacy policy for MERIDIAN. Short version: we run no servers, so your files, prompts, and API key never reach us.">
 <link rel="canonical" href="https://drewosi.github.io/lucid-engine/privacy.html">
 <style>
@@ -63,9 +63,9 @@
   </nav>
   <main>
     <h1>Privacy Policy</h1>
-    <p class="updated">LAST UPDATED · 03 OCT 2026 · APPLIES TO drewosi.github.io/lucid-engine</p>
+    <p class="updated">LAST UPDATED · 05 OCT 2026 · APPLIES TO drewosi.github.io/lucid-engine</p>
 
-    <p class="lede"><b>The short version:</b> Meridian runs entirely in your browser. We operate <b>no servers</b> and therefore <b>cannot see</b> your files, your questions, your AI conversations, or your API key. The only personal data that can ever reach us is an email you choose to send us. Everything else stays on your machine or travels directly between your browser and your chosen AI provider under your own account. The workbench's usage log is opt-in, off by default, and stays in your browser unless you point it at a collector of your own.</p>
+    <p class="lede"><b>The short version:</b> Meridian runs in your browser. We operate <b>no servers</b>, so we <b>cannot see</b> your files, your questions, your AI conversations or your API key. The only personal data that can reach us is an email you choose to send us. Everything else stays on your machine, travels directly between your browser and the AI provider you chose under your own account, or goes wherever you send a share link. The workbench's usage log is opt-in, off by default, and stays in your browser unless you point it at a collector of your own.</p>
 
     <section>
       <h2><span class="idx">§01</span>Who we are</h2>
@@ -73,19 +73,19 @@
     </section>
 
     <section>
-      <h2><span class="idx">§02</span>What the architecture makes impossible</h2>
-      <p>Meridian is a static site with no backend. There is no database, no account system, no server-side logging of your activity by us. Concretely, we never receive:</p>
+      <h2><span class="idx">§02</span>What we never receive</h2>
+      <p>Meridian is a static site with no backend: no database, no account system and no server-side logging of your activity by us. We never receive:</p>
       <ul>
-        <li>the project files you load into the workbench — they are read into your browser tab's memory only;</li>
+        <li>the project files you load into the workbench, which your browser reads into the tab's memory only;</li>
         <li>your questions and the AI's answers;</li>
         <li>your API key.</li>
       </ul>
-      <p>This is a property of the architecture, not just a promise: you can verify it in the <a href="https://github.com/drewosi/lucid-engine">public source code</a> or in your browser's network inspector.</p>
+      <p>The architecture enforces this, and you can verify it in the <a href="https://github.com/drewosi/lucid-engine">public source code</a> or in your browser's network inspector.</p>
     </section>
 
     <section>
       <h2><span class="idx">§03</span>Data stored in your browser (localStorage)</h2>
-      <p>Meridian stores a small amount of data in your own browser's localStorage so the pages can function. This data never leaves your device unless noted below, and you can delete all of it at any time.</p>
+      <p>Meridian keeps a small amount of data in your browser's localStorage so the pages work. This data stays on your device unless noted below, and you can delete all of it at any time.</p>
       <table>
         <tr><th>KEY</th><th>WHAT IT HOLDS</th><th>HOW TO CLEAR</th></tr>
         <tr><td>meridian.key</td><td>Your API key (workbench), one per provider. Sent only to that provider's API with your requests.</td><td>Settings → [ CLEAR KEY ]</td></tr>
@@ -101,8 +101,16 @@
 
     <section>
       <h2><span class="idx">§04</span>Data sent to your AI provider</h2>
-      <p>When you use the workbench with a model connected, your browser sends your question, the project context for it, and your API key <b>directly to the provider you chose</b> — Anthropic (api.anthropic.com), OpenAI (api.openai.com), or a custom endpoint you configure. That processing happens under <b>your own account</b> with that provider and under that provider's terms. We are not a party to it, do not sit in the middle of it, and cannot access it. In LOCAL mode, nothing is sent at all.</p>
-      <p>Review your provider's own privacy documentation — for example the <a href="https://www.anthropic.com/legal/privacy">Anthropic Privacy Policy</a> or the <a href="https://openai.com/policies/privacy-policy/">OpenAI Privacy Policy</a>. You choose what to send. The context is the files you tick in the context panel, plus, while <b>GROUND</b> is on (the default), short line-numbered excerpts that the workbench's local search found for that question, which can come from any file you loaded, ticked or not, and the lines of any evidence you pin. <b>[ PREVIEW SEND ]</b> shows the exact context before anything goes. To keep a file out entirely, don't load it (or exclude it with an ignore pattern), or turn GROUND off and untick it.</p>
+      <p>When you use the workbench with a model connected, your browser sends your question, the project context for it, and your API key <b>directly to the provider you chose</b>: Anthropic (api.anthropic.com), OpenAI (api.openai.com), or a custom endpoint you configure. That processing happens under <b>your own account</b> with that provider and under that provider's terms. We are not a party to it, do not sit in the middle of it, and cannot access it. In LOCAL mode, nothing is sent at all.</p>
+      <p>Review your provider's privacy documentation, for example the <a href="https://www.anthropic.com/legal/privacy">Anthropic Privacy Policy</a> or the <a href="https://openai.com/policies/privacy-policy/">OpenAI Privacy Policy</a>. Each request carries:</p>
+      <ul>
+        <li>the files you tick in the context panel. In <b>FULL</b> mode they go whole. In <b>SMART</b> mode the workbench sends the most relevant of them, some as line-numbered excerpts, plus a project map of the ticked files: their paths, size estimates and the first lines of a few key files;</li>
+        <li>while <b>GROUND</b> is on (the default), short line-numbered excerpts that the workbench's local search found for that question, which can come from any file you loaded, ticked or not;</li>
+        <li>the lines of any evidence you pin;</li>
+        <li>the earlier questions and answers of the conversation, which go with every new question;</li>
+        <li>in a multi-repo workspace, the names of the loaded repos.</li>
+      </ul>
+      <p><b>[ PREVIEW SEND ]</b> shows the exact context before anything goes. To keep a file out entirely, don't load it (or exclude it with an ignore pattern), or turn GROUND off and untick it.</p>
     </section>
 
     <section>
@@ -112,7 +120,7 @@
         <li><b>A share link.</b> Your browser compresses the files you tick (their paths, full text and last-modified times) plus a project name, and for a multi-repo workspace the repo names, into the link itself, in the part after <b>#</b>. Browsers never send that part of an address in a request, so GitHub Pages never receives it, and neither do we.</li>
         <li><b>A bundle</b> (a <b>.meridian</b> file). The same data as readable JSON, for projects too big for a link. It goes wherever you send it.</li>
       </ul>
-      <p><b>A link or bundle is the code itself.</b> Anyone who has it can read those files. So can any service it passes through: the chat app or email provider you paste it into stores the message, link included, and the address can stay in the browser history of whoever opens it. There is no server, so there is nothing we can revoke or expire: once sent, it works for as long as someone keeps it. Treat it exactly like sending the files.</p>
+      <p><b>A link or bundle is the code itself.</b> Anyone who has it can read those files. So can any service it passes through: the chat app or email provider you paste it into stores the message, link included, and the address can stay in the browser history of whoever opens it. There is no server, so there is nothing we can revoke or expire: once sent, it works for as long as someone keeps it. Treat it like sending the files.</p>
       <p>Never included: API keys, provider settings, conversations, saved projects, or anything else Meridian keeps in your browser's storage. Files that look like secrets (.env files, private keys, credential files) start unticked, but you choose what goes in.</p>
       <p>When someone opens a link or bundle, it is unpacked in their browser tab and held in memory only. It opens read-only, nothing about it is written to their browser's storage, and the <b>#</b> part is removed from the address bar once it has loaded.</p>
     </section>
@@ -137,13 +145,13 @@
     </section>
 
     <section>
-      <h2><span class="idx">§08</span>Your rights — GDPR (EEA/UK)</h2>
+      <h2><span class="idx">§08</span>Your rights under GDPR (EEA/UK)</h2>
       <p>If you are in the EEA or UK: for any email correspondence you send us, Drew Osipenko is the data controller, processing on the basis of your consent (Art. 6(1)(a) GDPR), which you can withdraw at any time. You have the rights of access, rectification, erasure, restriction, portability, and objection, and the right to lodge a complaint with your supervisory authority.</p>
       <p>To exercise any of them, email <a href="mailto:drewosipenko@gmail.com">drewosipenko@gmail.com</a>. Note that apart from email you send us, your data never reaches us: access and erasure are self-service via the clear buttons described in §03 and the usage-log export and clear buttons in §07, and processing by your AI provider under your own account is governed by your relationship with that provider.</p>
     </section>
 
     <section>
-      <h2><span class="idx">§09</span>Your rights — California (CCPA/CPRA)</h2>
+      <h2><span class="idx">§09</span>Your rights in California (CCPA/CPRA)</h2>
       <p>We do not sell or share personal information as those terms are defined in the CCPA/CPRA, and we collect no sensitive personal information. California residents may request access to or deletion of the only personal information we could hold (an email you sent us) at the contact address above. We do not discriminate against anyone for exercising privacy rights.</p>
     </section>
 

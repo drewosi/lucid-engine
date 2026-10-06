@@ -21,7 +21,7 @@ It serves two readers, and marks the difference where it matters:
 - **New to this:** you write a little code, or none, and want to *understand*
   a project. Follow the guide top to bottom. Concepts are explained the first
   time they appear, and there's a [Glossary](#glossary) at the end.
-- **Experienced:** you know codebases and just want the fast path and the
+- **Experienced:** you know codebases and want the fast path and the
   internals. Skim [Quick start](#quick-start-2-minutes-no-key-needed), the
   [Command reference](#6-the-local-command-reference), and
   [For power users](#12-for-power-users-internals--self-hosting).
@@ -53,25 +53,24 @@ Call-outs marked **Power user** add depth without cluttering the main path.
 
 ## 1. What MERIDIAN actually is
 
-Most tools that "read your code with AI" send your whole project to a server.
-MERIDIAN is built the opposite way. It does two things:
+MERIDIAN keeps your project in the browser tab and does two things:
 
 1. **A deterministic index (no AI).** The moment you load a project, MERIDIAN
    scans it and builds a structured map: every **symbol** (a named function,
    class, variable…), every **import** (which file pulls in which), the entry
    points, the tests, the packages. This is plain, repeatable analysis: the same
-   input always gives the same output. It runs entirely in your browser with no
+   input always gives the same output. It runs in your browser with no
    network.
 
 2. **An optional AI layer on top.** When you want interpretation ("*why* is this
    slow?", "*how should* I refactor this?"), you connect an AI. MERIDIAN first
-   runs its own investigation, then hands the AI only the **verified evidence** it
-   found, not your whole repo, so the answer stays anchored to real lines.
+   runs its own investigation, then sends the AI the **verified evidence** it
+   found along with the files you selected, so the answer stays anchored to real
+   lines.
 
-The mental model: **MERIDIAN indexes the project before a model is involved.**
-The AI is a reasoning layer, not the foundation. And because the index is
-always there, you can get real answers with **no key, no AI, and no internet**.
-That's the **LOCAL** engine, and it's the best place to start.
+**MERIDIAN indexes the project before any model sees it**, and the AI reasons on
+top of that index. Because the index is always there, the **LOCAL** engine can
+answer with **no key, no AI and no internet**. Start there.
 
 > **Jargon, once:** a **symbol** = a named thing in code (function, class,
 > constant). An **import** = one file using another. A **token** = the unit AIs
@@ -97,8 +96,8 @@ That's the **LOCAL** engine, and it's the best place to start.
 4. In any answer, **click an evidence chip** (the small `ctx://path:line`
    buttons) to open that file at the cited lines, with the quote highlighted.
 
-That's the whole loop: **load → ask → follow the evidence.** Everything below is
-detail you can reach for when you need it.
+The loop is **load → ask → follow the evidence.** The sections below are
+reference for when you need them.
 
 ---
 
@@ -151,7 +150,7 @@ it in anyway (true binaries stay out).
 
 **Ignore patterns.** In Settings, add glob-style filters (one per line, `*` is
 wildcard) to skip more, e.g. `*.min.js`, `*.map`, `*.lock`. **[ Suggest ]**
-proposes common ones, but only globs that actually match a file you loaded.
+proposes common ones, but only globs that match a file you loaded.
 
 > **Power user:** the indexer skips any single line longer than 400 characters
 > (minified bundles), so imports on those lines don't enter the graph, and the
@@ -208,7 +207,7 @@ provider keeps its own key.
 
 | Provider | Key? | Models | Notes |
 |---|---|---|---|
-| **LOCAL** | none | — | Answers factual questions itself. No AI, no network. **Start here.** |
+| **LOCAL** | none | none | Answers factual questions itself. No AI, no network. **Start here.** |
 | **Anthropic** | `sk-ant-…` | Sonnet 5 (1M-token context), Haiku 4.5 (200K) | Best reasoning; supports **prompt caching** (cheap multi-turn). |
 | **OpenAI** | `sk-…` | GPT-5.1 (400K), GPT-5 mini (400K) | Standard chat-completions. |
 | **Custom** | optional | your own | Any OpenAI-compatible endpoint. **On the hosted page only `localhost` endpoints work** (see below). |
@@ -230,6 +229,17 @@ save any placeholder (LM Studio accepts e.g. `lm-studio`); whatever you save is
 passed through verbatim as a `Bearer` token. Remote (non-localhost) endpoints are
 **blocked on the hosted page** by its security policy; to use one, self-host the
 workbench and widen `connect-src` ([§12](#12-for-power-users-internals--self-hosting)).
+
+**Enable CORS on a local server.** The browser only lets the hosted page talk to
+a local server that allows requests from `https://drewosi.github.io`.
+
+- **LM Studio** ships with CORS off. Turn on **Enable CORS** in its server
+  settings (or start it with `lms server start --cors`).
+- **Ollama** reads allowed origins from the `OLLAMA_ORIGINS` environment
+  variable. Set it to `https://drewosi.github.io` and restart Ollama.
+
+**[ TEST ENDPOINT ]** reports a CORS failure if one remains. On a self-hosted copy,
+allow your own page's origin instead.
 
 ---
 
@@ -253,9 +263,9 @@ REASONING** (an interpretation question; connect an AI for those).
 | `structure` | "project structure", "how is this organized" | Packages, entries, tests, top dirs, languages |
 | `tests` | "where are the tests" | Detected test files |
 | `entries` | "entry points", "main file" | index/main/app/server/cli… |
-| `dir <path>` | — | Summary of one folder |
+| `dir <path>` | n/a | Summary of one folder |
 | `recent [n]` | "what changed recently" | Most recently modified files |
-| `search <text\|regex>` | — | Text/regex search (quote for literal: `search "foo bar"`) |
+| `search <text\|regex>` | n/a | Text/regex search (quote for literal: `search "foo bar"`) |
 
 **Analyze the dependency graph & code health**
 
@@ -287,7 +297,7 @@ C#, Kotlin, Swift, PHP (symbols + import resolution), plus basic support for
 others (Scala, Elixir, Dart…). Depth varies: it's regex-based, dependency-free
 analysis, not a full compiler, and the app says so where it matters.
 
-> **Power user — the intentional limits, in one place:** graph analyses
+> **Power user: the intentional limits, in one place.** Graph analyses
 > (`cycles`/`orphans`/`hubs`/`path`/`untested`) walk **statically resolved**
 > import edges only; files wired at runtime (dynamic import, DI, HTML
 > `<script>`, bundler config) can show as orphaned without being dead. Symbol
@@ -313,7 +323,8 @@ then ask anything, including the interpretive questions LOCAL declines
 - **Grounding is on by default** (`[ GROUND: ON ]`). Before the AI answers,
   MERIDIAN runs its own investigation and attaches the verified `file:line`
   evidence as a context block. The AI is told to prefer citing those exact lines,
-  so answers are anchored to what MERIDIAN actually found, not the model's guess.
+  so answers rest on what MERIDIAN found in the index. These excerpts can come
+  from any loaded file, ticked or not.
 - Press **Stop** (or the palette) to cancel a stream; partial output is kept.
 
 > **Power user:** grounding is per-question and placed *after* the cached
@@ -358,8 +369,12 @@ shell command.
     their real line numbers kept** and omitted ranges marked, so citations stay
     verifiable. SMART turns on automatically once a project exceeds ~70% of the
     model's context window.
-- **GROUND: ON/OFF**: attach MERIDIAN's verified findings (leave it on).
-- **[ PREVIEW SEND ]**: shows *exactly* what your next question will transmit: the
+- **GROUND: ON/OFF**: attach MERIDIAN's verified findings (leave it on). The
+  excerpts can come from any loaded file, ticked or not; turn GROUND off and
+  untick a file to keep it out of a request.
+- **Conversation**: earlier questions and answers in the session go with every
+  new question.
+- **[ PREVIEW SEND ]**: shows the exact payload your next question will transmit: the
   map, the file list, whole-vs-excerpt, token estimates, and the grounding block,
   computed by the **same code** the real request uses, so the preview can't drift
   from reality.
@@ -368,7 +383,7 @@ shell command.
 - **File checkboxes**: tick/untick files (tri-state per directory) to include or
   exclude them; the budget bar shows the running total.
 
-> **Power user — how SMART scores files:** static importance (file type,
+> **Power user: how SMART scores files.** Static importance (file type,
 > READMEs/manifests/entry points weigh up; tests, lockfiles, generated dirs weigh
 > down) + recency (file *and* directory) + path depth + query-keyword hits.
 > Debug-worded questions boost test files; onboarding-worded questions boost docs.
@@ -420,7 +435,7 @@ which files go in, then either copy a **link** or download a **bundle**.
   entry points first). Files that look like secrets (`.env`, private keys,
   credential files) always start unticked.
 - **Too big for a link? Download a bundle.** A `.meridian` file holds the same
-  data as readable JSON (open it in a text editor to see exactly what's inside)
+  data as readable JSON (open it in a text editor to see what's inside)
   and has no size limit. Send it as a file.
 - **Never included:** API keys, provider settings, the conversation, saved
   projects, or anything else MERIDIAN keeps in your browser.
@@ -575,7 +590,7 @@ The hosted page's CSP only allows network to `api.anthropic.com`,
 (a hosted vLLM box, openrouter, a company gateway) is blocked there by design.
 Self-hosting lifts that in one edit:
 
-1. **Clone or fork** the repo (or just copy `app.html` + the `app/` folder; that
+1. **Clone or fork** the repo (or copy only `app.html` + the `app/` folder; that
    is the entire workbench).
 2. **Edit the one `connect-src` line** in `app.html`'s `<meta
    http-equiv="Content-Security-Policy">` tag: append your endpoint's origin,
@@ -626,7 +641,8 @@ endpoint). Neither does the landing page.
 - **No backend.** The whole product is static files. There is no server of ours to
   receive your data.
 - **Bring your own key.** Requests go directly from your browser to the provider's
-  API under your account. Keys live in `localStorage` only, one per provider.
+  API under your account. Keys live in `localStorage` only, one per provider. What
+  a request carries is listed in [§9](#9-control-what-gets-sent-ai-only).
 - **Zero egress to us.** File contents and conversations exist in tab memory and
   vanish on close (unless you switch on storing question text in the usage log,
   which keeps only your questions, in this browser). Saved projects and workspaces persist **metadata only**
@@ -643,8 +659,8 @@ endpoint). Neither does the landing page.
   export or clear it. Nothing is sent anywhere unless you enter your own endpoint,
   and LOCAL-mode events are never sent. See [§10](#10-save-reload-export).
 
-That architecture is the privacy model: not a policy you have to trust, but how
-the thing is built.
+The architecture is the privacy model, and you can check it in the source and in
+your browser's network inspector.
 
 ---
 

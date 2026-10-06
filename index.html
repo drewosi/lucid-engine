@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MERIDIAN: ask your codebase, keep the code in the browser</title>
-<meta name="description" content="A code workbench for engineering teams that runs entirely in the browser. No backend: files stay in tab memory, questions go straight to the model provider you already use, under your own key, or nowhere at all in LOCAL mode. Every answer cites the exact file and line.">
+<meta name="description" content="A browser-only code workbench for engineering teams. There is no backend: files stay in tab memory, and questions go straight to the model provider you already use, under your own key, or nowhere in LOCAL mode. Answers cite the file and line they rest on.">
 <link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -41,11 +41,11 @@
     --t-entrance: 400ms;
     --t-ceremony: 600ms;
 
-    /* v2.0 — Signal Orange as a lit instrument, not a UI accent (controlled bloom) */
+    /* v2.0: Signal Orange as a lit instrument, not a UI accent (controlled bloom) */
     --flare: var(--accent);
     --flare-bloom:    0 0 0 1px rgba(255,92,10,.42), 0 0 14px -2px rgba(255,92,10,.55);
     --flare-bloom-lg: 0 0 0 1px rgba(255,92,10,.50), 0 0 24px -4px rgba(255,92,10,.52);
-    /* v2.0 — authored monochrome: film grain + light-source falloff (ground only) */
+    /* v2.0: authored monochrome, film grain + light-source falloff (ground only) */
     --grain-opacity: .05;
     --atmosphere: radial-gradient(120% 66% at 50% -14%, rgba(255,255,255,.055), transparent 62%);
     --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -69,7 +69,7 @@
     --atmosphere: radial-gradient(120% 62% at 50% -12%, rgba(17,17,16,.045), transparent 60%);
   }
 
-  /* v2.0 — authored-monochrome ground layers (below content z:1, above #app bg) */
+  /* v2.0: authored-monochrome ground layers (below content z:1, above #app bg) */
   .atmosphere { position: fixed; inset: 0; pointer-events: none; z-index: 0; background: var(--atmosphere); }
   .grain {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
@@ -316,7 +316,7 @@
         <div class="hero-copy">
           <div class="eyebrow mono rv" style="--i:0"><span class="dot"></span><span>FREE BETA · NO BACKEND · RUNS IN YOUR BROWSER</span></div>
           <h1 class="rv" style="--i:1">Ask your codebase.<br>We never get a copy.</h1>
-          <p class="hero-sub rv" style="--i:2">Meridian is a code workbench that runs entirely in the browser and cites the exact file and line behind every answer. There is no Meridian server. Your files stay in tab memory, questions go <b>straight to the model provider you already use</b>, under your own key, and <b>LOCAL mode sends nothing at all</b>.</p>
+          <p class="hero-sub rv" style="--i:2">Meridian is a code workbench that runs in your browser and cites the file and line behind each answer. There is no Meridian server. Your files stay in tab memory, questions go <b>straight to the model provider you already use</b>, under your own key, and <b>LOCAL mode sends nothing at all</b>.</p>
           <div class="hero-cta-row rv" style="--i:3">
             <a href="app.html" class="btn btn-signal btn-hero" id="heroCta">Launch Meridian</a>
             <a href="app.html?demo" class="btn btn-hairline btn-hero">Try the demo in 30 seconds</a>
@@ -328,7 +328,7 @@
           <video id="demovid" src="media/meridian-demo.mp4" poster="media/meridian-poster.jpg" width="1280" height="800" autoplay muted loop playsinline preload="auto" aria-label="Screen capture of the Meridian workbench answering questions about its bundled sample project, with no key and no network">
             <img class="gif" src="media/meridian-demo.gif" width="1280" height="800" loading="lazy" alt="Screen capture of the Meridian workbench answering questions about its bundled sample project">
           </video>
-          <figcaption class="mono">// a real screen capture, not a mockup: the bundled sample project answered by the LOCAL engine, with no key and no network. <a href="media/meridian-demo.gif" class="trace">GIF version</a></figcaption>
+          <figcaption class="mono">// a screen capture of the real workbench: the LOCAL engine answers questions about the bundled sample project, with no key and no network. <a href="media/meridian-demo.gif" class="trace">GIF version</a></figcaption>
         </figure>
       </div>
     </div>
@@ -341,10 +341,10 @@
       <div class="caps">
         <div class="cap rv" style="--i:0">
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="5" y="11" width="16" height="11"/><path d="M9 11V7a4 4 0 018 0v4"/></svg>
-          <h3>No new vendor holding your code</h3><p>Meridian has no backend, no accounts and no database. Code goes to the model provider your company already approved, under your key and your agreement, or nowhere at all in LOCAL mode. There is nothing on our side to audit.</p></div>
+          <h3>No new vendor holding your code</h3><p>Meridian has no backend, accounts or database. Code goes to the model provider your company already approved, under your key and your agreement, or nowhere in LOCAL mode. Nothing runs on our side. The product is the static source, which you can review or self-host at a pinned commit.</p></div>
         <div class="cap rv" style="--i:1">
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="6" cy="20" r="2.5"/><circle cx="13" cy="8" r="2.5"/><circle cx="21" cy="15" r="2.5"/><path d="M8 18l3.5-8M15 9.5l4 4"/></svg>
-          <h3>Answers a reviewer can check</h3><p>Every answer carries a trace: the files and lines it stands on, as chips that open the exact line. The LOCAL engine answers structure questions from the index with no model involved. Export a session as Markdown or HTML for a ticket or a review.</p></div>
+          <h3>Answers a reviewer can check</h3><p>Each answer carries a trace: chips for the files and lines it rests on, and each chip opens its line. The LOCAL engine answers structure questions from the index with no model involved. Export a session as Markdown or HTML for a ticket or a review.</p></div>
         <div class="cap rv" style="--i:2">
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="3" y="3" width="9" height="9"/><rect x="14" y="3" width="9" height="9"/><rect x="3" y="14" width="9" height="9"/><path d="M14 18.5h9M18.5 14v9"/></svg>
           <h3>Works across your repos</h3><p>Load several repositories into one workspace and ask about one or all of them. Evidence reads <span class="mono">repo:path:line</span>. Hand a teammate a read-only snapshot as a link or a file, with no server in between.</p></div>
@@ -371,7 +371,7 @@
           <span class="k">OPT-IN USAGE LOG</span>
           <h3>Usage numbers you own</h3><p>Off by default. Turned on, it keeps question kinds, provider, timings and token counts in the browser, never code, paths or keys. Question text needs a second switch. Export JSON or CSV, or send events to an endpoint you run. There is no collector of ours.</p></div>
       </div>
-      <p class="also mono rv"><b>ALSO IN THE WORKBENCH</b> · about two dozen deterministic LOCAL queries (definitions, references, import cycles, orphans, untested files, env reads) · ranked signals · drift between sessions · <span class="mono">PREVIEW SEND</span> shows exactly what a question will send · symbols and imports for 10 languages</p>
+      <p class="also mono rv"><b>ALSO IN THE WORKBENCH</b> · about two dozen deterministic LOCAL queries (definitions, references, import cycles, orphans, untested files, env reads) · ranked signals · drift between sessions · <span class="mono">PREVIEW SEND</span> shows the exact payload before a question goes · symbols and imports for 10 languages</p>
     </div>
   </section>
 
@@ -387,11 +387,11 @@
               <li><b>Security and platform reviewers</b> who have to sign off on anything that touches source.</li>
               <li><b>Teams with data-residency or vendor-risk rules</b> that rule out hosted code assistants.</li>
             </ul></div>
-          <div class="step rv lit" style="--i:1"><div class="k mono">WHY NO BACKEND</div><h3>No server means no copy of your code</h3>
+          <div class="step rv lit" style="--i:1"><div class="k mono">WHY NO BACKEND</div><h3>No server, so we hold no copy of your code</h3>
             <ul>
               <li>No vendor server holds your code, so there is no copy of ours to breach, subpoena or retain.</li>
               <li>Requests go from the browser straight to your provider, under your agreement, account settings and data terms.</li>
-              <li>Fewer parties for data-residency and vendor-risk reviews to clear. Meridian adds none that sees code.</li>
+              <li>Meridian adds no party that sees code, so data-residency and vendor-risk reviews have fewer parties to clear.</li>
               <li>Saved projects and workspaces keep metadata only. Close the tab and the files are gone.</li>
             </ul></div>
         </div>
@@ -426,12 +426,12 @@
   <section class="block" id="security">
     <div class="wrap">
       <div class="sec-head rv"><span class="idx mono">04</span><h2>For security and compliance reviews</h2></div>
-      <p class="sec-lede rv">What a reviewer usually asks, answered plainly. Every point can be checked in the source and in your browser's network inspector.</p>
+      <p class="sec-lede rv">The questions reviewers ask, with direct answers. You can check each point in the source and in your browser's network inspector.</p>
       <dl class="spec rv">
         <div class="spec-row"><dt>WHERE CODE LIVES</dt><dd>In the memory of the browser tab that loaded it, and nowhere else. Close the tab and it is gone. Saved projects and workspaces keep <b>metadata only</b> (names, file counts, selection, settings) in that browser's IndexedDB.</dd></div>
-        <div class="spec-row"><dt>WHAT LEAVES, AND WHEN</dt><dd>Only when you ask a model a question: the question, the files you ticked, and short line-numbered excerpts the local index found for it (GROUND, on by default) go <b>directly from the browser to the provider you configured</b>. <span class="mono">PREVIEW SEND</span> shows the exact payload first. In LOCAL mode, nothing is sent.</dd></div>
-        <div class="spec-row"><dt>OUR SERVERS</dt><dd>None. Meridian is static files on GitHub Pages: no accounts, no database, no telemetry sent to us. Nothing to audit on our side. GitHub may log standard request data (such as IP addresses) when the page loads.</dd></div>
-        <div class="spec-row"><dt>MODEL PROVIDER</dt><dd>Anthropic, OpenAI, or any OpenAI-compatible endpoint, under <b>your own key, agreement, region and data terms</b>. Local and self-hosted models work too: the hosted page reaches localhost servers such as LM Studio or Ollama. For an internal gateway or a regional endpoint, host your own copy and add its address to the page's security policy.</dd></div>
+        <div class="spec-row"><dt>WHAT LEAVES, AND WHEN</dt><dd>Only when you ask a model a question: the question, the files you ticked, short line-numbered excerpts the local index found (with GROUND on, the default; these can come from any loaded file, ticked or not), any evidence you pinned, and earlier turns of the conversation go <b>directly from the browser to the provider you configured</b>. SMART mode also sends a project map of the ticked files. <span class="mono">PREVIEW SEND</span> shows the exact payload first. In LOCAL mode, nothing is sent.</dd></div>
+        <div class="spec-row"><dt>OUR SERVERS</dt><dd>None. Meridian is static files on GitHub Pages: no accounts, no database, no telemetry sent to us. Nothing runs on our side. The product is the static source, which you can review or self-host at a pinned commit. GitHub may log standard request data (such as IP addresses) when the page loads.</dd></div>
+        <div class="spec-row"><dt>MODEL PROVIDER</dt><dd>Anthropic, OpenAI, or any OpenAI-compatible endpoint, under <b>your own key, agreement, region and data terms</b>. Local models (LM Studio, Ollama) work on the hosted page with CORS enabled for this site (see the user guide). For an internal gateway or a regional endpoint, host your own copy and add its address to the page's security policy.</dd></div>
         <div class="spec-row"><dt>API KEYS</dt><dd>Stored in that browser's localStorage, one per provider, and sent only to that provider. Never put into share links, bundles, exports or the usage log.</dd></div>
         <div class="spec-row"><dt>SHARE LINKS</dt><dd>The link carries the selected files in the part after <span class="mono">#</span>, which browsers never send in a request, so no server receives it. It is the code itself: anyone who has it can read it, and it can't be revoked. Secret-looking files (.env, private keys) start unticked.</dd></div>
         <div class="spec-row"><dt>USAGE ANALYTICS</dt><dd>Off by default, and nothing is recorded while off. When on, events stay in the browser and hold no code, paths or keys; question text needs a separate switch. Optional sending goes only to an endpoint you enter (localhost on the hosted page). LOCAL-mode events are never sent.</dd></div>
@@ -447,7 +447,7 @@
     <div class="wrap">
       <div class="sec-head rv"><span class="idx mono">05</span><h2>Try it in 30 seconds</h2></div>
       <div class="try-steps">
-        <div class="step rv lit" style="--i:0"><div class="k mono">STEP 01</div><h3>Open the demo</h3><p>Follow the demo link. The first visit asks you to accept the terms once, with the demo button already focused, so it's one click.</p></div>
+        <div class="step rv lit" style="--i:0"><div class="k mono">STEP 01</div><h3>Open the demo</h3><p>Follow the demo link. A first visit asks you to accept the terms once, and the demo button is already focused, so that takes one click.</p></div>
         <div class="step rv lit" style="--i:1"><div class="k mono">STEP 02</div><h3>Watch it answer</h3><p>A small sample project loads and the LOCAL engine answers its first question. No key, no AI, nothing leaves the tab.</p></div>
         <div class="step rv lit" style="--i:2"><div class="k mono">STEP 03</div><h3>Ask your own question</h3><p>Try <span class="mono">what imports store.js?</span> and click an evidence chip to open the exact line. Then load a real repo.</p></div>
       </div>
@@ -466,13 +466,13 @@
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.01</span>Is my code safe?<span class="x">+</span></button>
           <div class="faq-a">
-            <p>It never reaches us. Meridian has no backend, so there is nowhere on our side for it to go. Files are read into the tab's memory and are gone when you close it. Code leaves the browser only in these cases, and you start each one:</p>
+            <p>Your code never reaches us: Meridian has no backend to receive it. The tab holds your files in memory until you close it. Code leaves the browser only in these cases, and you start each one:</p>
             <ul>
-              <li><b>You ask a model a question.</b> The question, the files you ticked, and short excerpts the local index found go straight to the provider you configured, under your key. <span class="mono">PREVIEW SEND</span> shows exactly what will go. In LOCAL mode nothing is sent.</li>
+              <li><b>You ask a model a question.</b> The question, the files you ticked, short excerpts the local index found (from any loaded file, ticked or not, while GROUND is on) and earlier turns of the conversation go straight to the provider you configured, under your key. SMART mode adds a project map of the ticked files. <span class="mono">PREVIEW SEND</span> shows the exact payload. In LOCAL mode nothing is sent.</li>
               <li><b>You create a share link or bundle.</b> The files you tick travel inside it, to wherever you send it.</li>
               <li><b>You export a session.</b> The cited lines are in the file you save.</li>
             </ul>
-            <p>What we can't control: what your model provider does with requests (that's your agreement with them), and where a share link ends up once you send it. The usage log never stores code. Details in the <a href="privacy.html" class="trace">privacy policy</a>.</p>
+            <p>Outside our control: what your model provider does with requests (your agreement with them covers that), and where a share link travels once you send it. The usage log never stores code. Details in the <a href="privacy.html" class="trace">privacy policy</a>.</p>
           </div>
         </div>
         <div class="faq-item">
@@ -481,15 +481,15 @@
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.03</span>Can we use local or self-hosted models?<span class="x">+</span></button>
-          <div class="faq-a"><p>Yes. Point the custom provider at any OpenAI-compatible server. On the hosted page that means a server on your own machine, such as LM Studio (<span class="mono">http://localhost:1234/v1</span>) or Ollama. For a model behind your company's gateway, or a provider endpoint in a specific region, host your own copy of the static files and add that address to the security policy. The <a href="https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md" class="trace">user guide</a> walks through it.</p></div>
+          <div class="faq-a"><p>Yes. Point the custom provider at any OpenAI-compatible server. On the hosted page that means a server on your own machine, such as LM Studio (<span class="mono">http://localhost:1234/v1</span>) or Ollama, with CORS enabled for this site. LM Studio ships with CORS off, and Ollama needs <span class="mono">OLLAMA_ORIGINS</span> set. For a model behind your company's gateway, or a provider endpoint in a specific region, host your own copy of the static files and add that address to the security policy. The <a href="https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md" class="trace">user guide</a> covers both setups.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.04</span>Who can read a share link?<span class="x">+</span></button>
-          <div class="faq-a"><p>Anyone who has it. The link carries the files you ticked, compressed, in the part after <span class="mono">#</span>. Browsers don't send that part to any server, so GitHub Pages and we never see it, but the chat app or inbox you paste it into stores it like any message. There is no server, so a link can't be revoked or expired. Treat it exactly like sending the files. It opens read-only, in the recipient's tab, and nothing is saved.</p></div>
+          <div class="faq-a"><p>Anyone who has it. The link carries the files you ticked, compressed, in the part after <span class="mono">#</span>. Browsers don't send that part to any server, so GitHub Pages and we never see it, but the chat app or inbox you paste it into stores it like any message. There is no server, so a link can't be revoked or expired. Treat it like sending the files. It opens read-only, in the recipient's tab, and nothing is saved.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.05</span>Does Meridian track usage?<span class="x">+</span></button>
-          <div class="faq-a"><p>Not for us. This site runs no analytics and sets no cookies. The workbench has an optional usage log for you: off by default, stored in your browser, exportable as JSON or CSV. It records question kinds, provider, timings and token counts, never code, file paths or keys, and stores question text only if you turn on a second switch. If you want team-wide numbers, it can send the same events to an endpoint you run (on the hosted page, one on localhost).</p></div>
+          <div class="faq-a"><p>Not for us. This site runs no analytics and sets no cookies. The workbench has an optional usage log for you: off by default, stored in your browser, exportable as JSON or CSV. It records question kinds, provider, timings and token counts, never code, file paths or keys, and stores question text only if you turn on a second switch. For team-wide numbers, it can send the same events to an endpoint you run (on the hosted page, one on localhost).</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.06</span>What does it cost?<span class="x">+</span></button>
@@ -641,7 +641,7 @@
     for (var pass = 0; pass < 2; pass++) {
       var accPass = pass === 1;
       ctx.fillStyle = 'rgb(' + (accPass ? pal.acc : pal.pt) + ')';
-      /* Flare Bloom — the meridian ring ignites; controlled, on-state only */
+      /* Flare Bloom: the meridian ring ignites; controlled, on-state only */
       ctx.shadowBlur = accPass ? 6 * gz : 0;
       ctx.shadowColor = accPass ? 'rgb(' + pal.acc + ')' : 'transparent';
       for (i = 0; i < n; i++) {
