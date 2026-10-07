@@ -22,16 +22,16 @@ var INSTRUCTIONS = [
   '- steps: 1 to 6 items, in reasoning order.',
   '- evidence: each item MUST cite a file path exactly as it appears after "FILE:" in the context, with 1-indexed line numbers matching the numbered lines, and a verbatim quote of at most 120 characters. Never invent files or line numbers. A pure-reasoning step may have an empty evidence array.',
   '- Context may include a PROJECT MAP block (file tree + key-file heads) and a question-relevant subset of files. Excerpted files keep their true line numbers; gaps are marked "··· lines A–B omitted ···". Cite only line ranges you can actually see.',
-  '- Context may include a <MERIDIAN_PROJECT_INTELLIGENCE> block produced by Meridian\'s deterministic local engine before your turn. It has typed sections: DETERMINISTIC FINDINGS, SYMBOLS, RELATED FILES, TESTS, RECENT CHANGES (all facts read from the project index — treat as verified, not your own inference), SOURCE EVIDENCE (attributed, line-true excerpts, each tagged "[Evidence NN]" with File / Lines / Kind), and MODEL TASK. Build your reasoning on these findings and excerpts, reuse their exact path:line ranges in your evidence, and clearly separate evidence-backed conclusions from hypotheses — never assert a fact the provided evidence does not support.',
+  '- Context may include a <MERIDIAN_PROJECT_INTELLIGENCE> block produced by Meridian\'s deterministic local engine before your turn. It has typed sections: DETERMINISTIC FINDINGS, SYMBOLS, RELATED FILES, TESTS, RECENT CHANGES (all facts read from the project index: treat as verified, not your own inference), SOURCE EVIDENCE (attributed, line-true excerpts, each tagged "[Evidence NN]" with File / Lines / Kind), and MODEL TASK. Build your reasoning on these findings and excerpts, reuse their exact path:line ranges in your evidence, and clearly separate evidence-backed conclusions from hypotheses: never assert a fact the provided evidence does not support.',
   '- If the map shows a file you cannot see that would answer better, name it and suggest the user ask again mentioning it.',
-  '- confidence: a number from 0 to 1 — your honest estimate.',
-  '- Optionally include "actions": up to 4 read-only items {"kind","command","filter"?,"why"} that run only after the user clicks. Kinds — search (substring/regex over loaded files; optional "filter" path glob with *), def / refs (definition sites / references of a symbol), dir (summarize a loaded dir; command = path), recent (list recent files; command = a count like "10"), open (a context file worth inspecting), git (read-only status/diff/log/show/blame for the user\'s terminal). Never propose anything that writes, deletes, or installs.',
+  '- confidence: a number from 0 to 1: your honest estimate.',
+  '- Optionally include "actions": up to 4 read-only items {"kind","command","filter"?,"why"} that run only after the user clicks. Kinds: search (substring/regex over loaded files; optional "filter" path glob with *), def / refs (definition sites / references of a symbol), dir (summarize a loaded dir; command = path), recent (list recent files; command = a count like "10"), open (a context file worth inspecting), git (read-only status/diff/log/show/blame for the user\'s terminal). Never propose anything that writes, deletes, or installs.',
   '- If no project files are loaded, still emit the block with reasoning steps and empty evidence arrays.',
   '- Emit exactly ONE meridian-trace block and output nothing after its closing fence. Do not tag it ```json or anything else.',
-  '- The trace MUST be valid JSON: double-quoted keys and strings, no comments, no trailing commas. If you cannot produce valid trace JSON, still give your prose answer and emit a minimal valid trace (one step, empty evidence) — never emit broken JSON.'
+  '- The trace MUST be valid JSON: double-quoted keys and strings, no comments, no trailing commas. If you cannot produce valid trace JSON, still give your prose answer and emit a minimal valid trace (one step, empty evidence): never emit broken JSON.'
 ].join('\n');
 /* appended on demand (RE-GROUND) or when the user enables Force Strict Trace */
-var STRICT_SUFFIX = '\n\nSTRICT MODE: A prior response could not be parsed into a trace. End with exactly one ```meridian-trace fenced block of strictly valid JSON — no prose, comments, or trailing commas after it. Prefer fewer steps over invalid JSON.';
+var STRICT_SUFFIX = '\n\nSTRICT MODE: A prior response could not be parsed into a trace. End with exactly one ```meridian-trace fenced block of strictly valid JSON: no prose, comments, or trailing commas after it. Prefer fewer steps over invalid JSON.';
 
 var CTX_PREAMBLE = 'The user\'s loaded project files follow. Each file begins with "═══ FILE: <path> ═══" and every line is prefixed with its 1-indexed line number and "│".';
 
@@ -160,12 +160,12 @@ function serializeInvestigationContext(ctx, budgetTok) {
   function section(title, lines) { return '── ' + title + ' ──\n' + (lines.length ? lines.join('\n') : 'none detected') + '\n\n'; }
 
   var head = '<MERIDIAN_PROJECT_INTELLIGENCE>\n'
-    + 'Meridian analyzed the project index for this question before your turn. Everything below is deterministic — read from the project, not inferred.\n\n'
+    + 'Meridian analyzed the project index for this question before your turn. Everything below is deterministic: read from the project, not inferred.\n\n'
     + 'USER QUESTION: ' + ctx.question + '\n'
     + 'INTENT: ' + ctx.intent + '    VERDICT: ' + verdict.text + '\n\n'
     + section('DETERMINISTIC FINDINGS', ctx.findings.map(function (f) { return '- ' + f; }))
-    + section('SYMBOLS', ctx.symbols.map(function (s) { return '- ' + s.name + ' (' + s.kind + ') — ' + s.file + ':' + s.line; }))
-    + section('RELATED FILES', ctx.relatedFiles.map(function (r) { return '- ' + r.file + ' — ' + r.relation; }))
+    + section('SYMBOLS', ctx.symbols.map(function (s) { return '- ' + s.name + ' (' + s.kind + '): ' + s.file + ':' + s.line; }))
+    + section('RELATED FILES', ctx.relatedFiles.map(function (r) { return '- ' + r.file + ': ' + r.relation; }))
     + section('TESTS', ctx.tests.map(function (t) { return '- ' + t; }))
     + section('RECENT CHANGES', ctx.recent.map(function (r) { return '- ' + r.file; }))
     + '── SOURCE EVIDENCE ──\n'
@@ -224,7 +224,7 @@ function buildInvestigationBlock(q, budgetTok) {
   } catch (e) {
     /* grounding must never break the send path, but a swallowed throw would make
        "no deterministic evidence" a false statement — leave a diagnosable trail */
-    console.warn('meridian: investigation failed — falling back to ungrounded send', e);
+    console.warn('meridian: investigation failed: falling back to ungrounded send', e);
     return null;
   }
 }
@@ -242,13 +242,13 @@ function buildPinnedBlock() {
     var ev = st.pinnedEv[i];
     var ex = groundExcerpt(ev.file, ev.startLine, ev.endLine);
     if (!ex) continue; /* pinned from a file no longer loaded — skipped, not faked */
-    var t = '─── [PINNED] ' + ev.file + ':' + ex.startLine + '–' + ex.endLine + (ev.quote ? ' — “' + String(ev.quote).slice(0, 100) + '”' : '') + '\n' + ex.text;
+    var t = '─── [PINNED] ' + ev.file + ':' + ex.startLine + '–' + ex.endLine + (ev.quote ? ': “' + String(ev.quote).slice(0, 100) + '”' : '') + '\n' + ex.text;
     var tok = estTokens(t, ev.file);
     if (used + tok > capTok) break;
     parts.push(t); used += tok; count++;
   }
   if (!parts.length) return null;
-  return { text: 'PINNED EVIDENCE — citations the user pinned in the workbench. Treat them as the focus of this question and prefer citing these exact lines.\n\n' + parts.join('\n\n'), count: count, tokens: used };
+  return { text: 'PINNED EVIDENCE: citations the user pinned in the workbench. Treat them as the focus of this question and prefer citing these exact lines.\n\n' + parts.join('\n\n'), count: count, tokens: used };
 }
 
 /* one question's context, built inside the question scope: all repos, or the
@@ -291,7 +291,7 @@ function buildScopedBlocks(q) {
       packed: { text: '', count: 0, total: 0, tokens: 0, included: [], notPacked: [] } };
     return { blocks: nblocks, note: (invBlock || pinBlock) ? gNote.replace(/^ · /, '') : null, ground: invBlock, pin: pinBlock, plan: nplan };
   }
-  var selHead = 'SELECTED FILES — the subset most relevant to this question. ' + CTX_PREAMBLE + ' Excerpted files keep true line numbers; omitted ranges are marked.\n\n';
+  var selHead = 'SELECTED FILES: the subset most relevant to this question. ' + CTX_PREAMBLE + ' Excerpted files keep true line numbers; omitted ranges are marked.\n\n';
   var mapTok = estTokens(map), headTok = estTokens(selHead);
   var packed = packSmartContext(q, Math.max(0, budget - mapTok - groundTok - overhead - headTok));
   /* cache the stable map block; pinned + grounding + packed subset vary per question */

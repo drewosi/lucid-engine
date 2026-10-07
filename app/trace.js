@@ -195,11 +195,11 @@ function evidenceChip(ev) {
     var title = 'Open ' + citeText(ev.file, a, b).replace(/:(\d+)–(\d+)$/, ' at $1–$2');
     if (ev.quote) {
       var q60 = String(ev.quote).trim().slice(0, 60);
-      if (q60 && st.files.get(ev.file).content.indexOf(q60) === -1) { title = 'Quote not found in this file — the model may have paraphrased or mis-cited these lines'; btn.classList.add('unverified'); }
+      if (q60 && st.files.get(ev.file).content.indexOf(q60) === -1) { title = 'Quote not found in this file: the model may have paraphrased or mis-cited these lines'; btn.classList.add('unverified'); }
     }
     btn.title = title;
     btn.addEventListener('click', function () { openViewer(ev.file, a, b, ev.quote); });
-  } else { btn.disabled = true; btn.title = 'File is not in the loaded context — the citation cannot be verified.'; }
+  } else { btn.disabled = true; btn.title = 'File is not in the loaded context: the citation cannot be verified.'; }
   return btn;
 }
 /* ---- pinned evidence: chips as first-class objects. Pins are session-scoped
@@ -216,7 +216,7 @@ function togglePin(ev) {
   /* every visible pin button for this citation reflects the new state */
   document.querySelectorAll('.evpin[data-pin="' + (window.CSS && CSS.escape ? CSS.escape(k) : k.replace(/"/g, '')) + '"]').forEach(function (b) {
     b.classList.toggle('on', i === -1);
-    b.title = i === -1 ? 'Unpin this citation' : 'Pin this citation — scope the next question to pinned evidence';
+    b.title = i === -1 ? 'Unpin this citation' : 'Pin this citation: scope the next question to pinned evidence';
   });
 }
 function evPinBtn(ev) {
@@ -226,14 +226,14 @@ function evPinBtn(ev) {
   b.textContent = '⌖';
   b.setAttribute('data-pin', pinKey(ev));
   b.setAttribute('aria-label', 'Pin citation ' + pinKey(ev));
-  b.title = isPinned(ev) ? 'Unpin this citation' : 'Pin this citation — scope the next question to pinned evidence';
+  b.title = isPinned(ev) ? 'Unpin this citation' : 'Pin this citation: scope the next question to pinned evidence';
   b.addEventListener('click', function (e) { e.stopPropagation(); togglePin(ev); });
   return b;
 }
 function pinnedMarkdown() {
   return st.pinnedEv.map(function (ev) {
     var a = ev.startLine || 1, bb = ev.endLine || a;
-    return '- `' + citeText(ev.file, a, bb) + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : '');
+    return '- `' + citeText(ev.file, a, bb) + '`' + (ev.quote ? ': “' + String(ev.quote) + '”' : '');
   }).join('\n');
 }
 function renderPinTray() {
@@ -255,7 +255,7 @@ function renderPinTray() {
   cl.addEventListener('click', function () {
     st.pinnedEv.length = 0;
     renderPinTray();
-    document.querySelectorAll('.evpin.on').forEach(function (b) { b.classList.remove('on'); b.title = 'Pin this citation — scope the next question to pinned evidence'; });
+    document.querySelectorAll('.evpin.on').forEach(function (b) { b.classList.remove('on'); b.title = 'Pin this citation: scope the next question to pinned evidence'; });
   });
   hd.appendChild(cp); hd.appendChild(cl);
   tray.appendChild(hd);
@@ -277,7 +277,7 @@ function evCopyBtn(ev) {
   btn.setAttribute('aria-label', 'Copy citation ' + citeText(ev.file, a, b));
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
-    var txt = '`' + citeText(ev.file, a, b) + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : '');
+    var txt = '`' + citeText(ev.file, a, b) + '`' + (ev.quote ? ': “' + String(ev.quote) + '”' : '');
     copyText(txt, 'Citation copied.');
   });
   return btn;
@@ -373,10 +373,10 @@ function renderTrace(msgEl, trace, opts) {
       var note = document.createElement('div');
       note.className = 'errline';
       note.textContent = deg === 'truncated'
-        ? '// trace truncated mid-output — showing the partial response'
+        ? '// trace truncated mid-output: showing the partial response'
         : deg === 'unparseable'
-          ? '// trace present but unreadable — showing the model\'s raw response'
-          : '// trace unavailable — showing the model\'s raw response';
+          ? '// trace present but unreadable: showing the model\'s raw response'
+          : '// trace unavailable: showing the model\'s raw response';
       bd.appendChild(note);
       if (typeof opts.retry === 'function') appendRegroundBtn(bd, opts.retry);
     } else {
@@ -417,7 +417,7 @@ function renderTrace(msgEl, trace, opts) {
   if (dead) {
     var dn = document.createElement('div');
     dn.className = 'errline';
-    dn.textContent = '// ' + dead + ' of ' + totalCites + ' citation' + (totalCites === 1 ? '' : 's') + ' reference files not in the loaded context — those chips are not verifiable';
+    dn.textContent = '// ' + dead + ' of ' + totalCites + ' citation' + (totalCites === 1 ? '' : 's') + ' reference files not in the loaded context: those chips are not verifiable';
     bd.appendChild(dn);
   }
 
@@ -485,13 +485,13 @@ function exchangeMarkdown(x, i) {
   L.push(x.answer);
   L.push('');
   if (x.trace && Array.isArray(x.trace.steps)) {
-    L.push('### Trace' + (typeof x.trace.confidence === 'number' ? ' — confidence ' + x.trace.confidence.toFixed(2) : ''));
+    L.push('### Trace' + (typeof x.trace.confidence === 'number' ? ': confidence ' + x.trace.confidence.toFixed(2) : ''));
     L.push('');
     x.trace.steps.forEach(function (step, n) {
-      L.push((n + 1) + '. **' + String(step.action || 'step') + '**' + (step.note ? ' — ' + String(step.note) : ''));
+      L.push((n + 1) + '. **' + String(step.action || 'step') + '**' + (step.note ? ': ' + String(step.note) : ''));
       (Array.isArray(step.evidence) ? step.evidence : []).forEach(function (ev) {
         if (!ev || typeof ev.file !== 'string') return;
-        L.push('   - `' + citeText(ev.file, ev.startLine, ev.endLine) + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : ''));
+        L.push('   - `' + citeText(ev.file, ev.startLine, ev.endLine) + '`' + (ev.quote ? ': “' + String(ev.quote) + '”' : ''));
         var ex = evExcerpt(ev);
         if (ex) {
           L.push('');
@@ -506,7 +506,7 @@ function exchangeMarkdown(x, i) {
       L.push('');
       L.push('### Proposed actions (never executed by meridian)');
       x.trace.actions.forEach(function (a) {
-        if (a && a.command) L.push('- `' + String(a.command) + '`' + (a.why ? ' — ' + String(a.why) : ''));
+        if (a && a.command) L.push('- `' + String(a.command) + '`' + (a.why ? ': ' + String(a.why) : ''));
       });
     }
     L.push('');

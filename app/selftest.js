@@ -1098,7 +1098,7 @@ function runSelfTests() {
     var dr = inv('drift');
     ok('intent · drift detects removed files', /Removed:/.test(dr.answer) && dr.answer.indexOf('ghost/old.js') !== -1);
     ok('intent · drift detects new files', /New:/.test(dr.answer));
-    ok('intent · drift detects reshaped files', /Reshaped:/.test(dr.answer) && /`src\/store\.js` — \+/.test(dr.answer));
+    ok('intent · drift detects reshaped files', /Reshaped:/.test(dr.answer) && /`src\/store\.js`: \+/.test(dr.answer));
     st.driftPrev = null;
     /* trace parser fallbacks */
     ok('trace · clean fence', extractTrace('a\n```meridian-trace\n{"steps":[{"action":"x"}]}\n```').degraded === null);

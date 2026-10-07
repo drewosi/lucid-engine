@@ -23,11 +23,11 @@ function renderVerdict(msgEl, verdict) {
   var v = document.createElement('div');
   v.className = 'verdict ' + (verdict.local ? 'ok' : 'model');
   v.title = verdict.local
-    ? 'Answered entirely from the deterministic project index — no model, no network'
-    : 'Meridian gathered the evidence; interpreting it needs a model — connect one in settings';
+    ? 'Answered entirely from the deterministic project index: no model, no network'
+    : 'Meridian gathered the evidence; interpreting it needs a model: connect one in settings';
   v.innerHTML = '<span class="vk mono"></span><span class="vt"></span>';
   v.querySelector('.vk').textContent = verdict.local ? '✓ ' + verdict.text : '○ ' + verdict.text;
-  v.querySelector('.vt').textContent = verdict.local ? 'answered from the project index — zero inference, zero network' : 'evidence gathered locally — connect a model to synthesize';
+  v.querySelector('.vt').textContent = verdict.local ? 'answered from the project index: zero inference, zero network' : 'evidence gathered locally: connect a model to synthesize';
   bd.appendChild(v);
 }
 
@@ -42,7 +42,7 @@ function renderOrientation(msgEl) {
   o.className = 'orient mono';
   var lead = document.createElement('span');
   lead.className = 'lead';
-  lead.textContent = '// this answer came from the deterministic index — no model was used, nothing left this tab. ';
+  lead.textContent = '// this answer came from the deterministic index: no model was used, nothing left this tab. ';
   o.appendChild(lead);
   o.appendChild(document.createElement('br'));
   o.appendChild(document.createTextNode('// ✓ KNOWN LOCALLY = answered from the index · ○ REQUIRES MODEL REASONING = evidence gathered, a model synthesizes · '));
@@ -58,12 +58,12 @@ function askLocal(q) {
   addUserMsg(q);
   var msgEl = addAiMsg();
   var txtEl = msgEl.querySelector('.txt');
-  setStatus('LOCAL ENGINE — investigating…');
+  setStatus('LOCAL ENGINE: investigating…');
   var t0 = performance.now();
 
   var answer, trace, verdict, kind = 'none';
   if (!st.files.size) {
-    answer = 'No project is loaded, so there is no terrain to analyze yet. Drop a folder into CONTEXT and Meridian will index it — or switch to an AI provider in settings.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n' + LOCAL_HELP;
+    answer = 'No project is loaded, so there is no terrain to analyze yet. Drop a folder into CONTEXT and Meridian will index it: or switch to an AI provider in settings.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n' + LOCAL_HELP;
     trace = { steps: [{ action: 'check loaded context', note: 'no files in memory', evidence: [] }] };
     verdict = { local: true, text: 'KNOWN LOCALLY' };
   } else {
@@ -94,13 +94,13 @@ function askLocal(q) {
   var chip = msgEl.querySelector('.term-hd .chip');
   if (chip) { chip.className = 'chip'; chip.textContent = 'LOCAL · NO AI'; }
   var hd = msgEl.querySelector('.term-hd');
-  if (hd && hd.firstChild) hd.firstChild.textContent = 'MERIDIAN LOCAL ENGINE — NO AI ';
+  if (hd && hd.firstChild) hd.firstChild.textContent = 'MERIDIAN LOCAL ENGINE: NO AI ';
 
   st.history.push({ role: 'user', content: q });
   st.history.push({ role: 'assistant', content: answer });
   st.transcript.push({ q: q, answer: answer, trace: trace, model: 'LOCAL ENGINE', provider: 'LOCAL', ts: Date.now() });
   attachCopy(msgEl, st.transcript.length - 1);
-  setStatus('LOCAL ENGINE IDLE — deterministic · zero network');
+  setStatus('LOCAL ENGINE IDLE: deterministic · zero network');
   announce('Local answer ready.');
   scrollEnd();
   /* opt-in usage log (a no-op while analytics is off); LOCAL events are never sent anywhere */
@@ -129,7 +129,7 @@ function renderOverview() {
     { label: 'SIGNALS', value: computeSignals(idx).length, q: 'signals' }
   ];
   ov.hidden = false;
-  ov.innerHTML = '<div class="ov-hd mono">PROJECT INTELLIGENCE // <b>deterministic</b> — Meridian understands the terrain before a model enters the room</div>'
+  ov.innerHTML = '<div class="ov-hd mono">PROJECT INTELLIGENCE // <b>deterministic</b>: Meridian reads the terrain before a model enters the room</div>'
     + '<div class="stat-grid"></div><div class="ov-index mono"></div><div class="ov-langs mono"></div><div class="ov-cap mono"></div>';
   var grid = ov.querySelector('.stat-grid');
   tiles.forEach(function (t) {
@@ -151,7 +151,7 @@ function renderOverview() {
   if (st.skippedFiles.length) {
     var sk = document.createElement('div');
     sk.className = 'ov-skip mono';
-    sk.appendChild(document.createTextNode('// ' + st.skippedFiles.length + ' file' + (st.skippedFiles.length === 1 ? '' : 's') + ' skipped during load (binary · oversized · ignored · caps) — '));
+    sk.appendChild(document.createTextNode('// ' + st.skippedFiles.length + ' file' + (st.skippedFiles.length === 1 ? '' : 's') + ' skipped during load (binary · oversized · ignored · caps): '));
     var sb = document.createElement('button');
     sb.type = 'button'; sb.className = 'kbd-link mono'; sb.textContent = '[ REVIEW SKIPPED ]';
     sb.title = 'List every skipped file and pull specific ones back in';
@@ -165,7 +165,7 @@ function renderOverview() {
      analysis repeats its own caveat in its answer */
   var lim = document.createElement('div');
   lim.className = 'ov-lim mono';
-  lim.textContent = '// machinery limits: static import edges only (regex extraction per language · >400-char lines not indexed) — cycles/orphans/hubs/untested read that graph; dynamic loading, DI and bundler wiring are invisible. each analysis states its own caveats in its answer.';
+  lim.textContent = '// machinery limits: static import edges only (regex extraction per language · >400-char lines not indexed): cycles/orphans/hubs/untested read that graph; dynamic loading, DI and bundler wiring are invisible. each analysis states its own caveats in its answer.';
   ov.appendChild(lim);
 }
 

@@ -22,13 +22,13 @@ function renderCost() {
   if (navc) navc.hidden = false;
   if (m.unknownRates) {
     $('costline').textContent = head + ' · rates unknown';
-    if (navc) { navv.textContent = '≈ ' + fmtTok(st.spent.in + st.spent.cacheW + st.spent.cacheR) + ' tok'; navc.title = 'Rates unknown for ' + m.label + '. Tokens this session — ' + breakdown + '. ↺ resets.'; }
+    if (navc) { navv.textContent = '≈ ' + fmtTok(st.spent.in + st.spent.cacheW + st.spent.cacheR) + ' tok'; navc.title = 'Rates unknown for ' + m.label + '. Tokens this session: ' + breakdown + '. ↺ resets.'; }
     return;
   }
   var usd = (st.spent.in * m.rIn + st.spent.out * m.rOut + st.spent.cacheW * m.rCacheW + st.spent.cacheR * m.rCacheR) / 1e6;
   var usdStr = '$' + (usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2));
   $('costline').textContent = head + ' · ' + usdStr + ' est';
-  if (navc) { navv.textContent = usdStr; navc.title = usdStr + ' estimated this session (' + m.label + ') — ' + breakdown + '. Your provider bills actuals. ↺ resets.'; }
+  if (navc) { navv.textContent = usdStr; navc.title = usdStr + ' estimated this session (' + m.label + '): ' + breakdown + '. Your provider bills actuals. ↺ resets.'; }
 }
 /* cost accumulates across clearConversation() by design — this is the explicit reset */
 function resetCost() {
@@ -60,7 +60,7 @@ function preSendOK() {
   var m = MODELS[st.model];
   if (st.ctxMode === 'full' && !m.local) {
     var sel = selectedTokens().tokens + overheadTokens();
-    if (sel > m.ctx && !confirm('Selected context + conversation ≈ ' + fmtTok(sel) + ' tokens exceeds ' + m.label + '’s ' + fmtTok(m.ctx) + '-token window — the provider will likely reject it. Deselect files, clear the conversation, or switch to SMART.\n\nSend anyway?')) return false;
+    if (sel > m.ctx && !confirm('Selected context + conversation ≈ ' + fmtTok(sel) + ' tokens exceeds ' + m.label + '’s ' + fmtTok(m.ctx) + '-token window: the provider will likely reject it. Deselect files, clear the conversation, or switch to SMART.\n\nSend anyway?')) return false;
   }
   var cap = parseFloat(lsGet(LS.spendcap) || '0');
   if (cap > 0 && !m.unknownRates) {
@@ -75,16 +75,16 @@ function httpErrorText(status, body, retryAfter) {
   var detail = '';
   /* OpenAI-style { error: { message } }, or a bare string (LM Studio and other local servers) */
   try { var pe = JSON.parse(body).error; detail = (typeof pe === 'string' ? pe : pe && pe.message) || ''; } catch (e) { detail = String(body || '').slice(0, 300); }
-  if (status === 401) return 'KEY REJECTED (401) — check it in settings.';
-  if (status === 403) return 'FORBIDDEN (403) — this key cannot use this model. ' + detail;
-  if (status === 404) return 'MODEL NOT FOUND (404) — ' + detail;
-  if (status === 429) return 'RATE LIMITED (429) — ' + (retryAfter ? 'retry in ' + retryAfter + 's. ' : 'slow down or raise your provider limits. ') + detail;
+  if (status === 401) return 'KEY REJECTED (401): check it in settings.';
+  if (status === 403) return 'FORBIDDEN (403): this key cannot use this model. ' + detail;
+  if (status === 404) return 'MODEL NOT FOUND (404): ' + detail;
+  if (status === 429) return 'RATE LIMITED (429): ' + (retryAfter ? 'retry in ' + retryAfter + 's. ' : 'slow down or raise your provider limits. ') + detail;
   if (status === 400 && /token|context|length/i.test(detail)) return st.ctxMode === 'smart'
     ? 'CONTEXT TOO LARGE (400): the request is bigger than the model accepts. Token counts here are estimates, so lower the SMART budget in settings (below the context length the model is loaded with) and retry.'
     : 'CONTEXT TOO LARGE (400): deselect some files, or switch to SMART, and retry.';
-  if (status === 400) return 'BAD REQUEST (400) — ' + detail;
-  if (status === 529 || status >= 500) return 'PROVIDER OVERLOADED (' + status + ') — retry in a moment.';
-  return 'HTTP ' + status + ' — ' + detail;
+  if (status === 400) return 'BAD REQUEST (400): ' + detail;
+  if (status === 529 || status >= 500) return 'PROVIDER OVERLOADED (' + status + '): retry in a moment.';
+  return 'HTTP ' + status + ': ' + detail;
 }
 
 /* One parsed SSE event → a plain effect object. Pure — shared by the live pump
@@ -131,7 +131,7 @@ function ask(q, key, opts) {
   opts = opts || {};
   /* concurrency guard — a stale [ RETRY ] / [ RE-GROUND & RETRY ] click while an
      answer is streaming would race two streams over one aborter and one flag */
-  if (st.streaming) { toast('One answer at a time — stop the current stream first.'); return; }
+  if (st.streaming) { toast('One answer at a time: stop the current stream first.'); return; }
   if (!opts.reask) addUserMsg(q); /* retries re-enter ask(); the question is already on screen */
   var msgEl = addAiMsg();
   var txtEl = msgEl.querySelector('.txt');
@@ -152,7 +152,7 @@ function ask(q, key, opts) {
   /* Phase 2: show what Meridian deterministically FOUND before the model interprets it
      — separate layer, navigable evidence. Never allowed to break the streaming path. */
   try { if (st.groundMode && cb.ground) renderFound(msgEl, cb.ground); } catch (e) {}
-  setStatus('REASONING — ' + MODELS[st.model].label + (cb.note ? ' · ' + cb.note : ''));
+  setStatus('REASONING: ' + MODELS[st.model].label + (cb.note ? ' · ' + cb.note : ''));
   var anthro = st.curProvider === 'anthropic';
   /* strict trace: on demand (RE-GROUND) or when the user enables Force Strict Trace */
   var strict = opts.strict || lsGet(LS.strictTrace) === '1';
@@ -257,7 +257,7 @@ function ask(q, key, opts) {
       if (!data || data === '[DONE]') return;
       var p;
       try { p = JSON.parse(data); } catch (e) {
-        if (++badEvents === 3) { var mw = document.createElement('div'); mw.className = 'errline'; mw.textContent = '// some stream data could not be parsed — the answer may be incomplete'; msgEl.querySelector('.bd').appendChild(mw); }
+        if (++badEvents === 3) { var mw = document.createElement('div'); mw.className = 'errline'; mw.textContent = '// some stream data could not be parsed: the answer may be incomplete'; msgEl.querySelector('.bd').appendChild(mw); }
         return;
       }
       var eff = parseStreamEvent(p, anthro);
@@ -310,14 +310,14 @@ function ask(q, key, opts) {
         msgEl.querySelector('.bd').appendChild(n2);
       }
       if (!parsed.answer && !parsed.trace && stopReason !== 'max_tokens') {
-        var ne = document.createElement('div'); ne.className = 'errline'; ne.textContent = '// the model returned no content — try again or rephrase'; msgEl.querySelector('.bd').appendChild(ne);
+        var ne = document.createElement('div'); ne.className = 'errline'; ne.textContent = '// the model returned no content: try again or rephrase'; msgEl.querySelector('.bd').appendChild(ne);
       }
       st.history.push({ role: 'user', content: q });
       st.history.push({ role: 'assistant', content: parsed.answer || '(empty)' });
       st.transcript.push({ q: q, answer: parsed.answer || '(empty)', trace: parsed.trace, model: MODELS[st.model].label, provider: PROVIDERS[st.curProvider].label, ts: Date.now() });
       attachCopy(msgEl, st.transcript.length - 1);
       logQuestion('ok');
-      setStatus('IDLE — response complete');
+      setStatus('IDLE: response complete');
       announce('Response complete.' + (parsed.trace ? ' Trace available.' : ''));
       scrollEnd();
     }
@@ -342,10 +342,10 @@ function ask(q, key, opts) {
       if (err.httpStatus === 401) openDrawer(true);
       setStatus('REQUEST FAILED', true);
     } else if (err.streamMsg) {
-      line = '// stream error — ' + err.streamMsg;
+      line = '// stream error: ' + err.streamMsg;
       setStatus('STREAM ERROR', true);
     } else {
-      line = '// network unreachable — check your connection and any ad/tracker blocker. requests go straight from this browser to the provider endpoint' + (st.curProvider === 'custom' ? ' — custom endpoints must allow browser CORS, and remote (non-localhost) endpoints are blocked by this page\'s CSP unless you self-host with a widened connect-src.' : '.');
+      line = '// network unreachable: check your connection and any ad/tracker blocker. requests go straight from this browser to the provider endpoint' + (st.curProvider === 'custom' ? ': custom endpoints must allow browser CORS, and remote (non-localhost) endpoints are blocked by this page\'s CSP unless you self-host with a widened connect-src.' : '.');
       setStatus('NETWORK ERROR', true);
     }
     var d = document.createElement('div');
@@ -388,13 +388,13 @@ export function initChat() {
     if (st.curProvider === 'local') { promptEl.value = ''; askLocal(q); return; }
     var key = lsGet(curKeyLS()) || '';
     if (!key && st.curProvider !== 'custom') {
-      setStatus('NO KEY — add your ' + PROVIDERS[st.curProvider].label + ' API key in settings', true);
+      setStatus('NO KEY: add your ' + PROVIDERS[st.curProvider].label + ' API key in settings', true);
       openDrawer(true);
-      toast('Add your ' + PROVIDERS[st.curProvider].label + ' API key first — it stays in this browser.');
+      toast('Add your ' + PROVIDERS[st.curProvider].label + ' API key first: it stays in this browser.');
       return;
     }
     if (st.curProvider === 'custom' && (!lsGet(LS.curl) || !lsGet(LS.cmodel))) {
-      setStatus('CUSTOM ENDPOINT NOT CONFIGURED — set base URL + model in settings', true);
+      setStatus('CUSTOM ENDPOINT NOT CONFIGURED: set base URL + model in settings', true);
       openDrawer(true);
       return;
     }

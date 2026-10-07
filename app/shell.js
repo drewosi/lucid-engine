@@ -8,9 +8,9 @@ import { wipeAnalytics } from './analytics.js';
 /* the custom provider is one synthetic MODELS entry, refreshed from settings */
 function syncCustomModel() {
   var id = lsGet(LS.cmodel) || '';
-  MODELS.__custom = { provider: 'custom', label: (id || 'CUSTOM — SET MODEL').toUpperCase().slice(0, 24), ctx: 200000,
+  MODELS.__custom = { provider: 'custom', label: (id || 'CUSTOM: SET MODEL').toUpperCase().slice(0, 24), ctx: 200000,
                       rIn: 0, rOut: 0, rCacheW: 0, rCacheR: 0, unknownRates: true,
-                      note: (id ? id : 'custom endpoint') + ' — rates unknown; context window assumed 200K. configure under PROVIDER in settings.' };
+                      note: (id ? id : 'custom endpoint') + ': rates unknown; context window assumed 200K. configure under PROVIDER in settings.' };
 }
 
 var modelsel = $('modelsel');
@@ -62,8 +62,8 @@ function curKeyLS() { return PROVIDERS[st.curProvider].keyLS; }
 function syncKeyState() {
   var k = lsGet(curKeyLS());
   $('keystate').innerHTML = k
-    ? 'key held: <span class="on">' + esc(keyMasked(k)) + '</span> — in this browser only'
-    : (st.curProvider === 'custom' ? 'no key saved — fine for local endpoints that need none.' : 'no key saved. requests cannot run without one.');
+    ? 'key held: <span class="on">' + esc(keyMasked(k)) + '</span>: in this browser only'
+    : (st.curProvider === 'custom' ? 'no key saved: fine for local endpoints that need none.' : 'no key saved. requests cannot run without one.');
 }
 
 /* provider switching */
@@ -111,7 +111,7 @@ function validateCustomUrl(u) {
   var warn = '';
   var isLocal = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(parsed.hostname);
   if (parsed.protocol === 'http:' && !isLocal) warn += 'http:// works only for localhost on this https page (browsers block mixed content). ';
-  if (parsed.protocol === 'https:' && !isLocal) warn += 'remote endpoints are blocked by this page’s CSP — self-host with your origin added to connect-src, or use localhost. ';
+  if (parsed.protocol === 'https:' && !isLocal) warn += 'remote endpoints are blocked by this page’s CSP: self-host with your origin added to connect-src, or use localhost. ';
   if (!/\/v\d+\/?$/.test(parsed.pathname)) warn += 'most OpenAI-compatible servers expect a /v1 suffix. ';
   return { ok: true, msg: warn.trim(), warn: warn.trim() };
 }
@@ -215,7 +215,7 @@ export function initShell() {
     var u = $('custurl').value.trim().replace(/\/+$/, '');
     var m = $('custmodel').value.trim();
     var v = validateCustomUrl(u);
-    if (u && !v.ok) { setCustState(v.msg, 'err'); toast('Endpoint URL invalid — ' + v.msg + '.'); return; }
+    if (u && !v.ok) { setCustState(v.msg, 'err'); toast('Endpoint URL invalid: ' + v.msg + '.'); return; }
     if (u) lsSet(LS.curl, u); else lsDel(LS.curl);
     if (m) lsSet(LS.cmodel, m); else lsDel(LS.cmodel);
     syncCustomModel(); syncModelSel(); renderBudget();
@@ -235,11 +235,11 @@ export function initShell() {
     fetch(u + '/models', { method: 'GET', headers: headers, signal: ctrl.signal }).then(function (res) {
       clearTimeout(to);
       var ms = t0 ? ' · ' + Math.round(performance.now() - t0) + ' ms' : '';
-      if (res.ok || res.status === 401 || res.status === 400) setCustState('reachable' + ms + (res.status === 401 ? ' (needs a key — LM Studio-style servers accept any placeholder, e.g. lm-studio)' : ''), 'ok');
-      else setCustState('reached, HTTP ' + res.status + ' — check the base path' + ms, 'note');
+      if (res.ok || res.status === 401 || res.status === 400) setCustState('reachable' + ms + (res.status === 401 ? ' (needs a key: LM Studio-style servers accept any placeholder, e.g. lm-studio)' : ''), 'ok');
+      else setCustState('reached, HTTP ' + res.status + ': check the base path' + ms, 'note');
     }).catch(function (err) {
       clearTimeout(to);
-      setCustState(err.name === 'AbortError' ? 'timed out (>8s) — is the server running?' : 'unreachable — CORS-blocked (the server must allow this origin), or a remote endpoint blocked by this page’s CSP (localhost only unless self-hosted)', 'err');
+      setCustState(err.name === 'AbortError' ? 'timed out (>8s): is the server running?' : 'unreachable: CORS-blocked (the server must allow this origin), or a remote endpoint blocked by this page’s CSP (localhost only unless self-hosted)', 'err');
     });
   });
   setbtn.addEventListener('click', function () { openDrawer(!drawer.classList.contains('open')); });
@@ -250,7 +250,7 @@ export function initShell() {
     lsSet(curKeyLS(), v);
     $('keyin').value = '';
     syncKeyState();
-    toast(PROVIDERS[st.curProvider].label + ' key saved — in this browser only.');
+    toast(PROVIDERS[st.curProvider].label + ' key saved: in this browser only.');
   });
   $('keyin').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); $('savekey').click(); }

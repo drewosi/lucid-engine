@@ -22,8 +22,8 @@ function clearConversation() {
   if (st.streaming && st.aborter) st.aborter.abort();
   st.history.length = 0; st.transcript.length = 0;
   convoIn.innerHTML = '';
-  setStatus('IDLE — conversation cleared');
-  toast('Conversation cleared — loaded files stay in memory.');
+  setStatus('IDLE: conversation cleared');
+  toast('Conversation cleared: loaded files stay in memory.');
 }
 var ACTIONS = [
   { g: 'CONTEXT', n: 'Show / hide the context sidebar', k: 'ctrl B', f: toggleRail },
@@ -75,7 +75,7 @@ function palRender() {
   palSel = Math.min(palSel, Math.max(0, palMatches.length - 1));
   palList.innerHTML = '';
   if (!palMatches.length) {
-    palList.innerHTML = '<div class="pal-empty">// no matching command — esc to close</div>';
+    palList.innerHTML = '<div class="pal-empty">// no matching command. esc to close</div>';
     return;
   }
   palMatches.forEach(function (a, i) {

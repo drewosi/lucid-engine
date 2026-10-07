@@ -38,18 +38,18 @@ var SHARE_EST_RATIO = 0.33;              /* encoded chars per text char for typi
 var PAYLOAD_FIELDS = ['format', 'v', 'name', 'created', 'files', 'repos'];
 var SHARE_MAX_REPOS = 32;
 var FILE_FIELDS = ['p', 'c', 'm'];
-var BUNDLE_NOTE = 'MERIDIAN shared project. This file contains source code in plain text: anyone who has it can read it. Open it in the MERIDIAN workbench with [ OPEN SHARED ] or drop it on the context panel.';
+var BUNDLE_NOTE = 'Meridian shared project. This file contains source code in plain text: anyone who has it can read it. Open it in the Meridian workbench with [ OPEN SHARED ] or drop it on the context panel.';
 /* likely-secret files start unticked: .env files, private keys, credential/secret/password files */
 var SECRETISH = /(^|\/)(\.env(\.[^/]*)?|[^/]*\.(pem|key|p12|pfx|keystore)|id_(rsa|dsa|ecdsa|ed25519)[^/]*|[^/]*(secret|credential|password)s?[^/]*)$/i;
 
 var SHARE_ERRORS = {
   corrupt: 'This share link is damaged or incomplete. Chat apps and email sometimes cut long links short. Ask the sender to send it again, or to send a .meridian bundle file instead.',
-  version: 'This share was made by a newer version of MERIDIAN. Reload the page to get the latest version, then open it again.',
-  invalid: 'This share does not contain a readable MERIDIAN project.',
-  toobig: function () { return 'This share is bigger than MERIDIAN opens (512 KB per file, ' + capInfo().maxFiles.toLocaleString('en-US') + ' files, 64 MB in total). The file cap is adjustable in settings.'; },
+  version: 'This share was made by a newer version of Meridian. Reload the page to get the latest version, then open it again.',
+  invalid: 'This share does not contain a readable Meridian project.',
+  toobig: function () { return 'This share is bigger than Meridian opens (512 KB per file, ' + capInfo().maxFiles.toLocaleString('en-US') + ' files, 64 MB in total). The file cap is adjustable in settings.'; },
   toolong: 'Too big for a link. Untick some files, or download a .meridian bundle instead.',
   unsupported: 'This browser cannot compress or decompress share links (it lacks CompressionStream). Try a current Chrome, Edge, Firefox or Safari.',
-  bundle: 'That file is not a MERIDIAN share bundle (.meridian).'
+  bundle: 'That file is not a Meridian share bundle (.meridian).'
 };
 function shareError(code) {
   var m = SHARE_ERRORS[code] || SHARE_ERRORS.corrupt;
@@ -397,8 +397,8 @@ function remeasure() {
     $('sharetxt').textContent = 'LINK ' + (m.estimated ? '≈ ' : '') + fmtK(m.chars) + ' / ' + fmtK(SHARE_LINK_MAX_CHARS) + ' CHARS';
     $('sharemax').textContent = paths.length + ' FILE' + (paths.length === 1 ? '' : 'S') + ' · ' + fmtSize(rawChars(paths)) + ' OF TEXT';
     $('sharenote').textContent = m.empty ? '// tick at least one file.'
-      : m.fits ? '// fits in a link. a bundle works too, and has no size limit.'
-      : '// too big for a link by ' + (m.estimated ? '≈ ' : '') + fmtK(m.chars - SHARE_LINK_MAX_CHARS) + ' chars. untick files, or download a .meridian bundle (no size limit; send it as a file).';
+      : m.fits ? '// fits in a link. a bundle works too, and has no link limit.'
+      : '// too big for a link by ' + (m.estimated ? '≈ ' : '') + fmtK(m.chars - SHARE_LINK_MAX_CHARS) + ' chars. untick files, or download a .meridian bundle (no link limit; send it as a file).';
   }).catch(function (e) {
     if (gen !== shareGen) return;
     $('sharetxt').textContent = 'LINK · unavailable';

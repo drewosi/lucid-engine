@@ -13,7 +13,7 @@ var SAMPLE_PROJECT = {
   'README.md': [
     '# todo-api',
     '',
-    'A tiny in-memory todo REST API — the sample project for MERIDIAN\'s demo.',
+    'A tiny in-memory todo REST API: the sample project for Meridian\'s demo.',
     '',
     '## Run',
     '',
@@ -25,19 +25,19 @@ var SAMPLE_PROJECT = {
     '',
     '## Layout',
     '',
-    '- src/index.js  — entry point; boots the server',
-    '- src/server.js — HTTP routes, wired to the store',
-    '- src/store.js  — in-memory todo store (addTodo, listTodos, removeTodo)',
-    '- src/config.js — API_BASE_URL and PORT',
-    '- src/util.js   — small response helpers',
-    '- src/legacy.js — old response helpers kept for reference (candidates for deletion)',
-    '- test/store.test.js — store unit tests'
+    '- src/index.js: entry point; boots the server',
+    '- src/server.js: HTTP routes, wired to the store',
+    '- src/store.js: in-memory todo store (addTodo, listTodos, removeTodo)',
+    '- src/config.js: API_BASE_URL and PORT',
+    '- src/util.js: small response helpers',
+    '- src/legacy.js: old response helpers kept for reference (candidates for deletion)',
+    '- test/store.test.js: store unit tests'
   ].join('\n'),
   'package.json': [
     '{',
     '  "name": "todo-api",',
     '  "version": "1.0.0",',
-    '  "description": "A tiny in-memory todo REST API (MERIDIAN demo project).",',
+    '  "description": "A tiny in-memory todo REST API (Meridian demo project).",',
     '  "main": "src/index.js",',
     '  "scripts": {',
     '    "start": "node src/index.js",',
@@ -55,7 +55,7 @@ var SAMPLE_PROJECT = {
     'module.exports = { PORT, API_BASE_URL };'
   ].join('\n'),
   'src/store.js': [
-    '// In-memory todo store. No database — state lives for the process lifetime.',
+    '// In-memory todo store. No database: state lives for the process lifetime.',
     'let todos = [];',
     'let nextId = 1;',
     '',
@@ -109,7 +109,7 @@ var SAMPLE_PROJECT = {
   ].join('\n'),
   'src/legacy.js': [
     '// Old response helpers, kept for reference while the routes migrated to util.js.',
-    '// Nothing imports this file any more — signals/orphans should catch it.',
+    '// Nothing imports this file any more: signals/orphans should catch it.',
     '// TODO: delete once the v1 clients are gone',
     '// TODO: fold sendText into util.json',
     'function sendText(res, status, text) {',
@@ -131,7 +131,7 @@ var SAMPLE_PROJECT = {
     '',
     'const server = createServer();',
     'server.listen(PORT, function () {',
-    '  console.log("todo-api listening — API at " + API_BASE_URL);',
+    '  console.log("todo-api listening: API at " + API_BASE_URL);',
     '});'
   ].join('\n'),
   'test/store.test.js': [
@@ -182,7 +182,7 @@ function renderDemoBanner() {
   top.innerHTML = '<span class="dm mono">DEMO · LOCAL ENGINE</span>';
   var dt = document.createElement('div');
   dt.className = 'dt';
-  dt.innerHTML = 'A sample <b>todo-api</b> project is loaded and answered by the deterministic <b>LOCAL</b> engine — no key, no AI, nothing leaves this tab. Try a question, then load your own project when ready.';
+  dt.innerHTML = 'A sample <b>todo-api</b> project is loaded and answered by the deterministic <b>LOCAL</b> engine: no key, no AI, nothing leaves this tab. Try a question, then load your own project when ready.';
   b.appendChild(top); b.appendChild(dt);
   var chips = document.createElement('div'); chips.className = 'demochips';
   DEMO_QUESTIONS.forEach(function (q) {

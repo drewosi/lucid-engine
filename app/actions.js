@@ -77,9 +77,9 @@ function localSearchData(query, mode, filterGlob, opts) {
 }
 /* honest one-liner for a bounded/degraded scan — '' when the scan was complete */
 function searchLimitNote(r) {
-  if (r.aborted) return 'search stopped after ' + Math.round(MAX_SCAN_LINES / 1000) + 'K lines — results may be incomplete; narrow the pattern or add a path filter';
-  if (r.timedOut) return 'search stopped after ' + (SCAN_TIME_MS / 1000) + 's — results may be incomplete; narrow the pattern or add a path filter';
-  if (r.invalidPattern) return 'not a valid regex — matched as literal text instead';
+  if (r.aborted) return 'search stopped after ' + Math.round(MAX_SCAN_LINES / 1000) + 'K lines: results may be incomplete; narrow the pattern or add a path filter';
+  if (r.timedOut) return 'search stopped after ' + (SCAN_TIME_MS / 1000) + 's: results may be incomplete; narrow the pattern or add a path filter';
+  if (r.invalidPattern) return 'not a valid regex: matched as literal text instead';
   return '';
 }
 function runLocalSearch(query, resEl, mode, filterGlob) {
@@ -87,7 +87,7 @@ function runLocalSearch(query, resEl, mode, filterGlob) {
   var r = localSearchData(query, mode, filterGlob);
   r.hits.forEach(function (h) { evChip(resEl, h.p + ':' + h.line, h.p, h.line); });
   if (!r.hits.length) resNote(resEl, '// no matches in loaded files' + (filterGlob ? ' under filter ' + filterGlob : ''));
-  else resNote(resEl, '// ' + (r.hits.length >= r.cap ? r.cap + '+ ' : r.hits.length + ' ') + (mode === 'def' ? 'definition-shaped ' : '') + 'match' + (r.hits.length === 1 ? '' : 'es') + ' in ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's') + ' — click a chip to inspect');
+  else resNote(resEl, '// ' + (r.hits.length >= r.cap ? r.cap + '+ ' : r.hits.length + ' ') + (mode === 'def' ? 'definition-shaped ' : '') + 'match' + (r.hits.length === 1 ? '' : 'es') + ' in ' + r.filesHit + ' file' + (r.filesHit === 1 ? '' : 's') + ': click a chip to inspect');
   var lim = searchLimitNote(r);
   if (lim) resNote(resEl, '// ' + lim);
 }
@@ -104,7 +104,7 @@ function runDirSummary(dirPath, resEl) {
   if (!items.length) { resNote(resEl, '// no loaded files under “' + dirPath + '”'); return; }
   var tok = 0;
   items.forEach(function (it) { tok += it.f.tokens; });
-  resNote(resEl, '// ' + (prefix || './') + ' — ' + items.length + ' files ≈' + fmtTok(tok) + ' tokens');
+  resNote(resEl, '// ' + (prefix || './') + ': ' + items.length + ' files ≈' + fmtTok(tok) + ' tokens');
   resNote(resEl, '// largest:');
   items.slice().sort(function (a, b) { return b.f.tokens - a.f.tokens; }).slice(0, 3)
     .forEach(function (it) { evChip(resEl, it.p + ' ≈' + fmtTok(it.f.tokens), it.p, 1); });
@@ -155,7 +155,7 @@ function renderActions(bd, actions) {
     var badge = document.createElement('span');
     badge.className = 'abadge' + (K.run || kind === 'open' ? '' : ' dim');
     badge.textContent = K.badge;
-    badge.title = kind === 'git' ? 'Copy-only — meridian never executes shell commands' : 'Runs locally, against in-memory files only';
+    badge.title = kind === 'git' ? 'Copy-only: meridian never executes shell commands' : 'Runs locally, against in-memory files only';
     row.appendChild(badge);
     var cmd = document.createElement('code');
     cmd.className = 'cmd mono';
@@ -181,13 +181,13 @@ function renderActions(bd, actions) {
       cp.type = 'button'; cp.className = 'ev mono'; cp.textContent = '[ COPY ]';
       cp.addEventListener('click', function () {
         (navigator.clipboard ? navigator.clipboard.writeText(a.command) : Promise.reject())
-          .then(function () { toast('Copied — review it, then run it in your own terminal.'); })
-          .catch(function () { toast('Copy failed — select the command text manually.'); });
+          .then(function () { toast('Copied: review it, then run it in your own terminal.'); })
+          .catch(function () { toast('Copy failed: select the command text manually.'); });
       });
       row.appendChild(cp);
       var lbl = document.createElement('span');
       lbl.className = 'rail-note'; lbl.style.margin = '0';
-      lbl.textContent = '// display only — meridian never executes shell commands';
+      lbl.textContent = '// display only: meridian never executes shell commands';
       row.appendChild(lbl);
     }
     if (a.why) {

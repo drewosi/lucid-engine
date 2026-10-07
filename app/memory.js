@@ -119,8 +119,8 @@ function loadProject(rec) {
       if (perm !== 'granted') {
         /* blocked or forgotten by the browser — leave standing guidance, not just a toast */
         var pn = $('projnote'); pn.hidden = false;
-        pn.textContent = '// “' + rec.name + '”: read permission declined — the browser blocked or forgot folder access. click the project again to re-authorize, or drop the folder to reload it.';
-        toast('Read permission declined — click the project again to re-authorize, or drop the folder.');
+        pn.textContent = '// “' + rec.name + '”: read permission declined: the browser blocked or forgot folder access. click the project again to re-authorize, or drop the folder to reload it.';
+        toast('Read permission declined: click the project again to re-authorize, or drop the folder.');
         return;
       }
       /* a full unload, then the folder as the workspace's one repo */
@@ -130,14 +130,14 @@ function loadProject(rec) {
       var gone = e && (e.name === 'NotFoundError' || /not found|no longer exists|GONE/i.test(e.message || ''));
       if (gone && st.lastDirHandle === rec.handle) st.lastDirHandle = null;
       var note = $('projnote'); note.hidden = false;
-      note.textContent = '// “' + rec.name + '”: settings restored. ' + (gone ? 'the saved folder was not found — it may have moved. ' : '') + 'drop the folder to reload its files.';
-      toast(gone ? '“' + rec.name + '” folder not found — drop it again to reload.' : 'Reload failed: ' + ((e && e.message) || 'unknown error') + ' — drop the folder instead.');
+      note.textContent = '// “' + rec.name + '”: settings restored. ' + (gone ? 'the saved folder was not found: it may have moved. ' : '') + 'drop the folder to reload its files.';
+      toast(gone ? '“' + rec.name + '” folder not found: drop it again to reload.' : 'Reload failed: ' + ((e && e.message) || 'unknown error') + '. Drop the folder instead.');
     });
   } else {
     var note = $('projnote');
     note.hidden = false;
-    note.textContent = '// “' + rec.name + '”: settings + selection restored. drop the folder (or pick it) to reload its files — contents are never stored.';
-    toast('“' + rec.name + '” restored — re-drop the folder to hydrate files.');
+    note.textContent = '// “' + rec.name + '”: settings + selection restored. drop the folder (or pick it) to reload its files: contents are never stored.';
+    toast('“' + rec.name + '” restored: re-drop the folder to hydrate files.');
   }
 }
 
@@ -224,8 +224,8 @@ function initMemory() {
       toast(rec.kind === 'workspace'
         ? '“' + name + '” saved as a workspace of ' + rec.repos.length + ' repos: names, counts, selection and settings only, never contents. Reloading asks you to pick each folder again.'
         : rec.handle
-        ? '“' + name + '” saved — one-click reload enabled (selection + settings only, never contents).'
-        : '“' + name + '” saved — settings + selection only; ' + (window.showDirectoryPicker ? 'open via [ PICK FOLDER ] to enable one-click reload.' : 'this browser can’t re-open folders — re-drop to reload.'));
+        ? '“' + name + '” saved: one-click reload enabled (selection + settings only, never contents).'
+        : '“' + name + '” saved: settings + selection only; ' + (window.showDirectoryPicker ? 'open via [ PICK FOLDER ] to enable one-click reload.' : 'this browser can’t re-open folders: re-drop to reload.'));
       renderProjects();
     }).catch(function (e) {
       /* a handle that cannot be cloned (rare) — retry without it */
