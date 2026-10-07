@@ -43,7 +43,7 @@ function toast(msg, action) {
 /* one clipboard path for every copy affordance — Clipboard API with a legacy fallback */
 function copyText(str, okMsg) {
   var done = function () { toast(okMsg || 'Copied to clipboard.'); };
-  var fail = function () { toast('Copy failed — your browser blocked clipboard access.'); };
+  var fail = function () { toast('Copy failed: your browser blocked clipboard access.'); };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(str).then(done, fail);
     return;
@@ -58,8 +58,8 @@ function copyText(str, okMsg) {
   } catch (e) { fail(); }
 }
 function fmtTok(n) {
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  if (n >= 1e6) return (n / 1e6).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1') + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
   return String(n);
 }
 

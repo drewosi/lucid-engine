@@ -487,13 +487,13 @@ function buildProjectMap() {
   Object.keys(byDir).sort().forEach(function (d) {
     var list = byDir[d];
     var pkg = pkgByDir[d];
-    var hd = (d === '.' ? './' : d + '/') + (pkg ? '  ◆ PACKAGE' + (pkg.name ? ' — ' + pkg.name : '') : '');
+    var hd = (d === '.' ? './' : d + '/') + (pkg ? '  ◆ PACKAGE' + (pkg.name ? ': ' + pkg.name : '') : '');
     if (collapse && list.length > 8 && !pkg) {
       var tot = 0;
       list.forEach(function (p) { tot += st.files.get(p).tokens; });
       var top = list.slice().sort(function (a, b) { return st.files.get(b).base - st.files.get(a).base; })
         .slice(0, 3).map(function (p) { return p.slice(p.lastIndexOf('/') + 1); });
-      out.push(d + '/ — ' + list.length + ' files ≈' + fmtTok(tot) + ' tok (incl. ' + top.join(', ') + ')');
+      out.push(d + '/: ' + list.length + ' files ≈' + fmtTok(tot) + ' tok (incl. ' + top.join(', ') + ')');
     } else {
       out.push(hd);
       list.forEach(function (p) {
@@ -513,7 +513,7 @@ function buildProjectMap() {
       + numberLines(lines.slice(0, n).join('\n'), 1));
   });
   var wn = workspaceNote();
-  st.mapCache = (wn ? wn + '\n\n' : '') + 'PROJECT MAP — the full shape of the loaded project (' + paths.length + ' files, path ≈tokens). "◆ PACKAGE" marks a directory with its own build manifest; "◇" marks manifests, READMEs and entry points. Only a question-relevant subset of files is included in full after the map. If a mapped file you cannot see would answer better, say which one.\n\n'
+  st.mapCache = (wn ? wn + '\n\n' : '') + 'PROJECT MAP: the full shape of the loaded project (' + paths.length + ' files, path ≈tokens). "◆ PACKAGE" marks a directory with its own build manifest; "◇" marks manifests, READMEs and entry points. Only a question-relevant subset of files is included in full after the map. If a mapped file you cannot see would answer better, say which one.\n\n'
     + out.join('\n') + (keyTxt.length ? '\n\n' + keyTxt.join('\n\n') : '');
   st.mapDirty = false;
   return st.mapCache;

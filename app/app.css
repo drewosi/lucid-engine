@@ -468,8 +468,8 @@
   #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 160; display: grid; gap: 8px; }
   .toast { width: 320px; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--line-strong); border-left: 2px solid var(--accent); border-radius: 3px; padding: 12px 14px; font-size: 13px; color: var(--ink); opacity: 0; transform: translateY(8px); transition: opacity var(--t-entrance) var(--ease-out-engine), transform var(--t-entrance) var(--ease-out-engine); }
   .toast.in { opacity: 1; transform: none; }
-  .toast.has-act { display: flex; align-items: center; gap: 12px; }
-  .toast.has-act .toast-msg { flex: 1; }
+  .toast.has-act { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+  .toast.has-act .toast-msg { flex: 1 1 100%; }
   .toast-act { flex: none; background: transparent; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 4px 10px; font-size: 10.5px; letter-spacing: .08em; cursor: pointer; white-space: nowrap; }
   .toast-act:hover { background: var(--accent); color: var(--accent-ink); }
 

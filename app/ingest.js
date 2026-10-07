@@ -127,7 +127,7 @@ function ingestFile(file, path, force) {
     });
     if (st.files.size % 100 === 0) {
       var skT = st.skipped.binary + st.skipped.big + st.skipped.over + st.skipped.user + st.skipped.readerr + st.skipped.memcap;
-      setStatus('INGESTING — ' + st.files.size + ' FILES' + (skT ? ' · ' + skT + ' SKIPPED' : '') + '…');
+      setStatus('INGESTING: ' + st.files.size + ' FILES' + (skT ? ' · ' + skT + ' SKIPPED' : '') + '…');
     }
   }).catch(function (e) {
     /* read/decode failure is NOT binary — record it so the review modal shows it */
@@ -200,7 +200,7 @@ function updateSkipBadge() {
   if (n > 0) {
     if (!badge) { badge = document.createElement('span'); badge.className = 'railbadge'; rb.appendChild(badge); }
     badge.textContent = n > 99 ? '99+' : String(n);
-    rb.title = n + ' skipped file' + (n === 1 ? '' : 's') + ' — open CONTEXT to review';
+    rb.title = n + ' skipped file' + (n === 1 ? '' : 's') + ': open CONTEXT to review';
   } else if (badge) { badge.remove(); rb.removeAttribute('title'); }
   var sr = $('skiprev');
   if (sr) sr.textContent = n ? '[ REVIEW SKIPPED · ' + n + ' ]' : '[ REVIEW SKIPPED ]';
@@ -236,15 +236,15 @@ function afterIngest() {
      while on a large project — announce it and yield one frame so the status
      actually paints before the work starts. Order inside the deferred block is
      load-bearing: recordSessionDrift must run after renderOverview's rebuild. */
-  setStatus('INDEXING — ' + st.files.size + ' files…');
+  setStatus('INDEXING: ' + st.files.size + ' files…');
   var finish = function () {
     renderOverview();
-    setStatus('IDLE — ' + st.files.size + ' files in memory');
+    setStatus('IDLE: ' + st.files.size + ' files in memory');
     /* graceful scaling: warn as the in-memory file cap approaches or is hit */
     var wsCap = isMulti() ? ' The cap covers every repo in the workspace together; unload a repo to make room.' : '';
-    if (st.skipped.memcap) toast('Memory cap reached (~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB of text) — ' + st.skipped.memcap + ' file' + (st.skipped.memcap === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.' + wsCap);
-    else if (st.skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.' + wsCap);
-    else if (st.files.size >= Math.floor(MAX_FILES * 0.9)) toast('Approaching the ' + MAX_FILES + '-file cap (' + st.files.size + ' loaded) — large repos may hit it; ignore patterns help.' + wsCap);
+    if (st.skipped.memcap) toast('Memory cap reached (~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB of text): ' + st.skipped.memcap + ' file' + (st.skipped.memcap === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.' + wsCap);
+    else if (st.skipped.over) toast('File cap reached (' + MAX_FILES + '): ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.' + wsCap);
+    else if (st.files.size >= Math.floor(MAX_FILES * 0.9)) toast('Approaching the ' + MAX_FILES + '-file cap (' + st.files.size + ' loaded): large repos may hit it; ignore patterns help.' + wsCap);
     maybeAutoSmart();
     /* last: renderOverview above has already rebuilt the index. A shared
        project is someone else's snapshot — nothing about it is persisted. */
@@ -317,7 +317,7 @@ function pickFolder(opts) {
       askFolderMode([h.name], function (mode, forced) { return loadHandle(h, mode, forced); });
     }).catch(function (e) {
       if (e && e.name === 'AbortError') return;
-      toast('Folder pick failed — using the fallback picker.');
+      toast('Folder pick failed: using the fallback picker.');
       nextPick = opts;
       $('dirpick').click();
     });
@@ -437,7 +437,7 @@ function renderTree() {
       tgl.querySelector('.dn').textContent = dir || './';
       tgl.querySelector('.dc').textContent = '· ' + mine.length;
       tgl.setAttribute('aria-expanded', String(!dirClosed));
-      tgl.setAttribute('aria-label', (dirClosed ? 'Expand ' : 'Collapse ') + (dir || 'project root') + ' — ' + mine.length + ' file' + (mine.length === 1 ? '' : 's'));
+      tgl.setAttribute('aria-label', (dirClosed ? 'Expand ' : 'Collapse ') + (dir || 'project root') + ': ' + mine.length + ' file' + (mine.length === 1 ? '' : 's'));
       (function (dirRow, dirTgl) {
         dirTgl.addEventListener('click', function () {
           if (treeQuery.trim()) return; /* collapse is moot while filtering */
@@ -445,7 +445,7 @@ function renderTree() {
           /* incremental: toggle this group's existing rows instead of a full re-render */
           dirRow.classList.toggle('closed', closed);
           dirTgl.setAttribute('aria-expanded', String(!closed));
-          dirTgl.setAttribute('aria-label', (closed ? 'Expand ' : 'Collapse ') + (dir || 'project root') + ' — ' + mine.length + ' file' + (mine.length === 1 ? '' : 's'));
+          dirTgl.setAttribute('aria-label', (closed ? 'Expand ' : 'Collapse ') + (dir || 'project root') + ': ' + mine.length + ' file' + (mine.length === 1 ? '' : 's'));
           var sib = dirRow.nextElementSibling;
           if (closed) {
             /* rows for this group exist — hide them */
@@ -510,7 +510,7 @@ function renderBudget() {
   $('budgettxt').textContent = (smart
     ? '≈ ' + fmtTok(sel.tokens) + ' loaded · sends ≤ ' + fmtTok(getBudget())
     : '≈ ' + fmtTok(sel.tokens) + ' tokens · ' + sel.count + ' selected') + (scoped !== null ? ' · ' + repoName(scoped).slice(0, 16) + ' only' : '');
-  $('budgetmax').textContent = MODELS[st.model].local ? 'LOCAL — NOTHING SENT' : MODELS[st.model].label + ' · ' + fmtTok(cap);
+  $('budgetmax').textContent = MODELS[st.model].local ? 'LOCAL: NOTHING SENT' : MODELS[st.model].label + ' · ' + fmtTok(cap);
   $('ctxreadout').innerHTML = smart
     ? 'CTX <b>SMART</b> · <b>' + sel.count + '</b> files · sends ≤ <b>' + fmtTok(getBudget()) + '</b>'
     : 'CTX ≈ <b>' + fmtTok(sel.tokens) + '</b> tokens · <b>' + sel.count + '</b> files';
@@ -518,7 +518,7 @@ function renderBudget() {
 
 /* ---- skipped-file review + include-back ---- */
 var skipveil = $('skipveil'), untrapSkip = null;
-var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE', 'read-error': 'READ ERROR — COULD NOT LOAD', 'over-cap': 'OVER THE FILE CAP', 'mem-cap': 'OVER THE MEMORY CAP' };
+var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT: CANNOT INCLUDE', 'read-error': 'READ ERROR: COULD NOT LOAD', 'over-cap': 'OVER THE FILE CAP', 'mem-cap': 'OVER THE MEMORY CAP' };
 function openSkipReview() {
   var list = $('skiplist');
   list.innerHTML = '';
@@ -526,14 +526,14 @@ function openSkipReview() {
   var groups = {};
   st.skippedFiles.forEach(function (s) { (groups[s.reason] = groups[s.reason] || []).push(s); });
   $('skipsum').textContent = '// ' + st.skippedFiles.length + ' file' + (st.skippedFiles.length === 1 ? '' : 's') + ' recorded'
-    + (st.skipped.dirs ? ' — plus ' + st.skipped.dirs + ' inside ignored/dot directories (not listed)' : '')
+    + (st.skipped.dirs ? ', plus ' + st.skipped.dirs + ' inside ignored/dot directories (not listed)' : '')
     + '. INCLUDE pulls a file into memory despite the filter; true binaries stay out.';
   order.forEach(function (g) {
     var rows = groups[g];
     if (!rows || !rows.length) return;
     var hd = document.createElement('div');
     hd.className = 'skip-grp';
-    hd.textContent = (g === 'over-cap' ? 'OVER THE ' + MAX_FILES + '-FILE CAP' : SKIP_LABEL[g]) + ' — ' + rows.length + (g === 'oversized' ? ' (>' + (MAX_FILE / 1024) + 'KB)' : '');
+    hd.textContent = (g === 'over-cap' ? 'OVER THE ' + MAX_FILES + '-FILE CAP' : SKIP_LABEL[g]) + ': ' + rows.length + (g === 'oversized' ? ' (>' + (MAX_FILE / 1024) + 'KB)' : '');
     list.appendChild(hd);
     rows.slice(0, 200).forEach(function (s) {
       var row = document.createElement('div');
@@ -561,8 +561,8 @@ function openSkipReview() {
             } else {
               inc.disabled = false;
               toast(st.totalBytes >= MAX_TOTAL
-                ? 'Could not include — the ~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB memory cap is reached. Clear or replace the project first.'
-                : 'Could not include — the file content reads as binary.');
+                ? 'Could not include: the ~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB memory cap is reached. Clear or replace the project first.'
+                : 'Could not include: the file content reads as binary.');
             }
           });
         });
@@ -619,14 +619,14 @@ function buildPreview() {
       if (f && st.ctxMode === 'smart') {
         var pb = document.createElement('button');
         pb.type = 'button'; pb.className = 'prev-ctl mono' + (f.pin ? ' on' : ''); pb.textContent = '⌖';
-        pb.title = f.pin ? 'Unpin — return to scored packing' : 'Always send this file (packed first, still within budget)';
+        pb.title = f.pin ? 'Unpin: return to scored packing' : 'Always send this file (packed first, still within budget)';
         pb.addEventListener('click', function () { f.pin = !f.pin; invalidateSelection(); openPreview(); });
         r.appendChild(pb);
       }
       if (f) {
         var xb = document.createElement('button');
         xb.type = 'button'; xb.className = 'prev-ctl mono'; xb.textContent = '−';
-        xb.title = 'Exclude — uncheck this file (same as unchecking it in the tree)';
+        xb.title = 'Exclude: uncheck this file (same as unchecking it in the tree)';
         xb.addEventListener('click', function () { f.checked = false; invalidateSelection(); renderTree(); renderBudget(); openPreview(); });
         r.appendChild(xb);
       }
@@ -634,7 +634,7 @@ function buildPreview() {
     body.appendChild(r);
   }
   var smart = st.ctxMode === 'smart';
-  if (st.curProvider === 'local') note('// provider is LOCAL — nothing is sent anywhere. this preview shows what a model WOULD receive if you connected one.');
+  if (st.curProvider === 'local') note('// provider is LOCAL: nothing is sent anywhere. this preview shows what a model WOULD receive if you connected one.');
   if (isMulti()) {
     var sr = scopeRepo();
     note(sr !== null ? '// scope: ' + repoName(sr) + ' only. the other repos stay loaded but are not sent. switch [ ASK ] under WORKSPACE to include them.'
@@ -646,22 +646,22 @@ function buildPreview() {
     var plan = cb.plan, map = plan.map, packed = plan.packed, mapTok = plan.mapTok;
     $('prevstat').textContent = 'SMART · ' + packed.count + '/' + packed.total + ' FILES · ≈' + fmtTok(plan.total) + ' TOK';
     note(q ? '// packed for the question currently in the composer: “' + q.slice(0, 80) + (q.length > 80 ? '…' : '') + '”'
-           : '// no question typed — packed by importance and recency alone. type a question first for a query-aware preview.');
+           : '// no question typed: packed by importance and recency alone. type a question first for a query-aware preview.');
     note('// budget ≈' + fmtTok(plan.budget) + ' tokens for the whole send · this send ≈' + fmtTok(plan.total) + ': map ≈' + fmtTok(mapTok)
       + ', files ≈' + fmtTok(plan.fileTok) + ', grounding and pins ≈' + fmtTok(plan.groundTok)
       + ', instructions and conversation ≈' + fmtTok(plan.overhead) + '. estimates run high of a model\'s own tokenizer, so this budget is a ceiling; the provider bills actual counts.');
     if (plan.total > plan.budget) note('// over budget: the map, grounding and conversation alone exceed it. raise the budget in settings or clear the conversation.');
-    sec('BLOCK 1 — PROJECT MAP ≈' + fmtTok(mapTok) + ' TOK (cached between questions)');
+    sec('BLOCK 1: PROJECT MAP ≈' + fmtTok(mapTok) + ' TOK (cached between questions)');
     var pre = document.createElement('pre');
     pre.className = 'mapview';
-    pre.textContent = map.length > 20000 ? map.slice(0, 20000) + '\n… truncated for display — the full map is sent' : map;
+    pre.textContent = map.length > 20000 ? map.slice(0, 20000) + '\n… truncated for display: the full map is sent' : map;
     body.appendChild(pre);
-    sec('BLOCK 2 — SELECTED FILES · ' + packed.count + ' OF ' + packed.total + ' · ≈' + fmtTok(packed.tokens) + ' TOK');
+    sec('BLOCK 2: SELECTED FILES · ' + packed.count + ' OF ' + packed.total + ' · ≈' + fmtTok(packed.tokens) + ' TOK');
     note('// each row says why it scored in: ⌖ pins a file (always sent, packed first) · − excludes it (unchecks it in the tree).');
     packed.included.forEach(function (it) { fileRow(it.p, it.tok, it.whole, it.why, true); });
-    if (!packed.included.length) note('// nothing fit the budget — raise it in settings.');
+    if (!packed.included.length) note('// nothing fit the budget: raise it in settings.');
     if (packed.notPacked && packed.notPacked.length) {
-      sec('DID NOT FIT — TOP SCORERS LEFT OUT OF THE BUDGET');
+      sec('DID NOT FIT: TOP SCORERS LEFT OUT OF THE BUDGET');
       packed.notPacked.forEach(function (np) {
         var r = document.createElement('div');
         r.className = 'prev-row np';
@@ -673,7 +673,7 @@ function buildPreview() {
         if (f) {
           var pb = document.createElement('button');
           pb.type = 'button'; pb.className = 'prev-ctl mono'; pb.textContent = '⌖';
-          pb.title = 'Pin — always send this file (packed first, within budget)';
+          pb.title = 'Pin: always send this file (packed first, within budget)';
           pb.addEventListener('click', function () { f.pin = true; invalidateSelection(); openPreview(); });
           r.appendChild(pb);
         }
@@ -686,7 +686,7 @@ function buildPreview() {
     $('prevstat').textContent = 'FULL · ' + sel.count + ' FILES · ≈' + fmtTok(sel.tokens) + ' TOK';
     note('// FULL mode sends every checked file whole, no map. switch to SMART in the rail for budgeted selection.');
     note('// instructions block adds ≈' + fmtTok(estTokens(INSTRUCTIONS)) + ' more.');
-    sec('ALL CHECKED FILES — ' + sel.count + ' · ≈' + fmtTok(sel.tokens) + ' TOK');
+    sec('ALL CHECKED FILES: ' + sel.count + ' · ≈' + fmtTok(sel.tokens) + ' TOK');
     var shown = 0;
     sortedPaths().some(function (p) {
       var f = st.files.get(p);
@@ -700,28 +700,28 @@ function buildPreview() {
   var pinB = cb ? cb.pin : buildPinnedBlock();
   if (pinB) {
     sec('PINNED EVIDENCE · ' + pinB.count + ' CITATION' + (pinB.count === 1 ? '' : 'S') + ' ≈' + fmtTok(pinB.tokens) + ' TOK (pinned, uncached)');
-    note('// excerpts of the citations pinned in the tray — sent with every question while pinned. unpin (or [ CLEAR ]) to stop.');
+    note('// excerpts of the citations pinned in the tray: sent with every question while pinned. unpin (or [ CLEAR ]) to stop.');
     var ppre = document.createElement('pre');
     ppre.className = 'mapview';
-    ppre.textContent = pinB.text.length > 8000 ? pinB.text.slice(0, 8000) + '\n… truncated for display — the full block is sent' : pinB.text;
+    ppre.textContent = pinB.text.length > 8000 ? pinB.text.slice(0, 8000) + '\n… truncated for display: the full block is sent' : pinB.text;
     body.appendChild(ppre);
   }
   /* grounding block — same helper the real request uses, so the preview cannot drift */
   if (st.groundMode) {
     var invB = cb ? cb.ground : buildInvestigationBlock(q);
     if (invB) {
-      sec('GROUNDING — MERIDIAN EVIDENCE PACK · ' + invB.count + ' ITEM' + (invB.count === 1 ? '' : 'S') + ' ≈' + fmtTok(estTokens(invB.text)) + ' TOK (per question, uncached)');
-      note(q ? '// deterministic findings + attributed source excerpts for the composed question — sent after the cached context so the model reasons on verified path:line evidence.'
+      sec('GROUNDING: MERIDIAN EVIDENCE PACK · ' + invB.count + ' ITEM' + (invB.count === 1 ? '' : 'S') + ' ≈' + fmtTok(estTokens(invB.text)) + ' TOK (per question, uncached)');
+      note(q ? '// deterministic findings + attributed source excerpts for the composed question: sent after the cached context so the model reasons on verified path:line evidence.'
              : '// type a question to preview the grounding evidence pack this engine will attach.');
       var gpre = document.createElement('pre');
       gpre.className = 'mapview';
-      gpre.textContent = invB.text.length > 8000 ? invB.text.slice(0, 8000) + '\n… truncated for display — the full block is sent' : invB.text;
+      gpre.textContent = invB.text.length > 8000 ? invB.text.slice(0, 8000) + '\n… truncated for display: the full block is sent' : invB.text;
       body.appendChild(gpre);
     } else {
-      note('// GROUND is ON, but this question produced no deterministic evidence — no grounding block will be sent.');
+      note('// GROUND is ON, but this question produced no deterministic evidence: no grounding block will be sent.');
     }
   } else {
-    note('// GROUND is OFF — no investigation block is attached. Toggle [ GROUND: ON ] in the rail to send verified evidence.');
+    note('// GROUND is OFF: no investigation block is attached. Toggle [ GROUND: ON ] in the rail to send verified evidence.');
   }
   rememberFocus();
   prevveil.classList.add('on');
@@ -769,7 +769,7 @@ function maybeAutoSmart() {
   var sel = selectedTokens();
   if (sel.tokens > MODELS[st.model].ctx * AUTO_SMART_FRAC) {
     setCtxMode('smart');
-    toast(sel.count + ' files ≈ ' + fmtTok(sel.tokens) + ' tokens — smart selection enabled.');
+    toast(sel.count + ' files ≈ ' + fmtTok(sel.tokens) + ' tokens: smart selection enabled.');
   }
 }
 
@@ -780,7 +780,7 @@ function syncBudgetState() {
 function syncSpendState() {
   var v = parseFloat(lsGet(LS.spendcap) || '0');
   $('spendin').value = v > 0 ? v : '';
-  $('spendstate').textContent = v > 0 ? '// limit: $' + v.toFixed(2) + ' per session — you’ll be warned before crossing it.' : '// no spend limit set.';
+  $('spendstate').textContent = v > 0 ? '// limit: $' + v.toFixed(2) + ' per session: you’ll be warned before crossing it.' : '// no spend limit set.';
 }
 
 function syncMaxFilesState() {
@@ -838,7 +838,7 @@ function suggestIgnore() {
   var cur = getIgnoreText().replace(/\s*$/, '');
   $('ignorein').value = (cur ? cur + '\n' : '') + add.join('\n');
   $('ignorein').focus();
-  toast(add.length + ' pattern' + (add.length === 1 ? '' : 's') + ' suggested — review, then Apply.', { label: '[ APPLY ]', fn: function () { $('saveignore').click(); } });
+  toast(add.length + ' pattern' + (add.length === 1 ? '' : 's') + ' suggested: review, then Apply.', { label: '[ APPLY ]', fn: function () { $('saveignore').click(); } });
 }
 /* DEV ONLY — self-tests lower the ingest caps to exercise the guard paths;
    returns the previous values so the caller can restore. Never called by app code. */
@@ -909,7 +909,7 @@ export function initIngest() {
      (Firefox/Safari) the folder is read once — no persistent handle, no one-click
      reload. The picker itself still works via the webkitdirectory fallback. */
   if (!window.showDirectoryPicker) {
-    $('dirbtn').title = 'This browser reads the folder once (no showDirectoryPicker) — re-pick or re-drop to reload; one-click project reload is unavailable.';
+    $('dirbtn').title = 'This browser reads the folder once (no showDirectoryPicker): re-pick or re-drop to reload; one-click project reload is unavailable.';
   }
   /* same replace-or-add choice as the dropzone when a project is loaded */
   $('dirbtn').addEventListener('click', function () { pickFolder(); });
@@ -948,12 +948,12 @@ export function initIngest() {
   setGround(st.groundMode);
   groundbtn.addEventListener('click', function () {
     setGround(!st.groundMode);
-    toast(st.groundMode ? 'Grounding on — model answers build on the local investigation.' : 'Grounding off — model receives context only.');
+    toast(st.groundMode ? 'Grounding on: model answers build on the local investigation.' : 'Grounding off: model receives context only.');
   });
   setStrictTrace(lsGet(LS.strictTrace) === '1');
   stricttracebtn.addEventListener('click', function () {
     setStrictTrace(lsGet(LS.strictTrace) !== '1');
-    toast(lsGet(LS.strictTrace) === '1' ? 'Force strict trace on — stricter trace instruction each request.' : 'Force strict trace off.');
+    toast(lsGet(LS.strictTrace) === '1' ? 'Force strict trace on: stricter trace instruction each request.' : 'Force strict trace off.');
   });
   $('savebudget').addEventListener('click', function () {
     var v = parseInt($('budgetin').value, 10);
@@ -966,7 +966,7 @@ export function initIngest() {
   $('savespend').addEventListener('click', function () {
     var v = parseFloat($('spendin').value);
     if (isNaN(v) || v <= 0) { lsDel(LS.spendcap); toast('Spend limit cleared.'); }
-    else { lsSet(LS.spendcap, String(v)); toast('Spend limit set to $' + v.toFixed(2) + ' — warns before the estimate crosses it.'); }
+    else { lsSet(LS.spendcap, String(v)); toast('Spend limit set to $' + v.toFixed(2) + ': warns before the estimate crosses it.'); }
     syncSpendState();
   });
   syncSpendState();

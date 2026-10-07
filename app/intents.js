@@ -124,7 +124,7 @@ var LOCAL_VERDICT = function () { return { local: true, text: 'KNOWN LOCALLY' };
 function longLineNote(idx) {
   if (!idx.longLineCount) return '';
   return '\n\nNote: ' + plural(idx.longLineCount, 'line') + ' over 400 chars in ' + plural(Object.keys(idx.longLinesByFile).length, 'file')
-    + ' were not indexed (minified/one-line content) — imports on those lines are invisible, so such files can appear orphaned or their targets unresolved.';
+    + ' were not indexed (minified/one-line content): imports on those lines are invisible, so such files can appear orphaned or their targets unresolved.';
 }
 
 /* shared evidence-gathering used by plain + reason: term search → ranked files.
@@ -164,7 +164,7 @@ function localDirData(dirPath) {
   var tok = 0;
   items.forEach(function (it) { tok += it.f.tokens; });
   var largest = items.slice().sort(function (a, b) { return b.f.tokens - a.f.tokens; }).slice(0, 5);
-  var ans = '`' + (prefix || './') + '` — ' + items.length + ' file' + (items.length === 1 ? '' : 's') + ' ≈' + fmtTok(tok) + ' tokens. Largest:\n\n'
+  var ans = '`' + (prefix || './') + '`: ' + items.length + ' file' + (items.length === 1 ? '' : 's') + ' ≈' + fmtTok(tok) + ' tokens. Largest:\n\n'
     + largest.map(function (it, i) { return (i + 1) + '. `' + it.p + '` ≈' + fmtTok(it.f.tokens); }).join('\n');
   return { answer: ans, steps: [{
     n: 1, action: 'summarize ' + (prefix || './'),
@@ -244,9 +244,9 @@ function computeSignals(idx) {
   if (sigCache.idx === idx) return sigCache.out;
   var out = [];
   var broken = listBroken(idx);
-  if (broken.length) out.push({ severity: 5, count: broken.length, title: plural(broken.length, 'broken relative import') + ' — likely real breakage, or files not loaded', evidence: evAt(broken[0].file, broken[0].line), drill: 'broken' });
+  if (broken.length) out.push({ severity: 5, count: broken.length, title: plural(broken.length, 'broken relative import') + ': likely real breakage, or files not loaded', evidence: evAt(broken[0].file, broken[0].line), drill: 'broken' });
   var cycles = findCycles(idx, 10);
-  if (cycles.length) out.push({ severity: 4, count: cycles.length, title: plural(cycles.length, 'import cycle') + (cycles.length >= 10 ? ' (search capped at 10 — more may exist)' : '') + ' in the dependency graph', evidence: evAt(cycles[0].from, cycles[0].line), drill: 'cycles' });
+  if (cycles.length) out.push({ severity: 4, count: cycles.length, title: plural(cycles.length, 'import cycle') + (cycles.length >= 10 ? ' (search capped at 10: more may exist)' : '') + ' in the dependency graph', evidence: evAt(cycles[0].from, cycles[0].line), drill: 'cycles' });
   var hubGaps = listUntestedGaps(idx).filter(function (p) { return (idx.importedBy.get(p) || []).length >= 3; });
   if (hubGaps.length) {
     hubGaps.sort(function (a, b) { return (idx.importedBy.get(b) || []).length - (idx.importedBy.get(a) || []).length; });
@@ -261,10 +261,10 @@ function computeSignals(idx) {
   });
   if (dupeNames.length >= 3) out.push({ severity: 2, count: dupeNames.length, title: plural(dupeNames.length, 'symbol name') + ' defined in more than one file', evidence: evAt(dupeNames[0].def.file, dupeNames[0].def.line), drill: 'dupes' });
   var orphans = listOrphans(idx);
-  if (orphans.length) out.push({ severity: 2, count: orphans.length, title: plural(orphans.length, 'code file') + ' never imported — possible dead weight', evidence: evAt(orphans[0], 1), drill: 'orphans' });
+  if (orphans.length) out.push({ severity: 2, count: orphans.length, title: plural(orphans.length, 'code file') + ' never imported: possible dead weight', evidence: evAt(orphans[0], 1), drill: 'orphans' });
   var byFileTodo = Object.create(null), maxOneFile = 0;
   idx.todos.forEach(function (t) { byFileTodo[t.file] = (byFileTodo[t.file] || 0) + 1; if (byFileTodo[t.file] > maxOneFile) maxOneFile = byFileTodo[t.file]; });
-  if (idx.todos.length >= 10 || maxOneFile >= 5) out.push({ severity: 2, count: idx.todos.length, title: plural(idx.todos.length, 'debt tag') + (maxOneFile >= 5 ? ' — one file carries ' + maxOneFile : ' across the project'), evidence: evAt(idx.todos[0].file, idx.todos[0].line), drill: 'todos' });
+  if (idx.todos.length >= 10 || maxOneFile >= 5) out.push({ severity: 2, count: idx.todos.length, title: plural(idx.todos.length, 'debt tag') + (maxOneFile >= 5 ? ': one file carries ' + maxOneFile : ' across the project'), evidence: evAt(idx.todos[0].file, idx.todos[0].line), drill: 'todos' });
   out.sort(function (a, b) { return b.severity - a.severity || b.count - a.count; });
   out = out.slice(0, 5);
   sigCache.idx = idx; sigCache.out = out;
@@ -381,7 +381,7 @@ var INTENTS = [
     run: function () {
       return { steps: [{ action: 'list capabilities', note: 'local engine reference', evidence: [], status: 'done' }],
         verdict: LOCAL_VERDICT(),
-        answer: '**Meridian LOCAL engine** — deterministic project intelligence, no AI, no network.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n**Intentional limits:** the graph analyses (cycles, orphans, hubs, untested, path) read static import edges only — regex extraction per language, lines over 400 chars not indexed — so dynamic loading, DI and bundler wiring are invisible. Each analysis states its own caveats in its answer.\n\n' + LOCAL_HELP };
+        answer: '**Meridian LOCAL engine**: deterministic project intelligence, no AI, no network.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n**Intentional limits:** the graph analyses (cycles, orphans, hubs, untested, path) read static import edges only: regex extraction per language, lines over 400 chars not indexed: so dynamic loading, DI and bundler wiring are invisible. Each analysis states its own caveats in its answer.\n\n' + LOCAL_HELP };
     } },
 
   /* cross-repo comparison — routes only when 2+ repos are loaded, and always
@@ -409,12 +409,12 @@ var INTENTS = [
       if (st.driftPending) {
         steps.push({ action: 'read the last session\'s snapshot', note: 'still loading from IndexedDB', evidence: [], status: 'done' });
         return { steps: steps, verdict: LOCAL_VERDICT(),
-          answer: 'Still reading the last session\'s snapshot from disk — ask `drift` again in a moment.' };
+          answer: 'Still reading the last session\'s snapshot from disk: ask `drift` again in a moment.' };
       }
       if (!st.driftPrev) {
         steps.push({ action: 'record drift baseline', note: 'paths + counts only, never contents', evidence: [], status: 'done' });
         return { steps: steps, verdict: LOCAL_VERDICT(),
-          answer: 'Baseline recorded for `' + sig + '` — no earlier snapshot to compare against. Ask `drift` again in your next session and Meridian will report what changed: new, removed, and reshaped files, from a local metadata fingerprint (paths and counts, never file contents), identified by top-level folder name.' };
+          answer: 'Baseline recorded for `' + sig + '`: no earlier snapshot to compare against. Ask `drift` again in your next session and Meridian will report what changed: new, removed, and reshaped files, from a local metadata fingerprint (paths and counts, never file contents), identified by top-level folder name.' };
       }
       var prev = st.driftPrev, cur = makeFingerprint(idx);
       var added = [], removed = [], reshaped = [];
@@ -435,15 +435,15 @@ var INTENTS = [
       function delta(n) { return (n >= 0 ? '+' : '') + n; }
       if (!added.length && !removed.length && !reshaped.length) {
         return { steps: steps, verdict: LOCAL_VERDICT(),
-          answer: 'No drift — `' + sig + '` matches the snapshot from ' + when + ' (' + prev.fileCount + ' files, ' + prev.symbolCount + ' symbols). Session-over-session comparison from paths and counts only.' };
+          answer: 'No drift: `' + sig + '` matches the snapshot from ' + when + ' (' + prev.fileCount + ' files, ' + prev.symbolCount + ' symbols). Session-over-session comparison from paths and counts only.' };
       }
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: '**Drift since the last session** (`' + sig + '`, vs snapshot from ' + when + '):\n\n'
           + '**Net:** ' + delta(cur.fileCount - prev.fileCount) + ' files · ' + delta(cur.symbolCount - prev.symbolCount) + ' symbols · ' + delta(cur.importCount - prev.importCount) + ' imports\n'
           + (added.length ? '**New:** ' + added.slice(0, 10).map(function (p) { return '`' + p + '`'; }).join(', ') + (added.length > 10 ? ' (+' + (added.length - 10) + ' more)' : '') + '\n' : '')
           + (removed.length ? '**Removed:** ' + removed.slice(0, 10).map(function (p) { return '`' + p + '`'; }).join(', ') + (removed.length > 10 ? ' (+' + (removed.length - 10) + ' more)' : '') + '\n' : '')
-          + (topR.length ? '**Reshaped:**\n' + topR.map(function (r) { return '- `' + r.p + '` — ' + delta(r.tokD) + ' tokens, ' + delta(r.symD) + ' symbols'; }).join('\n') + '\n' : '')
-          + '\nSession-over-session comparison from a local metadata fingerprint (paths + counts, never contents), keyed by top-level folder name — not continuous monitoring.' };
+          + (topR.length ? '**Reshaped:**\n' + topR.map(function (r) { return '- `' + r.p + '`: ' + delta(r.tokD) + ' tokens, ' + delta(r.symD) + ' symbols'; }).join('\n') + '\n' : '')
+          + '\nSession-over-session comparison from a local metadata fingerprint (paths + counts, never contents), keyed by top-level folder name: not continuous monitoring.' };
     } },
 
   { kind: 'recent', aliases: ['recent'], ground: 'recent-change', helpCmd: '`recent <n>`', needsModel: false,
@@ -466,7 +466,7 @@ var INTENTS = [
   { kind: 'search', aliases: ['search'], ground: 'match', helpCmd: '`search <text|regex>`', needsModel: false,
     route: null,
     run: function (arg, q, idx, intent) {
-      if (!arg) return { steps: [{ action: 'parse command', note: 'search needs a pattern', evidence: [], status: 'done' }], verdict: LOCAL_VERDICT(), answer: '`search` needs a pattern, e.g. `search cache_control` — quote it (`search "foo bar"`) to match literally.' };
+      if (!arg) return { steps: [{ action: 'parse command', note: 'search needs a pattern', evidence: [], status: 'done' }], verdict: LOCAL_VERDICT(), answer: '`search` needs a pattern, e.g. `search cache_control`: quote it (`search "foo bar"`) to match literally.' };
       var steps = [];
       var sr = localSearchData(arg, 'text', null, { literal: !!(intent && intent.literal) });
       var lim = searchLimitNote(sr);
@@ -486,7 +486,7 @@ var INTENTS = [
       var langs = Object.keys(idx.byExt).sort(function (a, b) { return idx.byExt[b] - idx.byExt[a]; }).slice(0, 6);
       steps.push({ action: 'read the project index', note: idx.fileCount + ' files · ' + idx.packages.length + ' packages · ' + idx.symbolCount + ' symbols', evidence: idx.entries.slice(0, 4).map(function (p) { return evAt(p, 1); }), status: 'done' });
       steps.push({ action: 'map directories & languages', note: topDirs.length + ' directories', evidence: idx.packages.slice(0, 4).map(function (pk) { return evAt(pk.manifest, 1); }), status: 'done' });
-      var sans = '**Project structure** — ' + idx.fileCount + ' files, ' + idx.symbolCount + ' symbols.\n\n'
+      var sans = '**Project structure**: ' + idx.fileCount + ' files, ' + idx.symbolCount + ' symbols.\n\n'
         + '**Packages:** ' + (idx.packages.length ? idx.packages.map(function (pk) { return '`' + (pk.name || pk.dir) + '`'; }).join(', ') : 'none detected (no build manifests)') + '\n'
         + '**Entry points:** ' + (idx.entries.length ? idx.entries.map(function (p) { return '`' + p + '`'; }).join(', ') : 'none detected') + '\n'
         + '**Tests:** ' + (idx.tests.length ? idx.tests.length + ' file' + (idx.tests.length === 1 ? '' : 's') : 'none detected') + '\n'
@@ -503,13 +503,13 @@ var INTENTS = [
       if (!sigs.length) {
         steps.push({ action: 'extract signals from the index', note: 'no high-signal findings', evidence: [], status: 'done' });
         return { steps: steps, verdict: LOCAL_VERDICT(),
-          answer: 'No high-signal findings — no broken relative imports, no import cycles, no untested high-fan-in files, and no unusual debt concentration. That is a real reading of the terrain, not a placeholder.' };
+          answer: 'No high-signal findings: no broken relative imports, no import cycles, no untested high-fan-in files, and no unusual debt concentration. That is a real reading of the terrain, not a placeholder.' };
       }
       sigs.forEach(function (g) { steps.push({ action: 'signal · ' + SEV_LABEL[g.severity], note: g.title, evidence: [g.evidence], status: 'done' }); });
       return { steps: steps, verdict: LOCAL_VERDICT(),
-        answer: 'Signal extraction — the ' + plural(sigs.length, 'finding') + ' worth your attention, ranked (not thirty):\n\n'
-          + sigs.map(function (g, i) { return (i + 1) + '. **' + SEV_LABEL[g.severity] + '** — ' + g.title + ' → drill in: `' + g.drill + '`'; }).join('\n')
-          + '\n\nEach step\'s chip opens the first piece of evidence; run the named command for the full list. Deterministic — computed from the index, no model.' };
+        answer: 'Signal extraction: the ' + plural(sigs.length, 'finding') + ' worth your attention, ranked (not thirty):\n\n'
+          + sigs.map(function (g, i) { return (i + 1) + '. **' + SEV_LABEL[g.severity] + '**: ' + g.title + ' → drill in: `' + g.drill + '`'; }).join('\n')
+          + '\n\nEach step\'s chip opens the first piece of evidence; run the named command for the full list. Deterministic: computed from the index, no model.' };
     } },
 
   /* before `tests`: "files without tests" must not be answered with the test list */
@@ -520,13 +520,13 @@ var INTENTS = [
       if (!idx.tests.length) {
         steps.push({ action: 'read test classification from the index', note: '0 test files', evidence: [], status: 'done' });
         return { steps: steps, verdict: LOCAL_VERDICT(),
-          answer: 'No test files detected by the standard patterns (`.test.` `.spec.` `_test` `tests/` `__tests__`) — every code file is a coverage gap. That is a real finding about this project, not a limitation.' };
+          answer: 'No test files detected by the standard patterns (`.test.` `.spec.` `_test` `tests/` `__tests__`): every code file is a coverage gap. That is a real finding about this project, not a limitation.' };
       }
       var gaps = listUntestedGaps(idx);
       steps.push({ action: 'match test files to sources (name stems + what tests import)', note: plural(idx.tests.length, 'test file') + ' · ' + plural(gaps.length, 'uncovered code file'), evidence: gaps.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: gaps.length
-          ? plural(gaps.length, 'code file') + ' with no matching test (no shared name stem, not imported by any test file):\n\n' + gaps.slice(0, 40).map(function (p) { return '- `' + p + '`'; }).join('\n') + '\n\nMatched by test-file name stems and test imports — integration tests that exercise code indirectly are not traced.'
+          ? plural(gaps.length, 'code file') + ' with no matching test (no shared name stem, not imported by any test file):\n\n' + gaps.slice(0, 40).map(function (p) { return '- `' + p + '`'; }).join('\n') + '\n\nMatched by test-file name stems and test imports: integration tests that exercise code indirectly are not traced.'
           : 'Every loaded code file is matched by a test name stem or imported by a test file.' };
     } },
 
@@ -548,8 +548,8 @@ var INTENTS = [
       steps.push({ action: 'trace cycles over resolved import edges', note: cycles.length ? plural(cycles.length, 'cycle') + (cycles.length >= 10 ? ' (capped at 10)' : '') : 'no cycles', evidence: cycles.slice(0, 10).map(function (c) { return evAt(c.from, c.line); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: cycles.length
-          ? 'Found ' + plural(cycles.length, 'import cycle') + (cycles.length >= 10 ? ' (search capped at 10)' : '') + ':\n\n' + cycles.slice(0, 10).map(function (c) { return '- ' + c.nodes.map(function (n) { return '`' + n + '`'; }).join(' → '); }).join('\n') + '\n\nChips open the import statement that closes each cycle. Static resolved edges only — dynamic loading is not traced.'
-          : 'No circular imports among the ' + plural(idx.importCount, 'indexed import') + ' — the resolved dependency graph is acyclic.' };
+          ? 'Found ' + plural(cycles.length, 'import cycle') + (cycles.length >= 10 ? ' (search capped at 10)' : '') + ':\n\n' + cycles.slice(0, 10).map(function (c) { return '- ' + c.nodes.map(function (n) { return '`' + n + '`'; }).join(' → '); }).join('\n') + '\n\nChips open the import statement that closes each cycle. Static resolved edges only: dynamic loading is not traced.'
+          : 'No circular imports among the ' + plural(idx.importCount, 'indexed import') + ': the resolved dependency graph is acyclic.' };
     } },
 
   /* before `listType`: "unused files" would otherwise be read as a list-by-type query */
@@ -561,7 +561,7 @@ var INTENTS = [
       steps.push({ action: 'scan importer edges for unreferenced code files', note: plural(orphans.length, 'candidate'), evidence: orphans.slice(0, 12).map(function (p) { return evAt(p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: (orphans.length
-          ? plural(orphans.length, 'code file') + ' ' + (orphans.length === 1 ? 'is' : 'are') + ' never imported by any loaded file (and not classified as entry point, test, config, or doc):\n\n' + orphans.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') + '\n\nStatic import edges only — files loaded dynamically, from HTML, or by a bundler config can appear here without being dead.'
+          ? plural(orphans.length, 'code file') + ' ' + (orphans.length === 1 ? 'is' : 'are') + ' never imported by any loaded file (and not classified as entry point, test, config, or doc):\n\n' + orphans.slice(0, 20).map(function (p) { return '- `' + p + '`'; }).join('\n') + '\n\nStatic import edges only: files loaded dynamically, from HTML, or by a bundler config can appear here without being dead.'
           : 'Every loaded code file is either imported somewhere or classified as an entry point, test, config, or doc.') + longLineNote(idx) };
     } },
 
@@ -589,11 +589,11 @@ var INTENTS = [
         var sd = symLookup(arg, idx);
         if (sd.length) {
           tf = sd[0].file;
-          steps.push({ action: '“' + arg + '” names a symbol — analyze its defining file', note: tf, evidence: [evAt(sd[0].file, sd[0].line)], status: 'done' });
+          steps.push({ action: '“' + arg + '” names a symbol: analyze its defining file', note: tf, evidence: [evAt(sd[0].file, sd[0].line)], status: 'done' });
         }
       }
       steps.push({ action: 'resolve “' + (arg || '?') + '” to a file', note: tf || 'unresolved', evidence: [], status: 'done' });
-      if (!tf) return { steps: steps, verdict: LOCAL_VERDICT(), answer: '`impact` needs a loaded file (or an indexed symbol), e.g. `impact src/store.js` — or ask “what breaks if I change store.js”.' };
+      if (!tf) return { steps: steps, verdict: LOCAL_VERDICT(), answer: '`impact` needs a loaded file (or an indexed symbol), e.g. `impact src/store.js`, or ask “what breaks if I change store.js”.' };
       /* BFS over reverse (importer) edges: depth 1 = direct, ≥2 = transitive */
       var depth = Object.create(null), order = [], queue = [tf], qi = 0, CAP = 200, capped = false;
       depth[tf] = 0;
@@ -621,17 +621,17 @@ var INTENTS = [
       steps.push({ action: 'classify the affected set', note: plural(testsHit.length, 'test file') + ' · ' + plural(entriesHit.length, 'entry point'), evidence: testsHit.slice(0, 4).map(function (x) { return evAt(x.file, x.line); }).concat(entriesHit.slice(0, 4).map(function (x) { return evAt(x.file, x.line); })), status: 'done' });
       if (!order.length) {
         return { steps: steps, verdict: LOCAL_VERDICT(),
-          answer: 'Nothing imports `' + tf + '` — its static blast radius is **the file itself**. ' + ((idx.importedBy.get(tf) || []).length ? '' : 'If it is not an entry point, test, config, or doc, `orphans` will list it too.') + '\n\nStatic import edges only — dynamic loading, DI, or bundler wiring could still depend on it invisibly.' + longLineNote(idx) };
+          answer: 'Nothing imports `' + tf + '`: its static blast radius is **the file itself**. ' + ((idx.importedBy.get(tf) || []).length ? '' : 'If it is not an entry point, test, config, or doc, `orphans` will list it too.') + '\n\nStatic import edges only: dynamic loading, DI, or bundler wiring could still depend on it invisibly.' + longLineNote(idx) };
       }
-      function li(x) { return '- `' + x.file + '` — imports ' + (x.via === tf ? 'it' : '`' + x.via + '`') + ' at line ' + x.line + (testSet[x.file] ? ' · **test**' : '') + (entrySet[x.file] ? ' · **entry point**' : ''); }
+      function li(x) { return '- `' + x.file + '`: imports ' + (x.via === tf ? 'it' : '`' + x.via + '`') + ' at line ' + x.line + (testSet[x.file] ? ' · **test**' : '') + (entrySet[x.file] ? ' · **entry point**' : ''); }
       return { steps: steps, verdict: LOCAL_VERDICT(),
-        answer: '**Blast radius of `' + tf + '`** — ' + plural(order.length, 'dependent file') + (capped ? ' (walk capped at ' + CAP + ')' : '') + ': '
+        answer: '**Blast radius of `' + tf + '`**: ' + plural(order.length, 'dependent file') + (capped ? ' (walk capped at ' + CAP + ')' : '') + ': '
           + direct.length + ' direct, ' + trans.length + ' transitive.\n\n'
           + '**Direct importers (break immediately):**\n' + direct.slice(0, 15).map(li).join('\n') + (direct.length > 15 ? '\n… +' + (direct.length - 15) + ' more' : '') + '\n'
           + (trans.length ? '\n**Transitive dependents (break through the chain):**\n' + trans.slice(0, 15).map(li).join('\n') + (trans.length > 15 ? '\n… +' + (trans.length - 15) + ' more' : '') + '\n' : '')
-          + '\n' + (testsHit.length ? plural(testsHit.length, 'test file') + ' ' + (testsHit.length === 1 ? 'is' : 'are') + ' in the blast radius — a break would be caught there. ' : 'No test file is in the blast radius — a break here would surface at runtime, not in tests. ')
-          + (entriesHit.length ? plural(entriesHit.length, 'entry point') + ' reached — the break is user-visible.' : '')
-          + '\n\nStatic resolved import edges only — dynamic loading, DI and bundler wiring are not traced.' + longLineNote(idx) };
+          + '\n' + (testsHit.length ? plural(testsHit.length, 'test file') + ' ' + (testsHit.length === 1 ? 'is' : 'are') + ' in the blast radius: a break would be caught there. ' : 'No test file is in the blast radius: a break here would surface at runtime, not in tests. ')
+          + (entriesHit.length ? plural(entriesHit.length, 'entry point') + ' reached: the break is user-visible.' : '')
+          + '\n\nStatic resolved import edges only: dynamic loading, DI and bundler wiring are not traced.' + longLineNote(idx) };
     } },
 
   /* before `importers`: "most imported files" would otherwise match its import- regex */
@@ -646,8 +646,8 @@ var INTENTS = [
       steps.push({ action: 'rank files by importer fan-in', note: plural(ranked.length, 'imported file') + ' · top ' + top.length, evidence: top.map(function (r) { return evAt(r.p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: top.length
-          ? 'Most-imported files (fan-in — the load-bearing walls of this project):\n\n' + top.map(function (r, i) { return (i + 1) + '. `' + r.p + '` — imported by ' + plural(r.n, 'file'); }).join('\n')
-          : 'No file is imported by another loaded file — either a single-file project or a bundling style with no static imports.' };
+          ? 'Most-imported files (fan-in: the load-bearing walls of this project):\n\n' + top.map(function (r, i) { return (i + 1) + '. `' + r.p + '`: imported by ' + plural(r.n, 'file'); }).join('\n')
+          : 'No file is imported by another loaded file: either a single-file project or a bundling style with no static imports.' };
     } },
 
   /* before `importers`: "import path/chain" would otherwise match its import- regex */
@@ -669,7 +669,7 @@ var INTENTS = [
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: chain
           ? 'Shortest import chain' + (reversed ? ' (found in the reverse direction, `' + b + '` → `' + a + '`)' : '') + ':\n\n' + chain.map(function (n) { return '`' + n + '`'; }).join(' → ') + '\n\nChips open each hop\'s import statement.'
-          : 'No static import path connects `' + a + '` and `' + b + '` in either direction. They may be linked at runtime (DI, dynamic import, config) — the index only traces static edges.' };
+          : 'No static import path connects `' + a + '` and `' + b + '` in either direction. They may be linked at runtime (DI, dynamic import, config): the index only traces static edges.' };
     } },
 
   { kind: 'exports', aliases: ['exports'], ground: 'export', helpCmd: '`exports <file>`', needsModel: false,
@@ -693,14 +693,14 @@ var INTENTS = [
         steps.push({ action: 'read module-level definitions (no export keyword)', note: plural(pub.length, 'definition'), evidence: pub.slice(0, 12).map(function (x) { return evAt(tf, x.line); }), status: 'done' });
         return { steps: steps, verdict: LOCAL_VERDICT(),
           answer: pub.length
-            ? '`' + tf + '` (' + (tfLang === 'python' ? 'Python' : 'Ruby') + ' — no export keyword) has ' + plural(pub.length, 'module-level definition') + ' as its public surface (underscore-prefixed names excluded):\n\n' + pub.map(function (x) { return '- `' + x.name + '` (' + x.kind + ') — line ' + x.line; }).join('\n')
+            ? '`' + tf + '` (' + (tfLang === 'python' ? 'Python' : 'Ruby') + ': no export keyword) has ' + plural(pub.length, 'module-level definition') + ' as its public surface (underscore-prefixed names excluded):\n\n' + pub.map(function (x) { return '- `' + x.name + '` (' + x.kind + '): line ' + x.line; }).join('\n')
             : 'No module-level definitions found in `' + tf + '`.' };
       }
       steps.push({ action: 'read exported symbols from the index', note: plural(list.length, 'export'), evidence: list.slice(0, 12).map(function (x) { return evAt(tf, x.line); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: list.length
-          ? '`' + tf + '` exports ' + plural(list.length, 'symbol') + ':\n\n' + list.slice(0, 20).map(function (x) { return '- `' + x.name + '` (' + x.kind + ') — line ' + x.line; }).join('\n')
-          : 'No exports recorded for `' + tf + '`. Tracking covers JS/TS (`export`, `module.exports`), Rust (`pub`), Go (uppercase initials), Java/C# (`public`), and Kotlin (non-private/internal declarations) — or the file genuinely exports nothing.' };
+          ? '`' + tf + '` exports ' + plural(list.length, 'symbol') + ':\n\n' + list.slice(0, 20).map(function (x) { return '- `' + x.name + '` (' + x.kind + '): line ' + x.line; }).join('\n')
+          : 'No exports recorded for `' + tf + '`. Tracking covers JS/TS (`export`, `module.exports`), Rust (`pub`), Go (uppercase initials), Java/C# (`public`), and Kotlin (non-private/internal declarations), or the file genuinely exports nothing.' };
     } },
 
   /* before `listType`/`structure` regexes see them: size/complexity questions */
@@ -720,7 +720,7 @@ var INTENTS = [
       steps.push({ action: 'rank code files by size · symbol density · fan-in', note: plural(rows.length, 'code file') + ' scored', evidence: top.map(function (r) { return evAt(r.p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: top.length
-          ? 'Hotspots — the files where change is most expensive (size + symbol density + fan-in):\n\n' + top.map(function (r, i) { return (i + 1) + '. `' + r.p + '` — ≈' + fmtTok(r.tok) + ' tokens · ' + plural(r.symN, 'symbol') + ' · ' + plural(r.fanIn, 'importer'); }).join('\n')
+          ? 'Hotspots: the files where change is most expensive (size + symbol density + fan-in):\n\n' + top.map(function (r, i) { return (i + 1) + '. `' + r.p + '`: ≈' + fmtTok(r.tok) + ' tokens · ' + plural(r.symN, 'symbol') + ' · ' + plural(r.fanIn, 'importer'); }).join('\n')
           : 'No code files loaded to rank.' };
     } },
 
@@ -734,7 +734,7 @@ var INTENTS = [
       steps.push({ action: 'read TODO/FIXME/HACK/XXX tags from the index', note: idx.todos.length ? plural(idx.todos.length, 'tag') + (idx.todos.length >= 500 ? ' (capped)' : '') + ' · ' + tagNote : 'none found', evidence: idx.todos.slice(0, 12).map(function (t) { return evAt(t.file, t.line); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: idx.todos.length
-          ? plural(idx.todos.length, 'debt tag') + ' (' + tagNote + '):\n\n' + idx.todos.slice(0, 15).map(function (t) { return '- `' + t.file + '` line ' + t.line + ' — **' + t.tag + '**'; }).join('\n') + '\n\nChips open each tag at its line.'
+          ? plural(idx.todos.length, 'debt tag') + ' (' + tagNote + '):\n\n' + idx.todos.slice(0, 15).map(function (t) { return '- `' + t.file + '` line ' + t.line + ': **' + t.tag + '**'; }).join('\n') + '\n\nChips open each tag at its line.'
           : 'No TODO / FIXME / HACK / XXX tags in the loaded files. Either the debt is paid, or it is not written down.' };
     } },
 
@@ -749,7 +749,7 @@ var INTENTS = [
       steps.push({ action: 'read environment-variable reads from the index', note: plural(names.length, 'variable'), evidence: names.slice(0, 12).map(function (n) { return evAt(n.refs[0].file, n.refs[0].line); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: names.length
-          ? plural(names.length, 'environment variable') + ' read by the code — the project\'s implicit configuration surface:\n\n' + names.slice(0, 20).map(function (n) { return '- `' + n.name + '` — ' + plural(n.refs.length, 'read') + ', first at `' + n.refs[0].file + '` line ' + n.refs[0].line; }).join('\n')
+          ? plural(names.length, 'environment variable') + ' read by the code: the project\'s implicit configuration surface:\n\n' + names.slice(0, 20).map(function (n) { return '- `' + n.name + '`: ' + plural(n.refs.length, 'read') + ', first at `' + n.refs[0].file + '` line ' + n.refs[0].line; }).join('\n')
           : 'No environment-variable reads detected (patterns: `process.env`, `import.meta.env`, `os.environ`/`getenv`, `os.Getenv`, `env::var`, `ENV[…]`).' };
     } },
 
@@ -772,7 +772,7 @@ var INTENTS = [
       steps.push({ action: 'scan the symbol index for names defined in multiple files', note: plural(dupes.length, 'duplicated name'), evidence: evs, status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: dupes.length
-          ? plural(dupes.length, 'symbol name') + ' (≥4 chars) defined in more than one file — collision and confusion candidates:\n\n' + top.map(function (d) { return '- `' + d.name + '` — ' + d.defs.map(function (x) { return '`' + x.file + '` line ' + x.line; }).join(', '); }).join('\n')
+          ? plural(dupes.length, 'symbol name') + ' (≥4 chars) defined in more than one file: collision and confusion candidates:\n\n' + top.map(function (d) { return '- `' + d.name + '`: ' + d.defs.map(function (x) { return '`' + x.file + '` line ' + x.line; }).join(', '); }).join('\n')
           : 'No symbol name (≥4 chars) is defined in more than one file.' };
     } },
 
@@ -819,7 +819,7 @@ var INTENTS = [
       var relList = Object.keys(rel).slice(0, 20);
       steps.push({ action: 'gather relationships (imports · importers · directory · name)', note: relList.length + ' related file' + (relList.length === 1 ? '' : 's'), evidence: relList.map(function (p) { return evAt(p, 1); }), status: 'done' });
       var rans = !rf ? 'Could not resolve `' + arg + '` to a loaded file.'
-        : relList.length ? 'Files related to `' + rf + '`:\n\n' + relList.map(function (p) { return '- `' + p + '` — ' + rel[p]; }).join('\n')
+        : relList.length ? 'Files related to `' + rf + '`:\n\n' + relList.map(function (p) { return '- `' + p + '`: ' + rel[p]; }).join('\n')
         : 'No related files found for `' + rf + '` (no import edges, no directory siblings, no name matches).';
       return { steps: steps, verdict: LOCAL_VERDICT(), answer: rans };
     } },
@@ -848,7 +848,7 @@ var INTENTS = [
          user wants references, not importer edges. Answer refs instead of dead-ending. */
       if (!tf && symLookup(arg, idx).length) {
         var rr = localSearchData(arg, 'refs');
-        steps.push({ action: 'no file named “' + arg + '” — treat as a symbol', note: rr.hits.length + ' reference' + (rr.hits.length === 1 ? '' : 's') + ' in ' + rr.filesHit + ' file' + (rr.filesHit === 1 ? '' : 's'), evidence: rr.hits.slice(0, 10).map(localEvidence), status: 'done' });
+        steps.push({ action: 'no file named “' + arg + '”: treat as a symbol', note: rr.hits.length + ' reference' + (rr.hits.length === 1 ? '' : 's') + ' in ' + rr.filesHit + ' file' + (rr.filesHit === 1 ? '' : 's'), evidence: rr.hits.slice(0, 10).map(localEvidence), status: 'done' });
         return { steps: steps, verdict: LOCAL_VERDICT(),
           actions: [{ kind: 'def', command: arg, why: 'jump to where ' + arg + ' is defined' }],
           answer: rr.hits.length
@@ -875,14 +875,14 @@ var INTENTS = [
         var top = matches.slice(0, 15);
         steps.push({ action: 'search the symbol index for “' + arg + '”', note: matches.length + ' matching symbol' + (matches.length === 1 ? '' : 's'), evidence: top.map(function (mm) { return evAt(mm.def.file, mm.def.line); }), status: 'done' });
         return { steps: steps, verdict: LOCAL_VERDICT(),
-          answer: top.length ? matches.length + ' symbol' + (matches.length === 1 ? '' : 's') + ' match `' + arg + '`:\n\n' + top.map(function (mm) { return '- `' + mm.name + '` (' + mm.def.kind + ') — `' + mm.def.file + '` line ' + mm.def.line + (mm.n > 1 ? ' (+' + (mm.n - 1) + ' more)' : ''); }).join('\n') : 'No indexed symbol matches `' + arg + '`.' };
+          answer: top.length ? matches.length + ' symbol' + (matches.length === 1 ? '' : 's') + ' match `' + arg + '`:\n\n' + top.map(function (mm) { return '- `' + mm.name + '` (' + mm.def.kind + '): `' + mm.def.file + '` line ' + mm.def.line + (mm.n > 1 ? ' (+' + (mm.n - 1) + ' more)' : ''); }).join('\n') : 'No indexed symbol matches `' + arg + '`.' };
       }
       var byFile = Object.create(null);
       idx.symbols.forEach(function (defsArr) { defsArr.forEach(function (d) { byFile[d.file] = (byFile[d.file] || 0) + 1; }); });
       var topFiles = Object.keys(byFile).sort(function (a, b) { return byFile[b] - byFile[a]; }).slice(0, 8);
       steps.push({ action: 'summarize the symbol index', note: idx.symbolCount + ' definitions · ' + idx.symbols.size + ' unique names', evidence: topFiles.map(function (p) { return evAt(p, 1); }), status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
-        answer: 'The index holds **' + idx.symbolCount + ' symbol definitions** (' + idx.symbols.size + ' unique names). Densest files:\n\n' + topFiles.map(function (p) { return '- `' + p + '` — ' + byFile[p] + ' symbols'; }).join('\n') + '\n\nAsk `symbols <name>` to find a specific one.' };
+        answer: 'The index holds **' + idx.symbolCount + ' symbol definitions** (' + idx.symbols.size + ' unique names). Densest files:\n\n' + topFiles.map(function (p) { return '- `' + p + '`: ' + byFile[p] + ' symbols'; }).join('\n') + '\n\nAsk `symbols <name>` to find a specific one.' };
     } },
 
   { kind: 'refs', aliases: ['refs'], ground: 'reference', helpCmd: '`refs`', needsModel: false,
@@ -934,9 +934,9 @@ var INTENTS = [
       return {
         steps: steps, actions: actions,
         verdict: { local: false, text: 'REQUIRES MODEL REASONING' },
-        answer: 'This question asks for **interpretation** (root cause / recommendation / explanation) — that is where a model reasons, and Meridian will not fabricate it. What Meridian **can** tell you is the terrain: it gathered ' + (t.ranked.length) + ' relevant file' + (t.ranked.length === 1 ? '' : 's') + ' and ' + steps.reduce(function (a, s) { return a + (s.evidence ? s.evidence.length : 0); }, 0) + ' pieces of evidence.\n\n'
+        answer: 'This question asks for **interpretation** (root cause / recommendation / explanation): that is where a model reasons, and Meridian will not fabricate it. What Meridian **can** tell you is the terrain: it gathered ' + (t.ranked.length) + ' relevant file' + (t.ranked.length === 1 ? '' : 's') + ' and ' + steps.reduce(function (a, s) { return a + (s.evidence ? s.evidence.length : 0); }, 0) + ' pieces of evidence.\n\n'
           + (top5 ? 'Most relevant files:\n\n' + top5 + '\n\n' : '')
-          + 'Connect a model in settings to synthesize an answer — Meridian will send only this evidence, not the whole repo.'
+          + 'Connect a model in settings to synthesize an answer. It receives your question, the files you ticked (SMART mode sends a project map and the most relevant of them) and this evidence. [ PREVIEW SEND ] shows the exact payload.'
       };
     } },
 
@@ -946,11 +946,11 @@ var INTENTS = [
     run: function (arg, q) {
       var steps = [];
       var tp = gatherTerrain(q, steps);
-      if (!tp.terms.length) return { steps: steps, verdict: LOCAL_VERDICT(), answer: 'That question has no distinctive terms to search for. Name a symbol, filename, or keyword — or use a command.\n\n' + LOCAL_HELP };
+      if (!tp.terms.length) return { steps: steps, verdict: LOCAL_VERDICT(), answer: 'That question has no distinctive terms to search for. Name a symbol, filename, or keyword, or use a command.\n\n' + LOCAL_HELP };
       var topSym = tp.terms[0];
       var actions = [{ kind: 'def', command: topSym, why: 'where “' + topSym + '” is defined' }, { kind: 'refs', command: topSym, why: 'every reference to “' + topSym + '”' }, { kind: 'recent', command: '10', why: 'recently modified files' }];
       return { steps: steps, verdict: LOCAL_VERDICT(), actions: actions,
-        answer: tp.ranked.length ? 'Deterministic search — the files below best match your words (match count, then importance). Open a chip to inspect, or ask `def`/`refs`. Interpreting *why* would benefit from a model.\n\n' + tp.ranked.slice(0, 5).map(function (r, i) { return (i + 1) + '. `' + r.p + '` — ' + r.count + ' match' + (r.count === 1 ? '' : 'es'); }).join('\n') : 'None of your terms appear in the loaded files. Try different wording or check what is selected in CONTEXT.' };
+        answer: tp.ranked.length ? 'Deterministic search: the files below best match your words (match count, then importance). Open a chip to inspect, or ask `def`/`refs`. Interpreting *why* would benefit from a model.\n\n' + tp.ranked.slice(0, 5).map(function (r, i) { return (i + 1) + '. `' + r.p + '`: ' + r.count + ' match' + (r.count === 1 ? '' : 'es'); }).join('\n') : 'None of your terms appear in the loaded files. Try different wording or check what is selected in CONTEXT.' };
     } }
 ];
 
@@ -982,8 +982,8 @@ function commandArg(kind, rest) {
 var LOCAL_HELP = 'Ask in plain language ("where is X defined", "what references X", "what imports X", '
   + '"files related to app.js", "project structure", "where are the tests", "entry points", "what changed recently") '
   + 'or use a command: ' + INTENTS.filter(function (it) { return it.helpCmd; }).map(function (it) { return it.helpCmd; }).join(', ')
-  + '. Interpretation ("why…", "how should I…") needs a model — '
-  + 'connect one in settings and Meridian sends only the relevant evidence, never the whole repo.';
+  + '. Interpretation ("why…", "how should I…") needs a model: '
+  + 'connect one in settings. It receives your question, the files you ticked (or the SMART selection) and the evidence Meridian found, and [ PREVIEW SEND ] shows the exact payload.';
 
 /* ---- The LOCAL "what can I ask" menu — a curated, grouped catalog of the
    questions the deterministic engine answers, kept next to the registry so a new
@@ -1006,7 +1006,7 @@ var LOCAL_MENU = [
     { label: 'Recent changes', fill: 'what changed recently' },
     { label: 'Search text or regex', fill: 'search <text>' }
   ] },
-  { group: 'ANALYZE — DEPENDENCY GRAPH & HEALTH', items: [
+  { group: 'ANALYZE: DEPENDENCY GRAPH & HEALTH', items: [
     { label: 'Circular imports', fill: 'cycles' },
     { label: 'Orphan (never-imported) files', fill: 'orphans' },
     { label: 'Broken imports', fill: 'broken' },
@@ -1020,8 +1020,8 @@ var LOCAL_MENU = [
     { label: 'Duplicate symbol names', fill: 'dupes' }
   ] },
   { group: 'INSTRUMENTS', items: [
-    { label: 'Signals — what deserves attention', fill: 'signals' },
-    { label: 'Drift — what changed since last session', fill: 'drift' },
+    { label: 'Signals: what deserves attention', fill: 'signals' },
+    { label: 'Drift: what changed since last session', fill: 'drift' },
     { label: 'Workspace: compare the loaded repos', fill: 'workspace' }
   ] }
 ];

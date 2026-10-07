@@ -324,11 +324,11 @@
           <p class="hero-fine mono rv" style="--i:4">NO SIGNUP · NOTHING TO INSTALL · THE DEMO NEEDS NO KEY</p>
         </div>
         <figure class="hero-media rv" style="--i:2">
-          <div class="hm-bar mono"><span>MERIDIAN WORKBENCH · BUILT-IN DEMO · LOCAL ENGINE</span><button class="hm-btn" id="vidbtn" type="button" aria-pressed="false">PAUSE</button></div>
-          <video id="demovid" src="media/meridian-demo.mp4" poster="media/meridian-poster.jpg" width="1280" height="800" autoplay muted loop playsinline preload="auto" aria-label="Screen capture of the Meridian workbench answering questions about its bundled sample project, with no key and no network">
-            <img class="gif" src="media/meridian-demo.gif" width="1280" height="800" loading="lazy" alt="Screen capture of the Meridian workbench answering questions about its bundled sample project">
+          <div class="hm-bar mono"><span>MERIDIAN WORKBENCH · SCREEN CAPTURE · NO KEY ENTERED</span><button class="hm-btn" id="vidbtn" type="button" aria-pressed="false">PAUSE</button></div>
+          <video id="demovid" src="media/meridian-demo.mp4" poster="media/meridian-poster.jpg" width="1280" height="800" autoplay muted loop playsinline preload="auto" aria-label="Screen capture of the Meridian workbench: the LOCAL engine answering questions about a sample project, a two-repo workspace, the share dialog and the settings, with no key and no network">
+            <img class="gif" src="media/meridian-demo.gif" width="1280" height="800" loading="lazy" alt="Screen capture of the Meridian workbench: LOCAL answers, a two-repo workspace, the share dialog and the settings">
           </video>
-          <figcaption class="mono">// a screen capture of the real workbench: the LOCAL engine answers questions about the bundled sample project, with no key and no network. <a href="media/meridian-demo.gif" class="trace">GIF version</a></figcaption>
+          <figcaption class="mono">// a 73-second screen capture of the real workbench, with captions: LOCAL answers, a two-repo workspace, the share dialog and the settings. No key is entered and nothing leaves the tab. <a href="media/meridian-demo.gif" class="trace">GIF version</a></figcaption>
         </figure>
       </div>
     </div>
@@ -425,7 +425,7 @@
   <!-- SECURITY REVIEW -->
   <section class="block" id="security">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">04</span><h2>For security and compliance reviews</h2></div>
+      <div class="sec-head rv"><span class="idx mono">04</span><h2>For security and vendor-risk reviews</h2></div>
       <p class="sec-lede rv">The questions reviewers ask, with direct answers. You can check each point in the source and in your browser's network inspector.</p>
       <dl class="spec rv">
         <div class="spec-row"><dt>WHERE CODE LIVES</dt><dd>In the memory of the browser tab that loaded it, and nowhere else. Close the tab and it is gone. Saved projects and workspaces keep <b>metadata only</b> (names, file counts, selection, settings) in that browser's IndexedDB.</dd></div>
@@ -485,7 +485,7 @@
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.04</span>Who can read a share link?<span class="x">+</span></button>
-          <div class="faq-a"><p>Anyone who has it. The link carries the files you ticked, compressed, in the part after <span class="mono">#</span>. Browsers don't send that part to any server, so GitHub Pages and we never see it, but the chat app or inbox you paste it into stores it like any message. There is no server, so a link can't be revoked or expired. Treat it like sending the files. It opens read-only, in the recipient's tab, and nothing is saved.</p></div>
+          <div class="faq-a"><p>Anyone who has it. The link carries the files you ticked, compressed, in the part after <span class="mono">#</span>. Browsers don't send that part to any server, so GitHub Pages and we never see it, but the chat app or inbox you paste it into stores it like any message. There is no server, so a link can't be revoked or expired. Treat it like sending the files. A link holds up to 32,000 characters, so a bigger project goes in a <span class="mono">.meridian</span> file instead. A shared project opens read-only, in the recipient's tab, and nothing is saved.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.05</span>Does Meridian track usage?<span class="x">+</span></button>
@@ -498,6 +498,10 @@
         <div class="faq-item">
           <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.07</span>Can I trust the answers?<span class="x">+</span></button>
           <div class="faq-a"><p>Check them; that's what the trace is for. Evidence chips open the cited file at the cited lines, so verifying takes seconds. LOCAL answers come straight from the index and say when a question needs a model instead. Model output can still be wrong, and if a trace can't be parsed, the answer says so.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.08</span>How big a project can it handle?<span class="x">+</span></button>
+          <div class="faq-a"><p>Up to 8,000 files by default, 512 KB per file and about 300 MB of text in the tab, counted across every repo in a workspace. Change the file count under FILE CAP in settings. Anything skipped is counted and listed under <span class="mono">REVIEW SKIPPED</span>, and you can pull single files back in. For large projects, SMART mode sends a project map plus the most relevant files packed into a token budget, in place of everything. Token figures are estimates that run high on purpose, and your provider bills the actual counts.</p></div>
         </div>
       </div>
     </div>

@@ -393,7 +393,7 @@ function buildIndex() {
   }
 
   paths.forEach(function (p, pi) {
-    if (big && pi % 500 === 0) setStatus('INDEXING SYMBOLS — ' + pi + '/' + paths.length + ' files…');
+    if (big && pi % 500 === 0) setStatus('INDEXING SYMBOLS: ' + pi + '/' + paths.length + ' files…');
     var f = st.files.get(p);
     var name = p.slice(p.lastIndexOf('/') + 1), ext = fileExt(p);
     byExt[ext || '·'] = (byExt[ext || '·'] || 0) + 1;
@@ -532,10 +532,10 @@ function buildIndex() {
 
 function getIndex() {
   if (!st.indexDirty && st.projectIndex) return st.projectIndex;
-  setStatus('INDEXING — reading project structure…');
+  setStatus('INDEXING: reading project structure…');
   st.projectIndex = buildIndex();
   st.indexDirty = false;
-  setStatus('IDLE — ' + st.files.size + ' files in memory');
+  setStatus('IDLE: ' + st.files.size + ' files in memory');
   return st.projectIndex;
 }
 
