@@ -22,7 +22,7 @@ It serves two readers, and marks the difference where it matters:
   a project. Follow the guide top to bottom. Concepts are explained the first
   time they appear, and there's a [Glossary](#glossary) at the end.
 - **Experienced:** you know codebases and want the fast path and the
-  internals. Skim [Quick start](#quick-start-2-minutes-no-key-needed), the
+  internals. Skim [Quick start](#2-quick-start-2-minutes-no-key-needed), the
   [Command reference](#6-the-local-command-reference), and
   [For power users](#12-for-power-users-internals--self-hosting).
 
@@ -33,7 +33,7 @@ Call-outs marked **Power user** add depth without cluttering the main path.
 ## Contents
 
 1. [What MERIDIAN actually is](#1-what-meridian-actually-is)
-2. [Quick start (no key)](#quick-start-2-minutes-no-key-needed)
+2. [Quick start (no key)](#2-quick-start-2-minutes-no-key-needed)
 3. [The screen, explained](#3-the-screen-explained)
 4. [Load your project](#4-load-your-project)
 5. [Choose a brain (provider & key)](#5-choose-a-brain-provider--key)
@@ -79,12 +79,13 @@ answer with **no key, no AI and no internet**. Start there.
 
 ---
 
-## Quick start (2 minutes, no key needed)
+## 2. Quick start (2 minutes, no key needed)
 
 1. Open the app: https://drewosi.github.io/lucid-engine/app.html
    (first visit shows a one-time welcome; accept to continue).
-2. Click **Load the demo project** (on the welcome screen, or press `Ctrl-K` and
-   type "demo"). A tiny sample project loads instantly. Shortcut: open
+2. Click **Try the demo (no key)** on the welcome screen, or **Try a demo project**
+   on the empty workbench, or press `Ctrl-K` and type "demo". A tiny sample
+   project loads instantly. Shortcut: open
    https://drewosi.github.io/lucid-engine/app.html?demo and the demo starts by
    itself (on a first visit, accept the welcome with the demo button).
 3. The provider is already **LOCAL**: no key, no AI, no network. Type a question
@@ -152,8 +153,8 @@ it in anyway (true binaries stay out).
 **FILE CAP**. Enter a positive whole number and click **Set**; leave it blank to
 go back to 8,000. Anything else (0, a negative number, text) is rejected. The new
 cap applies to the next folder you load. A higher cap uses more memory, and the
-~300 MB text cap still applies. Shared links and bundles are held to the same cap
-when you open them.
+~300 MB text cap still applies. Shared links and bundles are held to the same
+file cap and 512 KB per file when you open them, plus a 64 MB total.
 
 **Ignore patterns.** In Settings, add glob-style filters (one per line, `*` is
 wildcard) to skip more, e.g. `*.min.js`, `*.map`, `*.lock`. **[ Suggest ]**
@@ -181,7 +182,7 @@ this tab's memory only.
 - **Switch and scope.** Click a repo's name to make it the **active repo** (`▸`).
   **[ ASK: ALL REPOS ]** sends every question to all repos at once; click it to
   switch to **[ ASK: &lt;repo&gt; ONLY ]**, which narrows questions to the active
-  repo. The scope applies to the LOCAL engine and to AI providers alike: a scoped
+  repo. The switch appears once two or more repos are loaded. The scope applies to the LOCAL engine and to AI providers alike: a scoped
   question searches, indexes and sends that repo only. LOCAL answers state the
   scope as their first trace step, and the budget line says `… only` while scoped.
 - **Ask across repos.** In ALL scope, SMART packing guarantees the best-scoring
@@ -282,6 +283,7 @@ REASONING** (an interpretation question; connect an AI for those).
 | `orphans` | Code files nothing imports (possible dead weight) |
 | `broken` | Relative imports that resolve to no loaded file |
 | `hubs` | Most-depended-on files (the load-bearing walls) |
+| `impact <file>` | Blast radius: every file that depends on it, directly or through other files, with the tests and entry points among them |
 | `path <a> <b>` | Shortest dependency chain between two files |
 | `exports <file>` | A file's public surface |
 | `hotspots` | Where change is most expensive (size × symbols × fan-in) |
@@ -443,7 +445,9 @@ which files go in, then either copy a **link** or download a **bundle**.
   credential files) always start unticked.
 - **Too big for a link? Download a bundle.** A `.meridian` file holds the same
   data as readable JSON (open it in a text editor to see what's inside)
-  and has no size limit. Send it as a file.
+  and is not held to the link limit, so it suits big projects. Send it as a file.
+  Opening one is held to the same limits as any load: 512 KB per file, the file
+  cap, 64 MB of text in total, and a 96 MB bundle file.
 - **Never included:** API keys, provider settings, the conversation, saved
   projects, or anything else MERIDIAN keeps in your browser.
 - You tick a box confirming you understand the above before either button works.
