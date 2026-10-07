@@ -3,21 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MERIDIAN: ask your codebase, keep the code in the browser</title>
-<meta name="description" content="A browser-only code workbench for engineering teams. There is no backend: files stay in tab memory, and questions go straight to the model provider you already use, under your own key, or nowhere in LOCAL mode. Answers cite the file and line they rest on.">
+<title>MERIDIAN: AI writes the code. Check it without AI.</title>
+<meta name="description" content="A checker for AI-written code that uses no AI itself. Meridian maps your project in the browser and shows broken imports, new import cycles, duplicated code, untested files and what a change touches, each pinned to the file and line. No backend, no install, and your code never reaches us.">
 <link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="canonical" href="https://drewosi.github.io/lucid-engine/">
-<link rel="preload" as="image" href="media/meridian-poster.jpg" fetchpriority="high">
-<meta property="og:title" content="MERIDIAN: ask your codebase, keep the code in the browser">
-<meta property="og:description" content="A browser-only code workbench with no backend. Your code goes to the model provider you chose, under your key, or nowhere in LOCAL mode. Answers cite the exact file and line.">
+<meta property="og:title" content="MERIDIAN: AI writes the code. Check it without AI.">
+<meta property="og:description" content="A checker for AI-written code that uses no AI itself. Structural findings pinned to the exact file and line, computed in your browser. No backend, and your code never reaches us.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://drewosi.github.io/lucid-engine/">
 <meta property="og:site_name" content="MERIDIAN">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="MERIDIAN: ask your codebase, keep the code in the browser">
-<meta name="twitter:description" content="A browser-only code workbench with no backend. Your code goes to the model provider you chose, under your key, or nowhere in LOCAL mode. Answers cite the exact file and line.">
+<meta name="twitter:title" content="MERIDIAN: AI writes the code. Check it without AI.">
+<meta name="twitter:description" content="A checker for AI-written code that uses no AI itself. Structural findings pinned to the exact file and line, computed in your browser. No backend, and your code never reaches us.">
 <style>
   /* ============ LUCID ENGINE TOKENS · v2.0 ============ */
   #app {
@@ -141,8 +140,10 @@
   .hero > .wrap { width: 100%; }
   .hero-grid { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 48px; align-items: center; padding: 64px 0; }
   @media (max-width: 980px) { .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 52px; padding: 48px 0 64px; } }
+  /* the field sits behind the copy on narrow screens: a soft scrim keeps the text legible */
+  @media (max-width: 980px) { .hero-copy { background: radial-gradient(90% 70% at 30% 45%, var(--paper) 10%, transparent 80%); } }
   .hero-copy { pointer-events: none; }
-  .hero-copy a, .hero-copy .btn { pointer-events: auto; }
+  .hero-copy a, .hero-copy .btn, .hero-copy .btn-tut { pointer-events: auto; }
   .eyebrow { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; letter-spacing: .16em; color: var(--ink-3); display: flex; align-items: center; gap: 10px; }
   .eyebrow > span:not(.dot) { min-width: 0; }
   .eyebrow .dot { flex: none; width: 8px; height: 8px; background: var(--accent); box-shadow: var(--flare-bloom); animation: flare 1.6s var(--ease-inout-engine) infinite alternate; }
@@ -153,15 +154,18 @@
   .hero-cta-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
   .hero-fine { margin: 18px 0 0; font-size: 11px; letter-spacing: .12em; color: var(--ink-3); }
 
-  /* the demo, framed as an object: a real capture of the product, labelled as one */
-  .hero-media { margin: 0; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); overflow: hidden; }
+  /* tutorial: a secondary text control in the hero, opening the capture in a dialog */
+  .btn-tut { background: none; border: none; padding: 4px 0; cursor: pointer; color: var(--ink-2); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+  .btn-tut:hover { color: var(--ink); }
+  .tut { width: min(1100px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); color: var(--ink); overflow: auto; }
+  .tut::backdrop { background: rgba(5,6,8,.82); }
+  .tut video { display: block; width: 100%; height: auto; aspect-ratio: 1280 / 800; background: #0A0B0D; }
+  .tut-cap { margin: 0; padding: 10px 12px; border-top: 1px solid var(--line); font-size: 11px; color: var(--ink-3); }
+  .tut-cap a { color: var(--ink-2); }
   .hm-bar { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 10.5px; letter-spacing: .12em; color: var(--ink-3); }
   .hm-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hm-btn { margin-left: auto; flex: none; background: transparent; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink-2); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .12em; height: 24px; padding: 0 8px; cursor: pointer; transition: border-color var(--t-feedback) var(--ease-snap), color var(--t-feedback) var(--ease-snap); }
   .hm-btn:hover { border-color: var(--accent); color: var(--ink); }
-  .hero-media video, .hero-media .gif { display: block; width: 100%; height: auto; aspect-ratio: 1280 / 800; background: #0A0B0D; }
-  .hero-media figcaption { padding: 10px 12px; border-top: 1px solid var(--line); font-size: 11px; color: var(--ink-3); letter-spacing: .02em; }
-  .hero-media figcaption a { color: var(--ink-2); }
 
   /* ============ SECTIONS ============ */
   section.block { padding: 96px 0 0; }
@@ -293,10 +297,10 @@
   <!-- NAV -->
   <nav class="primary" aria-label="Primary">
     <div class="wrap nav-in">
-      <a href="#top" class="wordmark">MERIDIAN <span class="tag">CODE WORKBENCH</span></a>
+      <a href="#top" class="wordmark">MERIDIAN <span class="tag">CHECK THE AI</span></a>
       <div class="anchors">
-        <a href="#teams" class="trace" data-sec="teams">For teams</a>
-        <a href="#features" class="trace" data-sec="features">Features</a>
+        <a href="#teams" class="trace" data-sec="teams">What it checks</a>
+        <a href="#how" class="trace" data-sec="how">How it works</a>
         <a href="#security" class="trace" data-sec="security">Security review</a>
         <a href="#try" class="trace" data-sec="try">Try it</a>
         <a href="#faq" class="trace" data-sec="faq">FAQ</a>
@@ -314,40 +318,88 @@
     <div class="wrap">
       <div class="hero-grid">
         <div class="hero-copy">
-          <div class="eyebrow mono rv" style="--i:0"><span class="dot"></span><span>FREE BETA · NO BACKEND · RUNS IN YOUR BROWSER</span></div>
-          <h1 class="rv" style="--i:1">Ask your codebase.<br>We never get a copy.</h1>
-          <p class="hero-sub rv" style="--i:2">Meridian is a code workbench that runs in your browser and cites the file and line behind each answer. There is no Meridian server. Your files stay in tab memory, questions go <b>straight to the model provider you already use</b>, under your own key, and <b>LOCAL mode sends nothing at all</b>.</p>
+          <div class="eyebrow mono rv" style="--i:0"><span class="dot"></span><span>FREE BETA · NO AI IN THE CHECKS · RUNS IN YOUR BROWSER</span></div>
+          <h1 class="rv" style="--i:1">AI writes your code now.<br>Who checks the AI?</h1>
+          <p class="hero-sub rv" style="--i:2">Meridian checks AI-written code <b>without using AI to do it</b>. Load a project and it maps every file, function and import, then shows what's off: imports that point nowhere, new circular dependencies, code the AI duplicated, files with no tests, and what a change touches. Every finding opens the exact line. <b>Nothing leaves your browser</b> unless you choose to ask a model.</p>
           <div class="hero-cta-row rv" style="--i:3">
             <a href="app.html" class="btn btn-signal btn-hero" id="heroCta">Launch Meridian</a>
             <a href="app.html?demo" class="btn btn-hairline btn-hero">Try the demo in 30 seconds</a>
+            <button type="button" class="btn-tut mono trace" id="tutbtn" aria-haspopup="dialog">▶ Watch the tutorial</button>
           </div>
-          <p class="hero-fine mono rv" style="--i:4">NO SIGNUP · NOTHING TO INSTALL · THE DEMO NEEDS NO KEY</p>
+          <p class="hero-fine mono rv" style="--i:4">DON'T TRUST THE AI. CHECK IT. · NO SIGNUP · NO KEY NEEDED</p>
         </div>
-        <figure class="hero-media rv" style="--i:2">
-          <div class="hm-bar mono"><span>MERIDIAN WORKBENCH · SCREEN CAPTURE · NO KEY ENTERED</span><button class="hm-btn" id="vidbtn" type="button" aria-pressed="false">PAUSE</button></div>
-          <video id="demovid" src="media/meridian-demo.mp4" poster="media/meridian-poster.jpg" width="1280" height="800" autoplay muted loop playsinline preload="auto" aria-label="Screen capture of the Meridian workbench: the LOCAL engine answering questions about a sample project, a two-repo workspace, the share dialog and the settings, with no key and no network">
-            <img class="gif" src="media/meridian-demo.gif" width="1280" height="800" loading="lazy" alt="Screen capture of the Meridian workbench: LOCAL answers, a two-repo workspace, the share dialog and the settings">
-          </video>
-          <figcaption class="mono">// a 73-second screen capture of the real workbench, with captions: LOCAL answers, a two-repo workspace, the share dialog and the settings. No key is entered and nothing leaves the tab. <a href="media/meridian-demo.gif" class="trace">GIF version</a></figcaption>
-        </figure>
       </div>
+      <dialog class="tut" id="tutorial" aria-labelledby="tut-title">
+        <div class="hm-bar mono"><span id="tut-title">TUTORIAL · 73-SECOND SCREEN CAPTURE · NO KEY ENTERED</span><button class="hm-btn" id="tutclose" type="button">CLOSE</button></div>
+        <video id="demovid" poster="media/meridian-poster.jpg" width="1280" height="800" controls playsinline preload="none" aria-label="Screen capture of the Meridian workbench: the LOCAL engine answering questions about a sample project, a two-repo workspace, the share dialog and the settings, with no key and no network">
+          <source data-src="media/meridian-demo.mp4" type="video/mp4">
+        </video>
+        <p class="tut-cap mono">// the real workbench, with captions: LOCAL answers, a two-repo workspace, the share dialog and the settings. Nothing leaves the tab. <a href="media/meridian-demo.mp4" class="trace">Open the MP4</a></p>
+      </dialog>
     </div>
   </header>
 
   <!-- FOR TEAMS -->
   <section class="block" id="teams">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">01</span><h2>Built for teams that have to approve their tools</h2></div>
+      <div class="sec-head rv"><span class="idx mono">01</span><h2>What it checks in AI-written code</h2></div>
+      <p class="sec-lede rv">Coding assistants write fast and check nothing. These are the mistakes they make most, and Meridian finds each one by reading the code's structure, not by asking another model. Every finding links to the line it's about.</p>
       <div class="caps">
         <div class="cap rv" style="--i:0">
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="5" y="11" width="16" height="11"/><path d="M9 11V7a4 4 0 018 0v4"/></svg>
-          <h3>No new vendor holding your code</h3><p>Meridian has no backend, accounts or database. Code goes to the model provider your company already approved, under your key and your agreement, or nowhere in LOCAL mode. Nothing runs on our side. The product is the static source, which you can review or self-host at a pinned commit.</p></div>
+          <span class="k">BROKEN</span>
+          <h3>Imports that point nowhere</h3><p>The AI imported a project file that doesn't exist, or got the path wrong. Meridian lists every relative import that resolves to no loaded file, with the line. (Package imports are treated as external.)</p></div>
         <div class="cap rv" style="--i:1">
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="6" cy="20" r="2.5"/><circle cx="13" cy="8" r="2.5"/><circle cx="21" cy="15" r="2.5"/><path d="M8 18l3.5-8M15 9.5l4 4"/></svg>
-          <h3>Answers a reviewer can check</h3><p>Each answer carries a trace: chips for the files and lines it rests on, and each chip opens its line. The LOCAL engine answers structure questions from the index with no model involved. Export a session as Markdown or HTML for a ticket or a review.</p></div>
+          <span class="k">DUPES</span>
+          <h3>Code it wrote twice</h3><p>Assistants often rebuild a helper that already exists somewhere else. Meridian finds functions and classes with the same name in different files.</p></div>
         <div class="cap rv" style="--i:2">
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="3" y="3" width="9" height="9"/><rect x="14" y="3" width="9" height="9"/><rect x="3" y="14" width="9" height="9"/><path d="M14 18.5h9M18.5 14v9"/></svg>
-          <h3>Works across your repos</h3><p>Load several repositories into one workspace and ask about one or all of them. Evidence reads <span class="mono">repo:path:line</span>. Hand a teammate a read-only snapshot as a link or a file, with no server in between.</p></div>
+          <span class="k">CYCLES</span>
+          <h3>Circular dependencies</h3><p>File A imports B, which imports A. These cause hard-to-trace bugs. Meridian walks the whole import graph and lists every loop.</p></div>
+        <div class="cap rv" style="--i:3">
+          <span class="k">UNTESTED</span>
+          <h3>Files nothing tests</h3><p>Which code files have no matching test: no test file shares their name and no test imports them. Untested files that much of the project depends on also surface in the signals digest.</p></div>
+        <div class="cap rv" style="--i:4">
+          <span class="k">IMPACT</span>
+          <h3>What a change touches</h3><p>Name a file the AI edited and see every file that depends on it, directly or through other files. That's your review list.</p></div>
+        <div class="cap rv" style="--i:5">
+          <span class="k">SIGNALS · DRIFT</span>
+          <h3>The short list, and what moved</h3><p>A ranked digest of the three to five findings most worth your attention, plus which files appeared, disappeared or changed shape since your last session.</p></div>
+      </div>
+      <p class="also mono rv"><b>ALSO</b> · never-imported files (<span class="mono">orphans</span>) · most-depended-on files (<span class="mono">hubs</span>) · environment variables read (<span class="mono">env</span>) · TODO/FIXME tags (<span class="mono">todos</span>) · definitions and references · 10 languages</p>
+      <p class="also mono rv"><b>WHAT IT DOESN'T CHECK (YET)</b> · it doesn't run your code or your tests · it doesn't scan for security vulnerabilities · it doesn't prove logic is correct. It checks structure: what exists, what connects to what, and what's missing. Use it alongside your tests and code review, not instead of them.</p>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="block" id="how">
+    <div class="wrap">
+      <div class="sec-head rv"><span class="idx mono">02</span><h2>How it checks code without AI</h2></div>
+      <p class="sec-lede rv">The checks are ordinary program logic, the same kind of analysis a linter or an IDE's "find references" does. Nothing in them guesses. Here's what happens when you load a project.</p>
+      <div class="sys-grid">
+        <div>
+          <div class="step rv lit" style="--i:0"><div class="k mono">STEP 01 · READ</div><h3>Your browser reads the files</h3>
+            <p>You drop a folder on the page. The browser reads the files into the tab's memory. They aren't uploaded anywhere; there's no server to upload them to. Binary files, huge files and folders like <span class="mono">node_modules</span> are skipped and listed.</p></div>
+          <div class="step rv lit" style="--i:1"><div class="k mono">STEP 02 · MAP</div><h3>It builds a map of the project</h3>
+            <p>Language-specific rules scan each file for definitions (functions, classes, types), imports, exports, tests and entry points across 10 languages. Then it resolves each import to the file it points at. The result is a graph: every file, and every connection between files.</p></div>
+          <div class="step rv lit" style="--i:2"><div class="k mono">STEP 03 · CHECK</div><h3>The checks are questions about that map</h3>
+            <p>"Which imports didn't resolve?" "Is there a loop in the graph?" "Which names are defined twice?" "Which files does nothing test?" These are exact lookups and graph walks, so the <b>same project always gives the same answer</b>, and each answer points at the lines it came from.</p></div>
+          <div class="step rv lit" style="--i:3"><div class="k mono">STEP 04 · OPTIONAL</div><h3>Ask a model only when you need reasoning</h3>
+            <p>For "why" and "how should I" questions, plug in your own Anthropic, OpenAI or local model key. Meridian attaches its verified findings so the model starts from facts, and <span class="mono">PREVIEW SEND</span> shows the exact payload first. Answers that need a model are labelled <b>REQUIRES MODEL REASONING</b>; answers that don't are labelled <b>KNOWN LOCALLY</b>.</p></div>
+        </div>
+        <div>
+          <div class="step rv" style="--i:4"><div class="k mono">WHY NOT JUST ASK AN AI?</div><h3>Checking AI with AI moves the problem</h3>
+            <ul>
+              <li><b>It's repeatable.</b> Run the same check twice and get the same result. A model can answer differently each time.</li>
+              <li><b>It can't make things up.</b> A finding exists only if the line exists. Click it and you're there.</li>
+              <li><b>It knows its limits.</b> If a question needs judgement, it says so instead of guessing.</li>
+              <li><b>It's free and offline.</b> No key, no per-question cost, no network.</li>
+            </ul></div>
+          <div class="step rv" style="--i:5"><div class="k mono">THE HONEST LIMITS</div><h3>Pattern rules, not a compiler</h3>
+            <ul>
+              <li>The map comes from fast pattern rules, not a full compiler, so unusual code can be missed. Depth varies by language; JavaScript and TypeScript are strongest.</li>
+              <li>It sees imports written in the code. Files wired up at runtime (plugins, dependency injection, script tags) can look unused when they aren't, and the answers say so.</li>
+              <li>Tuned for projects up to about 8,000 files.</li>
+            </ul></div>
+        </div>
       </div>
     </div>
   </section>
@@ -355,7 +407,7 @@
   <!-- TEAM CAPABILITIES -->
   <section class="block" id="features">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">02</span><h2>Team capabilities</h2></div>
+      <div class="sec-head rv"><span class="idx mono">03</span><h2>Built for teams</h2></div>
       <p class="sec-lede rv">Screenshots of the real workbench. The workspace repos are two small samples.</p>
       <div class="caps">
         <div class="cap rv" style="--i:0">
@@ -371,18 +423,19 @@
           <span class="k">OPT-IN USAGE LOG</span>
           <h3>Usage numbers you own</h3><p>Off by default. Turned on, it keeps question kinds, provider, timings and token counts in the browser, never code, paths or keys. Question text needs a second switch. Export JSON or CSV, or send events to an endpoint you run. There is no collector of ours.</p></div>
       </div>
-      <p class="also mono rv"><b>ALSO IN THE WORKBENCH</b> · about two dozen deterministic LOCAL queries (definitions, references, import cycles, orphans, untested files, env reads) · ranked signals · drift between sessions · <span class="mono">PREVIEW SEND</span> shows the exact payload before a question goes · symbols and imports for 10 languages</p>
+      <p class="also mono rv"><b>ALSO IN THE WORKBENCH</b> · <span class="mono">PREVIEW SEND</span> shows the exact payload before a question goes to a model · export a session as Markdown or HTML for a ticket or a review · provider quick-switch between Anthropic, OpenAI, a local model and no AI</p>
     </div>
   </section>
 
   <!-- WHO + WHY -->
   <section class="block" id="why">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">03</span><h2>Who it's for, and why there's no backend</h2></div>
+      <div class="sec-head rv"><span class="idx mono">04</span><h2>Who it's for, and why there's no backend</h2></div>
       <div class="sys-grid">
         <div>
-          <div class="step rv lit" style="--i:0"><div class="k mono">WHO IT'S FOR</div><h3>Engineering teams at mid-size and large companies</h3>
+          <div class="step rv lit" style="--i:0"><div class="k mono">WHO IT'S FOR</div><h3>Teams shipping code that AI helped write</h3>
             <ul>
+              <li><b>Developers and reviewers</b> checking what an assistant changed before it merges.</li>
               <li><b>Engineering leads</b> getting people productive in large or unfamiliar codebases.</li>
               <li><b>Security and platform reviewers</b> who have to sign off on anything that touches source.</li>
               <li><b>Teams with data-residency or vendor-risk rules</b> that rule out hosted code assistants.</li>
@@ -425,7 +478,7 @@
   <!-- SECURITY REVIEW -->
   <section class="block" id="security">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">04</span><h2>For security and vendor-risk reviews</h2></div>
+      <div class="sec-head rv"><span class="idx mono">05</span><h2>For security and vendor-risk reviews</h2></div>
       <p class="sec-lede rv">The questions reviewers ask, with direct answers. You can check each point in the source and in your browser's network inspector.</p>
       <dl class="spec rv">
         <div class="spec-row"><dt>WHERE CODE LIVES</dt><dd>In the memory of the browser tab that loaded it, and nowhere else. Close the tab and it is gone. Saved projects and workspaces keep <b>metadata only</b> (names, file counts, selection, settings) in that browser's IndexedDB.</dd></div>
@@ -445,11 +498,11 @@
   <!-- TRY IT -->
   <section class="block" id="try">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">05</span><h2>Try it in 30 seconds</h2></div>
+      <div class="sec-head rv"><span class="idx mono">06</span><h2>Try it in 30 seconds</h2></div>
       <div class="try-steps">
         <div class="step rv lit" style="--i:0"><div class="k mono">STEP 01</div><h3>Open the demo</h3><p>Follow the demo link. A first visit asks you to accept the terms once, and the demo button is already focused, so that takes one click.</p></div>
         <div class="step rv lit" style="--i:1"><div class="k mono">STEP 02</div><h3>Watch it answer</h3><p>A small sample project loads and the LOCAL engine answers its first question. No key, no AI, nothing leaves the tab.</p></div>
-        <div class="step rv lit" style="--i:2"><div class="k mono">STEP 03</div><h3>Ask your own question</h3><p>Try <span class="mono">what imports store.js?</span> and click an evidence chip to open the exact line. Then load a real repo.</p></div>
+        <div class="step rv lit" style="--i:2"><div class="k mono">STEP 03</div><h3>Run a check</h3><p>Try <span class="mono">signals</span>, <span class="mono">broken</span> or <span class="mono">what breaks if I change store.js</span>, and click an evidence chip to open the exact line. Then load a real repo.</p></div>
       </div>
       <div class="hero-cta-row rv">
         <a href="app.html?demo" class="btn btn-signal btn-hero">Try the demo in 30 seconds</a>
@@ -461,10 +514,18 @@
   <!-- FAQ -->
   <section class="block" id="faq">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">06</span><h2>Questions</h2></div>
+      <div class="sec-head rv"><span class="idx mono">07</span><h2>Questions</h2></div>
       <div class="faq rv" id="faqbox">
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.01</span>Is my code safe?<span class="x">+</span></button>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.01</span>Does Meridian use AI?<span class="x">+</span></button>
+          <div class="faq-a"><p><b>The checks don't.</b> Broken imports, cycles, duplicates, untested files, impact and signals are computed by ordinary program logic from a map of your code, with no model and no network. AI is an optional extra for questions that need judgement ("why is this built this way?"), and only with a key you supply. Each answer is labelled <b>KNOWN LOCALLY</b> or <b>REQUIRES MODEL REASONING</b> so you always know which one you're reading.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.02</span>Does it replace tests or code review?<span class="x">+</span></button>
+          <div class="faq-a"><p>No. Meridian checks structure: what exists, what connects to what, and what's missing. It doesn't run your code, run your tests, scan for security vulnerabilities or prove the logic is right. Think of it as a fast first pass that tells a reviewer where to look.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.03</span>Is my code safe?<span class="x">+</span></button>
           <div class="faq-a">
             <p>Your code never reaches us: Meridian has no backend to receive it. The tab holds your files in memory until you close it. Code leaves the browser only in these cases, and you start each one:</p>
             <ul>
@@ -476,31 +537,31 @@
           </div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.02</span>What do we need to run it?<span class="x">+</span></button>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.04</span>What do we need to run it?<span class="x">+</span></button>
           <div class="faq-a"><p>A modern browser. For model answers, an API key for Anthropic, OpenAI or any OpenAI-compatible endpoint; keys stay in that browser's localStorage and go only to that provider. Or no key at all: the <b>LOCAL</b> engine answers questions about definitions, references, imports and structure by deterministic search, with no AI and no network. Nothing to install, no account to create.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.03</span>Can we use local or self-hosted models?<span class="x">+</span></button>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.05</span>Can we use local or self-hosted models?<span class="x">+</span></button>
           <div class="faq-a"><p>Yes. Point the custom provider at any OpenAI-compatible server. On the hosted page that means a server on your own machine, such as LM Studio (<span class="mono">http://localhost:1234/v1</span>) or Ollama, with CORS enabled for this site. LM Studio ships with CORS off, and Ollama needs <span class="mono">OLLAMA_ORIGINS</span> set. For a model behind your company's gateway, or a provider endpoint in a specific region, host your own copy of the static files and add that address to the security policy. The <a href="https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md" class="trace">user guide</a> covers both setups.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.04</span>Who can read a share link?<span class="x">+</span></button>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.06</span>Who can read a share link?<span class="x">+</span></button>
           <div class="faq-a"><p>Anyone who has it. The link carries the files you ticked, compressed, in the part after <span class="mono">#</span>. Browsers don't send that part to any server, so GitHub Pages and we never see it, but the chat app or inbox you paste it into stores it like any message. There is no server, so a link can't be revoked or expired. Treat it like sending the files. A link holds up to 32,000 characters, so a bigger project goes in a <span class="mono">.meridian</span> file instead. A shared project opens read-only, in the recipient's tab, and nothing is saved.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.05</span>Does Meridian track usage?<span class="x">+</span></button>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.07</span>Does Meridian track usage?<span class="x">+</span></button>
           <div class="faq-a"><p>Not for us. This site runs no analytics and sets no cookies. The workbench has an optional usage log for you: off by default, stored in your browser, exportable as JSON or CSV. It records question kinds, provider, timings and token counts, never code, file paths or keys, and stores question text only if you turn on a second switch. For team-wide numbers, it can send the same events to an endpoint you run (on the hosted page, one on localhost).</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.06</span>What does it cost?<span class="x">+</span></button>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.08</span>What does it cost?<span class="x">+</span></button>
           <div class="faq-a"><p>Meridian is free during the beta. Model usage is billed by your provider at their rates; the workbench shows a running cost estimate and supports a session spend limit. Use a key with a spend cap.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.07</span>Can I trust the answers?<span class="x">+</span></button>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.09</span>Can I trust the answers?<span class="x">+</span></button>
           <div class="faq-a"><p>Check them; that's what the trace is for. Evidence chips open the cited file at the cited lines, so verifying takes seconds. LOCAL answers come straight from the index and say when a question needs a model instead. Model output can still be wrong, and if a trace can't be parsed, the answer says so.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.08</span>How big a project can it handle?<span class="x">+</span></button>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.10</span>How big a project can it handle?<span class="x">+</span></button>
           <div class="faq-a"><p>Up to 8,000 files by default, 512 KB per file and about 300 MB of text in the tab, counted across every repo in a workspace. Change the file count under FILE CAP in settings. Anything skipped is counted and listed under <span class="mono">REVIEW SKIPPED</span>, and you can pull single files back in. For large projects, SMART mode sends a project map plus the most relevant files packed into a token budget, in place of everything. Token figures are estimates that run high on purpose, and your provider bills the actual counts.</p></div>
         </div>
       </div>
@@ -511,8 +572,8 @@
   <section class="access" id="access">
     <div class="wrap access-grid">
       <div class="rv" style="--i:0">
-        <h2>Point it at a real repo this afternoon.</h2>
-        <p>Free during the beta. No signup, no account, nothing to install, and the full source is on GitHub, so your reviewers can read it before you run it.</p>
+        <h2>Don't trust the AI. Check it.</h2>
+        <p>Point it at a repo your assistant has been working in. Free during the beta. No signup, no account, nothing to install, and the full source is on GitHub, so your reviewers can read it before you run it.</p>
       </div>
       <div class="rv" style="--i:1">
         <div class="hero-cta-row">
@@ -529,7 +590,7 @@
       <div class="foot-cols">
         <div>
           <div class="brand">MERIDIAN</div>
-          <div class="brand-sub">A browser-only code workbench. No servers, no build step, no third-party scripts.</div>
+          <div class="brand-sub">The non-AI checker for AI-written code. No servers, no build step, no third-party scripts.</div>
         </div>
         <div>
           <h4>PAGE</h4>
@@ -599,14 +660,14 @@
     canvas.width = W * dpr; canvas.height = H * dpr;
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    /* the field orbits the demo, so the ring frames the real product and never
-       sits behind the copy */
-    var media = document.querySelector('.hero-media');
-    if (media) {
-      var hr = hero.getBoundingClientRect(), mr = media.getBoundingClientRect();
-      CX = mr.left - hr.left + mr.width / 2;
-      CY = mr.top - hr.top + mr.height / 2;
-      R = W > 980 ? Math.min(mr.width * 0.62, H * 0.46) : mr.width * 0.5;
+    /* the field is the hero's centrepiece: it owns the right column on wide
+       screens and never sits behind the copy there */
+    if (W > 980) {
+      var col = document.querySelector('.hero-grid'), cr = col.getBoundingClientRect(), hr = hero.getBoundingClientRect();
+      var right = cr.left - hr.left + cr.width * 0.535 + 48;
+      CX = right + (cr.right - hr.left - right) / 2;
+      CY = H * 0.5;
+      R = Math.min((cr.right - hr.left - right) * 0.5, H * 0.38);
     } else {
       CX = W * 0.5; CY = H * 0.5;
       R = Math.min(W, H) * 0.42;
@@ -704,23 +765,23 @@
   document.querySelectorAll('.hero .rv').forEach(function (el) { el.classList.add('in'); });
   if (!reduced && !formed) { resolving = true; resolveStart = performance.now(); }
 
-  /* ============ DEMO VIDEO ============
-     autoplays muted on a loop; reduced-motion visitors get the poster and start
-     it themselves. One visible control either way. */
-  var vid = $('demovid'), vidbtn = $('vidbtn');
-  function syncVid() {
-    var playing = !vid.paused;
-    vidbtn.textContent = playing ? 'PAUSE' : 'PLAY';
-    vidbtn.setAttribute('aria-pressed', playing ? 'false' : 'true');
-  }
-  if (vid && vidbtn) {
-    if (reduced) { vid.removeAttribute('autoplay'); vid.pause(); }
-    vid.addEventListener('play', syncVid);
-    vid.addEventListener('pause', syncVid);
-    vidbtn.addEventListener('click', function () {
-      if (vid.paused) { var pr = vid.play(); if (pr && pr.catch) pr.catch(function () {}); } else vid.pause();
+  /* ============ TUTORIAL ============
+     the capture loads only when asked for: the dialog sets the source on first
+     open, and closing it (button, Esc or backdrop) pauses playback */
+  var tut = $('tutorial'), vid = $('demovid');
+  if (tut && tut.showModal) {
+    $('tutbtn').addEventListener('click', function () {
+      var src = vid.querySelector('source[data-src]');
+      if (src) { src.src = src.getAttribute('data-src'); src.removeAttribute('data-src'); vid.load(); }
+      tut.showModal();
+      if (!reduced) { var pr = vid.play(); if (pr && pr.catch) pr.catch(function () {}); }
     });
-    syncVid();
+    $('tutclose').addEventListener('click', function () { tut.close(); });
+    tut.addEventListener('click', function (e) { if (e.target === tut) tut.close(); });
+    tut.addEventListener('close', function () { vid.pause(); });
+  } else if (tut) {
+    /* no <dialog> support: the button opens the MP4 directly */
+    $('tutbtn').addEventListener('click', function () { location.href = 'media/meridian-demo.mp4'; });
   }
 
   /* ============ MATERIALIZE + section machinery ============ */
@@ -742,8 +803,9 @@
   /* nav + wayfinder tracking */
   var SECTIONS = [
     { id: 'top', label: 'TOP' },
-    { id: 'teams', label: 'FOR TEAMS' },
-    { id: 'features', label: 'FEATURES' },
+    { id: 'teams', label: 'WHAT IT CHECKS' },
+    { id: 'how', label: 'HOW IT WORKS' },
+    { id: 'features', label: 'FOR TEAMS' },
     { id: 'why', label: 'WHY NO BACKEND' },
     { id: 'security', label: 'SECURITY REVIEW' },
     { id: 'try', label: 'TRY IT' },
