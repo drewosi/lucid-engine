@@ -1,12 +1,16 @@
 import { invalidateAll, invalidateSelection, sortedPaths, st } from './state.js';
-import { AUTO_SMART_FRAC, buildProjectMap, estTokens, getBudget, packSmartContext, staticScore } from './smart-context.js';
+import { AUTO_SMART_FRAC, estTokens, getBudget, staticScore } from './smart-context.js';
 import { detectLang } from './indexer.js';
 import { $, fmtTok, lsDel, lsGet, lsSet, rememberFocus, returnFocus, setStatus, toast, trap } from './helpers.js';
 import { applyPendingProject, renderProjects, walkHandle } from './memory.js';
 import { renderOverview } from './local.js';
 import { recordSession as recordSessionDrift } from './drift.js';
 import { LS, MODELS } from './config.js';
-import { INSTRUCTIONS, buildInvestigationBlock, buildPinnedBlock } from './prompt.js';
+import { INSTRUCTIONS, buildContextBlocks, buildInvestigationBlock, buildPinnedBlock } from './prompt.js';
+import { openBundleFile, syncSharedUI } from './share.js';
+import { dropRepoFiles, hasRepo, isMulti, registerRepo, remapRoot, repoList, repoName, resetWorkspace, scopeFilter, scopeRepo, uniqueLabel, withScope } from './repos.js';
+import { afterWorkspaceIngest, pendingLabelFor, renderWorkspace } from './workspace.js';
+import { track } from './analytics.js';
 /* ============ CONTEXT ENGINE ============ */
 var SKIP_LIST_MAX = 500;
 function recordSkip(path, reason, size, ref) {
@@ -33,7 +37,17 @@ function skipSummary(c) {
 var IGNORE_DIRS = ['.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', 'target', 'vendor', '__pycache__', '.venv', 'venv', 'coverage', '.cache', '.idea', '.vscode',
                    'obj', '.gradle', 'pods', '.tox', '.mypy_cache', '.pytest_cache', '.terraform', '_build', '.dart_tool'];
 var BIN_EXT = /\.(png|jpe?g|gif|webp|avif|ico|icns|bmp|tiff?|svgz|woff2?|ttf|otf|eot|mp[34]|m4[av]|mov|avi|mkv|webm|ogg|wav|flac|zip|gz|bz2|xz|7z|rar|tar|jar|war|class|pyc|pyo|o|a|so|dylib|dll|exe|bin|dat|db|sqlite3?|pdf|doc[x]?|xls[x]?|ppt[x]?|ds_store|lockb|wasm)$/i;
-var MAX_FILE = 512 * 1024, MAX_FILES = 8000;
+var MAX_FILE = 512 * 1024;
+/* the file-count cap is a user setting (settings → FILE CAP, LS.maxfiles);
+   anything that is not a positive whole number falls back to the default */
+var DEFAULT_MAX_FILES = 8000, MAX_FILES = DEFAULT_MAX_FILES;
+function validMaxFiles(v) {
+  var s = v == null ? '' : String(v).trim();
+  return /^\d+$/.test(s) && Number(s) > 0 && Number.isSafeInteger(Number(s));
+}
+function parseMaxFiles(v) { return validMaxFiles(v) ? Number(String(v).trim()) : DEFAULT_MAX_FILES; }
+/* (re)read the saved setting into the live cap; returns it */
+function loadMaxFiles() { MAX_FILES = parseMaxFiles(lsGet(LS.maxfiles)); return MAX_FILES; }
 /* aggregate cap — 8000 × 512KB is ~4GB, a tab-killer long before the file-count
    cap fires. Measured in text length (≈bytes for source), tracked in st.totalBytes. */
 var MAX_TOTAL = 300 * 1024 * 1024;
@@ -191,8 +205,19 @@ function updateSkipBadge() {
   var sr = $('skiprev');
   if (sr) sr.textContent = n ? '[ REVIEW SKIPPED · ' + n + ' ]' : '[ REVIEW SKIPPED ]';
 }
+/* the skip note, review control and rail badge — from the cumulative counters */
+function refreshSkipUI() {
+  var s = skipSummary(st.skipped);
+  var totSkipped = st.skipped.binary + st.skipped.big + st.skipped.dirs + st.skipped.user + st.skipped.over + st.skipped.readerr + st.skipped.memcap;
+  var note = $('skipnote');
+  note.hidden = !s.length;
+  if (s.length) note.textContent = '// ' + totSkipped + ' skipped: ' + s.join(' · ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files, ~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB total' + (isMulti() ? ' across the whole workspace.' : '.');
+  $('skiprevrow').hidden = !st.skippedFiles.length;
+  updateSkipBadge();
+}
 function afterIngest() {
   applyPendingProject();
+  afterWorkspaceIngest(); /* a saved workspace's per-repo selection, as each folder arrives */
   invalidateAll();
   renderTree(); renderBudget();
   renderProjects();
@@ -203,14 +228,8 @@ function afterIngest() {
   batchBase = null;
   var batchSkipped = (st.skipped.binary - b0.binary) + (st.skipped.big - b0.big) + (st.skipped.dirs - b0.dirs)
     + (st.skipped.user - b0.user) + (st.skipped.over - b0.over) + (st.skipped.readerr - b0.readerr) + (st.skipped.memcap - (b0.memcap || 0));
-  var s = skipSummary(st.skipped);
-  var totSkipped = st.skipped.binary + st.skipped.big + st.skipped.dirs + st.skipped.user + st.skipped.over + st.skipped.readerr + st.skipped.memcap;
-  var note = $('skipnote');
-  note.hidden = !s.length;
-  if (s.length) note.textContent = '// ' + totSkipped + ' skipped: ' + s.join(' · ') + '. caps: ' + (MAX_FILE / 1024) + 'KB/file, ' + MAX_FILES + ' files, ~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB total.';
-  $('skiprevrow').hidden = !st.skippedFiles.length;
-  updateSkipBadge();
-  var base = st.files.size + ' file' + (st.files.size === 1 ? '' : 's') + ' loaded into memory';
+  refreshSkipUI();
+  var base = st.files.size + ' file' + (st.files.size === 1 ? '' : 's') + ' loaded into memory' + (isMulti() ? ' across ' + repoList().length + ' repos' : '');
   if (batchSkipped && st.skippedFiles.length) toast(base + ' · ' + batchSkipped + ' skipped in this load.', { label: '[ REVIEW ]', fn: openSkipReview });
   else toast(base + (batchSkipped ? ' · ' + batchSkipped + ' skipped in this load.' : '.'));
   /* the index build inside renderOverview() is synchronous and can block for a
@@ -222,11 +241,14 @@ function afterIngest() {
     renderOverview();
     setStatus('IDLE — ' + st.files.size + ' files in memory');
     /* graceful scaling: warn as the in-memory file cap approaches or is hit */
-    if (st.skipped.memcap) toast('Memory cap reached (~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB of text) — ' + st.skipped.memcap + ' file' + (st.skipped.memcap === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
-    else if (st.skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.');
-    else if (st.files.size >= Math.floor(MAX_FILES * 0.9)) toast('Approaching the ' + MAX_FILES + '-file cap (' + st.files.size + ' loaded) — large repos may hit it; ignore patterns help.');
+    var wsCap = isMulti() ? ' The cap covers every repo in the workspace together; unload a repo to make room.' : '';
+    if (st.skipped.memcap) toast('Memory cap reached (~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB of text) — ' + st.skipped.memcap + ' file' + (st.skipped.memcap === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.' + wsCap);
+    else if (st.skipped.over) toast('File cap reached (' + MAX_FILES + ') — ' + st.skipped.over + ' file' + (st.skipped.over === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.' + wsCap);
+    else if (st.files.size >= Math.floor(MAX_FILES * 0.9)) toast('Approaching the ' + MAX_FILES + '-file cap (' + st.files.size + ' loaded) — large repos may hit it; ignore patterns help.' + wsCap);
     maybeAutoSmart();
-    recordSessionDrift(); /* last: renderOverview above has already rebuilt the index */
+    /* last: renderOverview above has already rebuilt the index. A shared
+       project is someone else's snapshot — nothing about it is persisted. */
+    if (!st.shared) recordSessionDrift();
   };
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { setTimeout(finish, 0); });
   else setTimeout(finish, 0);
@@ -235,29 +257,121 @@ function afterIngest() {
 var dz = $('dropzone');
 /* Prefer the File System Access API when available — its directory handle can be
    persisted to IndexedDB, enabling one-click project reload later. */
-function pickHandler(input) {
-  st.lastDirHandle = null;
+/* ---- folders join the workspace as repos ----
+   Every folder load lands as a repo whose label is the first segment of its
+   paths. The mode decides how it joins: 'replace' clears the workspace first,
+   'add' takes a fresh unique label (a second "app" becomes "app-2"), and a
+   forced label (reload, or a saved workspace's repo) refills that repo in place. */
+function claimLabel(name, forced, handle) {
+  var label = forced || uniqueLabel(name);
+  if (forced && hasRepo(forced)) {
+    var wasActive = st.ws.active === forced;
+    dropRepoFiles(forced);
+    registerRepo(forced, handle);
+    if (wasActive) st.ws.active = forced;
+  } else {
+    var joining = st.repos.length >= 1; /* beside a loaded repo, not a first load or a replace */
+    registerRepo(label, handle);
+    if (joining) track({ type: 'repo_added', repos: st.repos.length }); /* opt-in usage log: a count, never the name */
+  }
+  return label;
+}
+/* how a picked/dropped folder joins: straight in when nothing is loaded (or a
+   saved workspace is waiting for exactly this folder), otherwise ask. Dismissing
+   the toast is a no-op. */
+function askFolderMode(names, run) {
+  var pend = names.length === 1 ? pendingLabelFor(names[0]) : null;
+  if (pend) { run('add', pend); return; }
+  if (st.shared) { run('replace'); return; } /* your own files replace a shared snapshot, never mix into it */
+  if (!st.files.size) { run('add'); return; }
+  var dup = names.length === 1 && hasRepo(names[0]) ? names[0] : null;
+  if (dup) {
+    toast('“' + dup + '” is already loaded. Reload it from this folder, or add it as another repo?', [
+      { label: '[ RELOAD ]', fn: function () { run('reload', dup); } },
+      { label: '[ ADD REPO ]', fn: function () { run('add'); } }
+    ]);
+  } else {
+    toast((names.length > 1 ? names.length + ' folders' : 'Folder') + ' picked with a project loaded. Replace it, or add ' + (names.length > 1 ? 'them as repos' : 'it as another repo') + '?', [
+      { label: '[ REPLACE ]', fn: function () { run('replace'); } },
+      { label: '[ ADD REPO ]', fn: function () { run('add'); } }
+    ]);
+  }
+}
+/* a directory handle (File System Access API) → a repo */
+function loadHandle(h, mode, forced) {
+  if (mode === 'replace' || st.shared) clearContext();
+  var label = claimLabel(h.name, mode === 'reload' ? h.name : forced, h);
+  st.lastDirHandle = h;
   beginBatch();
+  return walkHandle(h, label + '/').then(afterIngest);
+}
+/* the folder picker; opts.mode 'add' skips the replace-or-add question and
+   opts.label pins the repo label (a saved workspace waiting for its folders).
+   The webkitdirectory fallback carries opts across its change event. */
+var nextPick = null;
+function pickFolder(opts) {
+  opts = opts || {};
+  if (window.showDirectoryPicker) {
+    window.showDirectoryPicker({ mode: 'read' }).then(function (h) {
+      if (opts.mode === 'add') return loadHandle(h, 'add', opts.label || null);
+      askFolderMode([h.name], function (mode, forced) { return loadHandle(h, mode, forced); });
+    }).catch(function (e) {
+      if (e && e.name === 'AbortError') return;
+      toast('Folder pick failed — using the fallback picker.');
+      nextPick = opts;
+      $('dirpick').click();
+    });
+  } else { nextPick = opts; $('dirpick').click(); }
+}
+function pickHandler(input) {
   var list = Array.prototype.slice.call(input.files || []);
+  var opts = nextPick || {};
+  nextPick = null;
+  input.value = '';
+  if (list.length === 1 && /\.meridian$/i.test(list[0].name)) { openBundleFile(list[0]); return; }
   /* the picker hands us a flat FileList with no directory objects to skip, so
      ignored dirs would otherwise be counted once per file (drop/FSA count them
      once per directory). Pre-filter here and tally each distinct ignored dir
      once, so the skip count means the same thing regardless of load path. */
-  var seenIgnored = Object.create(null), items = [];
-  list.forEach(function (f) {
-    var path = f.webkitRelativePath || f.name;
-    var pref = ignoredDirPrefix(path);
-    if (pref) { if (!seenIgnored[pref]) { seenIgnored[pref] = 1; st.skipped.dirs++; } return; }
-    items.push({ path: path, getFile: function () { return Promise.resolve(f); } });
-  });
-  runIngestPool(items).then(afterIngest);
-  input.value = '';
+  function collect(label) {
+    var seenIgnored = Object.create(null), items = [];
+    list.forEach(function (f) {
+      var path = f.webkitRelativePath || f.name;
+      var pref = ignoredDirPrefix(path);
+      if (pref) { if (!seenIgnored[pref]) { seenIgnored[pref] = 1; st.skipped.dirs++; } return; }
+      if (label) path = remapRoot(path, label);
+      items.push({ path: path, getFile: function () { return Promise.resolve(f); } });
+    });
+    return items;
+  }
+  var rel = list.length ? (list[0].webkitRelativePath || '') : '';
+  if (rel.indexOf('/') === -1) {
+    /* loose files are additive and belong to no repo */
+    if (st.shared) clearContext();
+    st.lastDirHandle = null;
+    beginBatch();
+    runIngestPool(collect(null)).then(afterIngest);
+    return;
+  }
+  var root = rel.slice(0, rel.indexOf('/'));
+  function run(mode, forced) {
+    if (mode === 'replace' || st.shared) clearContext();
+    var label = claimLabel(root, mode === 'reload' ? root : forced, null);
+    st.lastDirHandle = null;
+    beginBatch();
+    var items = collect(label);
+    if (!items.length) { st.repos = st.repos.filter(function (r) { return r.label !== label; }); st.wsCache = null; } /* an ignored dir (build/, .git/…) — no repo */
+    runIngestPool(items).then(afterIngest);
+  }
+  if (opts.mode === 'add') run('add', opts.label || null);
+  else askFolderMode([root], run);
 }
 /* full unload — shared by the [ CLEAR ] control and the REPLACE ingest path */
 function clearContext() {
   st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
   st.totalBytes = 0;
   st.skippedFiles.length = 0;
+  resetWorkspace();
   collapsedDirs = {}; treeQuery = '';
   var ts = $('treesearch'); if (ts) ts.value = '';
   invalidateAll(); renderTree(); renderBudget();
@@ -265,6 +379,7 @@ function clearContext() {
   $('skipnote').hidden = true;
   $('skiprevrow').hidden = true;
   updateSkipBadge();
+  st.shared = null; syncSharedUI();
 }
 
 /* ---- project tree ----
@@ -282,6 +397,7 @@ function syncDirCheck(check, mine) {
 function renderTree() {
   var tree = $('tree');
   tree.innerHTML = '';
+  renderWorkspace(); /* the repo list above the tree follows every load / unload */
   var allPaths = sortedPaths();
   $('filecount').textContent = allPaths.length ? allPaths.length + ' FILES' : '';
   $('ctxactions').hidden = !allPaths.length;
@@ -375,9 +491,10 @@ function renderTree() {
   tree.appendChild(frag);
 }
 
+/* checked files in the question scope (all repos, or the active repo only) */
 function selectedTokens() {
-  var t = 0, n = 0;
-  st.files.forEach(function (f) { if (f.checked) { t += f.tokens; n++; } });
+  var t = 0, n = 0, inScope = scopeFilter();
+  st.files.forEach(function (f, p) { if (f.checked && inScope(p)) { t += f.tokens; n++; } });
   return { tokens: t, count: n };
 }
 function renderBudget() {
@@ -389,9 +506,10 @@ function renderBudget() {
   var bar = $('budgetbar');
   bar.querySelector('i').style.width = pct + '%';
   bar.classList.toggle('full', !smart && pct > 90);
-  $('budgettxt').textContent = smart
+  var scoped = scopeRepo();
+  $('budgettxt').textContent = (smart
     ? '≈ ' + fmtTok(sel.tokens) + ' loaded · sends ≤ ' + fmtTok(getBudget())
-    : '≈ ' + fmtTok(sel.tokens) + ' tokens · ' + sel.count + ' selected';
+    : '≈ ' + fmtTok(sel.tokens) + ' tokens · ' + sel.count + ' selected') + (scoped !== null ? ' · ' + repoName(scoped).slice(0, 16) + ' only' : '');
   $('budgetmax').textContent = MODELS[st.model].local ? 'LOCAL — NOTHING SENT' : MODELS[st.model].label + ' · ' + fmtTok(cap);
   $('ctxreadout').innerHTML = smart
     ? 'CTX <b>SMART</b> · <b>' + sel.count + '</b> files · sends ≤ <b>' + fmtTok(getBudget()) + '</b>'
@@ -400,7 +518,7 @@ function renderBudget() {
 
 /* ---- skipped-file review + include-back ---- */
 var skipveil = $('skipveil'), untrapSkip = null;
-var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE', 'read-error': 'READ ERROR — COULD NOT LOAD', 'over-cap': 'OVER THE ' + MAX_FILES + '-FILE CAP', 'mem-cap': 'OVER THE MEMORY CAP' };
+var SKIP_LABEL = { oversized: 'OVERSIZED', 'ignore-pattern': 'IGNORE PATTERN', 'binary-ext': 'BINARY EXTENSION', 'binary-content': 'BINARY CONTENT — CANNOT INCLUDE', 'read-error': 'READ ERROR — COULD NOT LOAD', 'over-cap': 'OVER THE FILE CAP', 'mem-cap': 'OVER THE MEMORY CAP' };
 function openSkipReview() {
   var list = $('skiplist');
   list.innerHTML = '';
@@ -415,7 +533,7 @@ function openSkipReview() {
     if (!rows || !rows.length) return;
     var hd = document.createElement('div');
     hd.className = 'skip-grp';
-    hd.textContent = SKIP_LABEL[g] + ' — ' + rows.length + (g === 'oversized' ? ' (>' + (MAX_FILE / 1024) + 'KB)' : '');
+    hd.textContent = (g === 'over-cap' ? 'OVER THE ' + MAX_FILES + '-FILE CAP' : SKIP_LABEL[g]) + ' — ' + rows.length + (g === 'oversized' ? ' (>' + (MAX_FILE / 1024) + 'KB)' : '');
     list.appendChild(hd);
     rows.slice(0, 200).forEach(function (s) {
       var row = document.createElement('div');
@@ -471,10 +589,12 @@ function closeSkipReview() {
 
 /* ---- context send preview ----
    Shows exactly what the next question will send, computed by the SAME
-   functions the request uses (buildProjectMap / packSmartContext /
+   functions the request uses (buildContextBlocks /
    assembleContext) — the preview cannot drift from reality. */
 var prevveil = $('prevveil'), untrapPrev = null;
-function openPreview() {
+/* the preview runs inside the question scope, exactly like the real request */
+function openPreview() { withScope(buildPreview); }
+function buildPreview() {
   if (!st.files.size) { toast('Load a project first.'); return; }
   var q = $('prompt').value.trim();
   var body = $('prevbody');
@@ -515,14 +635,22 @@ function openPreview() {
   }
   var smart = st.ctxMode === 'smart';
   if (st.curProvider === 'local') note('// provider is LOCAL — nothing is sent anywhere. this preview shows what a model WOULD receive if you connected one.');
+  if (isMulti()) {
+    var sr = scopeRepo();
+    note(sr !== null ? '// scope: ' + repoName(sr) + ' only. the other repos stay loaded but are not sent. switch [ ASK ] under WORKSPACE to include them.'
+                     : '// scope: all ' + repoList().length + ' repos. every file is sent under its repo label (repo/path), with a workspace note naming the repos.');
+  }
+  /* SMART: the request's own plan (buildContextBlocks), so the totals here are the send's */
+  var cb = smart ? buildContextBlocks(q) : null;
   if (smart) {
-    var map = buildProjectMap();
-    var packed = packSmartContext(q, getBudget());
-    var mapTok = estTokens(map);
-    $('prevstat').textContent = 'SMART · ' + packed.count + '/' + packed.total + ' FILES · ≈' + fmtTok(packed.tokens + mapTok) + ' TOK';
+    var plan = cb.plan, map = plan.map, packed = plan.packed, mapTok = plan.mapTok;
+    $('prevstat').textContent = 'SMART · ' + packed.count + '/' + packed.total + ' FILES · ≈' + fmtTok(plan.total) + ' TOK';
     note(q ? '// packed for the question currently in the composer: “' + q.slice(0, 80) + (q.length > 80 ? '…' : '') + '”'
            : '// no question typed — packed by importance and recency alone. type a question first for a query-aware preview.');
-    note('// budget ≈' + fmtTok(getBudget()) + ' tokens · instructions block adds ≈' + fmtTok(estTokens(INSTRUCTIONS)) + ' more.');
+    note('// budget ≈' + fmtTok(plan.budget) + ' tokens for the whole send · this send ≈' + fmtTok(plan.total) + ': map ≈' + fmtTok(mapTok)
+      + ', files ≈' + fmtTok(plan.fileTok) + ', grounding and pins ≈' + fmtTok(plan.groundTok)
+      + ', instructions and conversation ≈' + fmtTok(plan.overhead) + '. estimates run high of a model\'s own tokenizer, so this budget is a ceiling; the provider bills actual counts.');
+    if (plan.total > plan.budget) note('// over budget: the map, grounding and conversation alone exceed it. raise the budget in settings or clear the conversation.');
     sec('BLOCK 1 — PROJECT MAP ≈' + fmtTok(mapTok) + ' TOK (cached between questions)');
     var pre = document.createElement('pre');
     pre.className = 'mapview';
@@ -569,7 +697,7 @@ function openPreview() {
     if (sel.count > shown) note('// … ' + (sel.count - shown) + ' more files not listed here (all are sent).');
   }
   /* pinned evidence — same helper the real request uses, so the preview cannot drift */
-  var pinB = buildPinnedBlock();
+  var pinB = cb ? cb.pin : buildPinnedBlock();
   if (pinB) {
     sec('PINNED EVIDENCE · ' + pinB.count + ' CITATION' + (pinB.count === 1 ? '' : 'S') + ' ≈' + fmtTok(pinB.tokens) + ' TOK (pinned, uncached)');
     note('// excerpts of the citations pinned in the tray — sent with every question while pinned. unpin (or [ CLEAR ]) to stop.');
@@ -580,7 +708,7 @@ function openPreview() {
   }
   /* grounding block — same helper the real request uses, so the preview cannot drift */
   if (st.groundMode) {
-    var invB = buildInvestigationBlock(q);
+    var invB = cb ? cb.ground : buildInvestigationBlock(q);
     if (invB) {
       sec('GROUNDING — MERIDIAN EVIDENCE PACK · ' + invB.count + ' ITEM' + (invB.count === 1 ? '' : 'S') + ' ≈' + fmtTok(estTokens(invB.text)) + ' TOK (per question, uncached)');
       note(q ? '// deterministic findings + attributed source excerpts for the composed question — sent after the cached context so the model reasons on verified path:line evidence.'
@@ -654,6 +782,11 @@ function syncSpendState() {
   $('spendin').value = v > 0 ? v : '';
   $('spendstate').textContent = v > 0 ? '// limit: $' + v.toFixed(2) + ' per session — you’ll be warned before crossing it.' : '// no spend limit set.';
 }
+
+function syncMaxFilesState() {
+  $('maxfilesin').value = MAX_FILES !== DEFAULT_MAX_FILES ? MAX_FILES : '';
+  $('maxfilesstate').textContent = '// file cap: ' + MAX_FILES + ' files' + (MAX_FILES === DEFAULT_MAX_FILES ? ' (default).' : ' (custom; default ' + DEFAULT_MAX_FILES + ').');
+}
 /* ---- ignore patterns (glob-lite: * matches anything) ---- */
 var ignoreRes = [];
 function compileIgnore(txt) {
@@ -715,8 +848,10 @@ function __setCapsForTest(o) {
   if (o && o.maxTotal) MAX_TOTAL = o.maxTotal;
   return prev;
 }
+/* the ingest caps, for the workspace meter (they cover every repo together) */
+function capInfo() { return { maxFiles: MAX_FILES, maxTotal: MAX_TOTAL, maxFile: MAX_FILE }; }
 
-export { IGNORE_DIRS, __setCapsForTest, afterIngest, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, maybeAutoSmart, openPreview, openSkipReview, prevveil, recordSkip, renderBudget, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
+export { DEFAULT_MAX_FILES, IGNORE_DIRS, __setCapsForTest, afterIngest, capInfo, loadMaxFiles, parseMaxFiles, claimLabel, clearContext, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, loadHandle, maybeAutoSmart, openPreview, openSkipReview, pickFolder, prevveil, recordSkip, refreshSkipUI, renderBudget, renderTree, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
 
 export function initIngest() {
   st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
@@ -739,25 +874,36 @@ export function initIngest() {
     } else if (e.dataTransfer.files) {
       for (var j = 0; j < e.dataTransfer.files.length; j++) files.push(e.dataTransfer.files[j]);
     }
-    function run(replace) {
-      if (replace) clearContext();
+    /* a single dropped .meridian file is a share bundle, not source to ingest */
+    if (entries.length === 1 && entries[0].isFile && /\.meridian$/i.test(entries[0].name)) {
+      entries[0].file(openBundleFile, function () { toast('Could not read that bundle file.'); });
+      return;
+    }
+    if (!entries.length && files.length === 1 && /\.meridian$/i.test(files[0].name)) { openBundleFile(files[0]); return; }
+    function run(mode, forced) {
+      if (mode === 'replace' || st.shared) clearContext(); /* your own files replace a shared snapshot */
       beginBatch();
-      /* collect the whole tree first (cheap), then read through the bounded pool */
+      /* collect the whole tree first (cheap), then read through the bounded pool.
+         Each dropped folder becomes a repo; loose files belong to none. */
       var pool = [];
       files.forEach(function (f) { pool.push({ path: f.name, getFile: function () { return Promise.resolve(f); } }); });
-      Promise.all(entries.map(function (en) { return collectEntry(en, '', pool); }))
+      Promise.all(entries.map(function (en) {
+        if (!en.isDirectory) return collectEntry(en, '', pool);
+        var label = claimLabel(en.name, mode === 'reload' ? en.name : (entries.length === 1 ? forced : null), null);
+        var mine = [];
+        return collectEntry(en, '', mine).then(function () {
+          if (!mine.length) { st.repos = st.repos.filter(function (r) { return r.label !== label; }); st.wsCache = null; return; } /* an ignored dir (build/, .git/…) — no repo */
+          mine.forEach(function (it) { it.path = remapRoot(it.path, label); pool.push(it); });
+        });
+      }))
         .then(function () { return runIngestPool(pool); })
         .then(afterIngest);
     }
     /* a whole folder dropped onto an already-loaded project is ambiguous — ask
        instead of silently merging (dismissing the toast = no-op; loose-file
        drops stay silently additive) */
-    if (hasDir && st.files.size) {
-      toast('Folder dropped onto a loaded project — replace it, or add to it?', [
-        { label: '[ REPLACE ]', fn: function () { run(true); } },
-        { label: '[ ADD ]', fn: function () { run(false); } }
-      ]);
-    } else run(false);
+    if (hasDir) askFolderMode(entries.filter(function (en) { return en.isDirectory; }).map(function (en) { return en.name; }), run);
+    else run(st.shared ? 'replace' : 'add');
   });
   /* honest capability note where the choice is made: without showDirectoryPicker
      (Firefox/Safari) the folder is read once — no persistent handle, no one-click
@@ -765,33 +911,11 @@ export function initIngest() {
   if (!window.showDirectoryPicker) {
     $('dirbtn').title = 'This browser reads the folder once (no showDirectoryPicker) — re-pick or re-drop to reload; one-click project reload is unavailable.';
   }
-  $('dirbtn').addEventListener('click', function () {
-    if (window.showDirectoryPicker) {
-      window.showDirectoryPicker({ mode: 'read' }).then(function (h) {
-        function run(replace) {
-          if (replace) clearContext();
-          st.lastDirHandle = h;
-          beginBatch();
-          return walkHandle(h, h.name + '/').then(afterIngest);
-        }
-        /* same replace-or-add choice as the dropzone when a project is loaded */
-        if (st.files.size) {
-          toast('Folder picked with a project already loaded — replace it, or add to it?', [
-            { label: '[ REPLACE ]', fn: function () { run(true); } },
-            { label: '[ ADD ]', fn: function () { run(false); } }
-          ]);
-          return;
-        }
-        return run(false);
-      }).catch(function (e) {
-        if (e && e.name === 'AbortError') return;
-        toast('Folder pick failed — using the fallback picker.');
-        $('dirpick').click();
-      });
-    } else $('dirpick').click();
-  });
+  /* same replace-or-add choice as the dropzone when a project is loaded */
+  $('dirbtn').addEventListener('click', function () { pickFolder(); });
   $('filebtn').addEventListener('click', function () { $('filepick').click(); });
   $('dirpick').addEventListener('change', function () { pickHandler(this); });
+  $('dirpick').addEventListener('cancel', function () { nextPick = null; });
   $('filepick').addEventListener('change', function () { pickHandler(this); });
   /* tree search — debounced filter over loaded paths; Escape clears the filter
      without bubbling to the global layer-closing handler */
@@ -846,6 +970,16 @@ export function initIngest() {
     syncSpendState();
   });
   syncSpendState();
+  $('savemaxfiles').addEventListener('click', function () {
+    var raw = $('maxfilesin').value.trim();
+    if (!raw && $('maxfilesin').validity && $('maxfilesin').validity.badInput) { toast('File cap must be a positive whole number. Kept ' + MAX_FILES + '.'); }
+    else if (!raw) { lsDel(LS.maxfiles); loadMaxFiles(); toast('File cap reset to the default (' + DEFAULT_MAX_FILES + ' files).'); }
+    else if (!validMaxFiles(raw)) { toast('File cap must be a positive whole number. Kept ' + MAX_FILES + '.'); }
+    else { lsSet(LS.maxfiles, String(Number(raw))); loadMaxFiles(); toast('File cap set to ' + MAX_FILES + ' files. It applies to the next folder you load.'); }
+    syncMaxFilesState(); refreshSkipUI(); renderWorkspace();
+  });
+  loadMaxFiles();
+  syncMaxFilesState();
   $('saveignore').addEventListener('click', function () {
     setIgnoreText($('ignorein').value);
     var removed = 0;

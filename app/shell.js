@@ -3,6 +3,7 @@ import { $, app, esc, lsDel, lsGet, lsSet, toast, trap } from './helpers.js';
 import { LS, MODELS, PROVIDERS } from './config.js';
 import { maybeAutoSmart, renderBudget } from './ingest.js';
 import { wipeMemory } from './memory.js';
+import { wipeAnalytics } from './analytics.js';
 
 /* the custom provider is one synthetic MODELS entry, refreshed from settings */
 function syncCustomModel() {
@@ -261,6 +262,7 @@ export function initShell() {
     Object.keys(LS).forEach(function (k) { lsDel(LS[k]); });
     lsDel('meridian.waitlist');
     wipeMemory();
+    wipeAnalytics(); /* the usage log's own database */
     toast('All Meridian data cleared from this browser.');
     setTimeout(function () { location.reload(); }, 600);
   });

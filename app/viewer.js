@@ -1,5 +1,6 @@
 import { $, copyText, rememberFocus, returnFocus, trap } from './helpers.js';
 import { st } from './state.js';
+import { displayPath } from './repos.js';
 /* ============ FILE VIEWER ============
    ≥1100px the viewer docks as the deck's right detail column (non-modal — the
    chat stays reachable while reading evidence); below that it falls back to a
@@ -45,8 +46,8 @@ function openViewer(path, a, b, quote) {
   /* normalized exactly like the chip-tooltip verification, so what verified is what highlights */
   curQuote = quote ? String(quote).trim().slice(0, 60) : '';
   quoteDone = false;
-  $('vtitle').textContent = path;
-  $('vtitle').title = path;
+  $('vtitle').textContent = displayPath(path); /* "repo:path" when several repos are loaded */
+  $('vtitle').title = displayPath(path);
   $('vrange').textContent = 'L' + a + '–' + b;
   var vb = $('vbody');
   vb.innerHTML = '';
@@ -149,8 +150,8 @@ function copyViewed() {
   var whole = !(curA >= 1) || curB < curA;
   var text = whole ? f.content : f.content.split('\n').slice(curA - 1, curB).join('\n');
   copyText(text, whole
-    ? '“' + curPath + '” copied (whole file).'
-    : curPath + ' L' + curA + '–' + curB + ' copied.');
+    ? '“' + displayPath(curPath) + '” copied (whole file).'
+    : displayPath(curPath) + ' L' + curA + '–' + curB + ' copied.');
 }
 function initViewer() {
   $('vclose').addEventListener('click', closeViewer);

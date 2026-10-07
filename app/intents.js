@@ -4,6 +4,7 @@ import { dirOf, fileExt, getIndex } from './indexer.js';
 import { localSearchData, searchLimitNote } from './actions.js';
 import { makeFingerprint, projectSig } from './drift.js';
 import { fmtTok } from './helpers.js';
+import { isMulti, repoName, resolveCitePath, withFull, workspaceFacts } from './repos.js';
 /* ============ INTENT REGISTRY (DETERMINISTIC REASONING INSTANCES) ============
    The single source of truth for every deterministic reasoning instance the
    LOCAL engine knows. Each entry is one self-contained intent:
@@ -19,7 +20,7 @@ import { fmtTok } from './helpers.js';
    Adding a reasoning instance = adding ONE entry here. DOM-free by design so
    the registry is reusable from the grounding bridge and the self-tests.     */
 
-var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Dependency graph (cycles · hubs · orphans · broken imports · paths)', 'Code health (TODOs · env vars · duplicates · hotspots)', 'Exports & coverage gaps', 'Signals digest', 'Session drift', 'Evidence collection'];
+var CAP_LOCAL = ['Project structure', 'Search', 'Definitions', 'References', 'Imports & importers', 'File relationships', 'Recent changes', 'Dependency graph (cycles · hubs · orphans · broken imports · paths)', 'Code health (TODOs · env vars · duplicates · hotspots)', 'Exports & coverage gaps', 'Signals digest', 'Session drift', 'Cross-repo comparison', 'Evidence collection'];
 var CAP_MODEL = ['Architectural reasoning', 'Natural-language synthesis', 'Root-cause analysis', 'Refactoring recommendations'];
 
 function localEvidence(h) {
@@ -34,6 +35,7 @@ function evAt(file, line) { return { file: file, startLine: line, endLine: line,
 /* resolve a natural-language argument to a loaded file path (basename-aware) */
 function resolveToFile(arg) {
   if (!arg) return null;
+  arg = resolveCitePath(arg); /* accepts the workspace "repo:path" form */
   if (st.files.has(arg)) return arg;
   var base = arg.slice(arg.lastIndexOf('/') + 1).toLowerCase(), la = arg.toLowerCase();
   var exact = null, contains = null;
@@ -62,12 +64,44 @@ var STOP_INTENT = Object.assign(Object.create(null), { where: 1, what: 1, which:
    falls back to bare query terms these are skipped in favor of the real noun
    ("who uses the store" must pick `store`, not the verb `uses`) */
 var PICK_SKIP = Object.assign(Object.create(null), { uses: 1, use: 1, used: 1, using: 1, call: 1, calls: 1, called: 1, calling: 1, import: 1, imports: 1, imported: 1, importing: 1, depend: 1, depends: 1, depended: 1, reference: 1, references: 1, referenced: 1 });
+/* question grammar — never the symbol a question is about, even when the project
+   happens to define a symbol with that name (Godot defines `where`). A grammar
+   word is only picked when it is the one explicitly named: "where is where defined". */
+var GRAMMAR = Object.assign(Object.create(null), STOP_INTENT, PICK_SKIP, { how: 1, why: 1, when: 1, whom: 1, whose: 1, was: 1, were: 1, be: 1, been: 1, did: 1, done: 1,
+  a: 1, an: 1, of: 1, to: 1, in: 1, on: 1, at: 1, by: 1, from: 1, into: 1, or: 1, it: 1, its: 1, me: 1, my: 1, i: 1, you: 1, can: 1, could: 1, would: 1, should: 1,
+  we: 1, us: 1, our: 1, your: 1, they: 1, them: 1, there: 1, here: 1, any: 1, some: 1, not: 1, no: 1,
+  define: 1, defines: 1, declare: 1, declares: 1, declaration: 1, location: 1, located: 1, locate: 1, live: 1, lives: 1, implemented: 1, get: 1, gets: 1,
+  variable: 1, var: 1, const: 1, type: 1, struct: 1, enum: 1, interface: 1, called: 1, invoked: 1, invokes: 1 });
+var KIND_WORDS = '(?:(?:the|a|an)\\s+)?(?:(?:function|method|class|symbol|variable|const|constant|type|struct|enum|interface|field|property|signal)\\s+)?';
+var IDENT = '([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)';
+/* positional slots, strongest first: "is X defined", "where is X", "define X",
+   "who calls X", "references to X", "find X". The first slot holding a
+   non-grammar word names the symbol; `is X defined` accepts any X but a pronoun. */
+var SLOT_RES = [
+  new RegExp('\\b(?:is|are|was)\\s+' + KIND_WORDS + IDENT + '\\s+(?:defined|declared|implemented|created|set|used|called|referenced|imported)\\b', 'i'),
+  new RegExp('\\bwhere(?:\'s|\\s+is|\\s+are|\\s+was|\\s+does|\\s+do)?\\s+' + KIND_WORDS + IDENT, 'i'),
+  new RegExp('\\b(?:define[sd]?|declares?|definition\\s+of|declaration\\s+of)\\s+' + KIND_WORDS + IDENT, 'i'),
+  new RegExp('\\b(?:who|what|which)\\s+(?:calls|uses|references|invokes|imports|depends\\s+on)\\s+' + KIND_WORDS + IDENT, 'i'),
+  new RegExp('\\b(?:references?|refs|callers|usages?|uses|call\\s+sites?)\\s+(?:to|of|for)\\s+' + KIND_WORDS + IDENT, 'i'),
+  new RegExp('\\b(?:find|locate|show)\\s+' + KIND_WORDS + IDENT, 'i')
+];
+var PRONOUN = Object.assign(Object.create(null), { it: 1, this: 1, that: 1, them: 1, they: 1, the: 1, a: 1, an: 1 });
+function slotSymbol(q) {
+  for (var i = 0; i < SLOT_RES.length; i++) {
+    var m = q.match(SLOT_RES[i]);
+    if (!m) continue;
+    var w = m[1], lw = w.toLowerCase();
+    if (i === 0 ? !PRONOUN[lw] : !GRAMMAR[lw]) return w;
+  }
+  return '';
+}
 /* pick the most identifier-like token from a question (for def/refs/symbols) */
 function pickSymbol(q, idx) {
   var bt = q.match(/`([^`]+)`/); if (bt) return bt[1].trim();
   var qq = q.match(/["“”']([^"“”']+)["“”']/); if (qq) return qq[1].trim();
+  var slot = slotSymbol(q); if (slot) return slot;
   var toks = q.match(/[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/g) || [];
-  if (idx) { for (var i = 0; i < toks.length; i++) { if (symLookup(toks[i], idx).length) return toks[i]; } }
+  if (idx) { for (var i = 0; i < toks.length; i++) { if (!GRAMMAR[toks[i].toLowerCase()] && symLookup(toks[i], idx).length) return toks[i]; } }
   var fancy = toks.filter(function (t) { return (/[A-Z]/.test(t) || t.indexOf('_') !== -1 || t.indexOf('.') !== -1 || /\d/.test(t)) && !STOP_INTENT[t.toLowerCase()]; });
   if (fancy.length) return fancy.sort(function (a, b) { return b.length - a.length; })[0];
   var terms = queryTerms(q);
@@ -78,7 +112,7 @@ function pickSymbol(q, idx) {
 function pickPathish(q) {
   var bt = q.match(/`([^`]+)`/); if (bt) return bt[1].trim();
   var qq = q.match(/["“”']([^"“”']+)["“”']/); if (qq) return qq[1].trim();
-  var withExt = q.match(/[\w./-]*[\w-]\.[A-Za-z]{1,6}\b/); if (withExt) return withExt[0];
+  var withExt = q.match(/[\w./:-]*[\w-]\.[A-Za-z]{1,6}\b/); if (withExt) return withExt[0]; /* ':' keeps a "repo:path" whole */
   var withSlash = q.match(/[\w.-]+\/[\w./-]+/); if (withSlash) return withSlash[0];
   return pickSymbol(q);
 }
@@ -296,6 +330,49 @@ function testStem(p) {
 }
 function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
 
+/* the cross-repo investigation: per-repo stats, shared dependencies, repo links,
+   cross-repo imports and shared exported names, every row pinned to evidence */
+function workspaceRun(idx) {
+  if (!isMulti()) {
+    return { steps: [{ action: 'read the workspace', note: 'one project loaded', evidence: [], status: 'done' }], verdict: LOCAL_VERDICT(),
+      answer: 'Only one project is loaded, so there is nothing to compare across repos. Add another folder with **[ + ADD REPO ]** under WORKSPACE in the rail, then ask `workspace` again.' };
+  }
+  var f = workspaceFacts(idx), steps = [];
+  function names(rs) { return rs.map(function (r) { return '`' + repoName(r) + '`'; }).join(', '); }
+  var total = 0;
+  f.repos.forEach(function (r) { total += r.files; });
+  var entryEv = [];
+  f.repos.forEach(function (r) { r.entries.slice(0, 2).forEach(function (p) { entryEv.push(evAt(p, 1)); }); });
+  steps.push({ action: 'read each repo\'s index', note: plural(f.repos.length, 'repo') + ' · ' + plural(total, 'file'), evidence: entryEv.slice(0, 8), status: 'done' });
+  var depEv = [];
+  f.sharedDeps.slice(0, 4).forEach(function (d) { d.ev.forEach(function (e) { depEv.push(evAt(e.file, e.line)); }); });
+  f.links.slice(0, 4).forEach(function (l) { depEv.push(evAt(l.file, l.line)); });
+  steps.push({ action: 'compare dependency manifests', note: f.sharedDeps.length + ' shared ' + (f.sharedDeps.length === 1 ? 'dependency' : 'dependencies') + ' · ' + plural(f.links.length, 'repo link'), evidence: depEv.slice(0, 8), status: 'done' });
+  steps.push({ action: 'trace imports that cross repos', note: f.crossImports.length ? plural(f.crossImports.length, 'repo pair') : 'none resolved', evidence: f.crossImports.slice(0, 6).map(function (c) { return evAt(c.file, c.line); }), status: 'done' });
+  var nameEv = [];
+  f.sharedNames.slice(0, 4).forEach(function (n) { n.ev.forEach(function (e) { nameEv.push(evAt(e.file, e.line)); }); });
+  steps.push({ action: 'match exported names across repos', note: plural(f.sharedNames.length, 'name'), evidence: nameEv.slice(0, 8), status: 'done' });
+  var ans = '**Workspace:** ' + plural(f.repos.length, 'repo') + ', ' + plural(total, 'file') + '. Each repo has its own index; this answer reads them together.\n\n'
+    + '**Repos**\n' + f.repos.map(function (r) {
+      var langs = Object.keys(r.langs).filter(function (l) { return l !== 'other'; }).sort(function (a, b) { return r.langs[b] - r.langs[a]; }).slice(0, 3);
+      return '- `' + r.name + '`: ' + plural(r.files, 'file') + (langs.length ? ' · ' + langs.map(function (l) { return l + ' (' + r.langs[l] + ')'; }).join(', ') : '')
+        + ' · ' + plural(r.entries.length, 'entry point') + ' · ' + plural(r.tests, 'test file') + ' · ' + plural(r.symbols, 'symbol')
+        + (r.packages.length ? ' · publishes ' + r.packages.slice(0, 3).map(function (p) { return '`' + p + '`'; }).join(', ') : '');
+    }).join('\n') + '\n\n'
+    + '**Shared dependencies** (declared by 2+ repos): ' + (f.sharedDeps.length
+      ? f.sharedDeps.slice(0, 12).map(function (d) { return '`' + d.name + '` (' + names(d.repos) + ')'; }).join(', ') + (f.sharedDeps.length > 12 ? ', +' + (f.sharedDeps.length - 12) + ' more' : '')
+      : 'none found in package.json, requirements.txt, go.mod, Cargo.toml, composer.json or Gemfile') + '\n'
+    + (f.links.length ? '**Repo links** (a dependency another loaded repo publishes): ' + f.links.slice(0, 8).map(function (l) { return '`' + repoName(l.from) + '` → `' + repoName(l.to) + '` via `' + l.pkg + '`'; }).join(', ') + '\n' : '')
+    + '**Cross-repo imports:** ' + (f.crossImports.length
+      ? f.crossImports.slice(0, 8).map(function (c) { return '`' + repoName(c.from) + '` → `' + repoName(c.to) + '` ×' + c.count; }).join(', ')
+      : 'none resolved. Each repo\'s imports stay inside it, or point at packages that are not loaded here') + '\n'
+    + '**Exported in 2+ repos:** ' + (f.sharedNames.length
+      ? f.sharedNames.slice(0, 10).map(function (n) { return '`' + n.name + '` (' + names(n.repos) + ')'; }).join(', ')
+      : 'none') + '\n\n'
+    + 'For one repo\'s own `signals`, `cycles` or `orphans`, set [ ASK ] under WORKSPACE to that repo. Deterministic, from the index and the manifests; manifest parsing is line-based, so unusual formats can be missed.';
+  return { steps: steps, verdict: LOCAL_VERDICT(), answer: ans };
+}
+
 /* ---- The registry. Array order IS the natural-language routing cascade. ---- */
 var INTENTS = [
 
@@ -306,6 +383,12 @@ var INTENTS = [
         verdict: LOCAL_VERDICT(),
         answer: '**Meridian LOCAL engine** — deterministic project intelligence, no AI, no network.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n**Intentional limits:** the graph analyses (cycles, orphans, hubs, untested, path) read static import edges only — regex extraction per language, lines over 400 chars not indexed — so dynamic loading, DI and bundler wiring are invisible. Each analysis states its own caveats in its answer.\n\n' + LOCAL_HELP };
     } },
+
+  /* cross-repo comparison — routes only when 2+ repos are loaded, and always
+     reads the whole workspace, whatever the question scope says */
+  { kind: 'workspace', aliases: ['workspace', 'repos'], ground: 'workspace', helpCmd: '`workspace`', needsModel: false,
+    route: function (s, lo) { return isMulti() && /\b(workspace|repos|repositories|across (all |the |both |my )?(repos|projects)|cross-repo|between (the |both |my )?(repos|projects)|shared (dependencies|deps|packages))\b/.test(lo) ? { arg: '' } : null; },
+    run: function () { return withFull(function () { return workspaceRun(getIndex()); }); } },
 
   { kind: 'entries', aliases: ['entries', 'entrypoints'], ground: 'entry-point', helpCmd: '`entries`', needsModel: false,
     route: function (s, lo) { return /\b(entry ?points?|entrypoints?|main file|entry file)\b/.test(lo) ? { arg: '' } : null; },
@@ -823,10 +906,14 @@ var INTENTS = [
       steps.push({ action: 'look up “' + arg + '” in the symbol index', note: defs.length + ' definition' + (defs.length === 1 ? '' : 's'), evidence: defs.slice(0, 8).map(function (d) { return evAt(d.file, d.line); }), status: 'done' });
       var refs = localSearchData(arg, 'refs');
       steps.push({ action: 'scan for references', note: refs.hits.length + ' reference' + (refs.hits.length === 1 ? '' : 's'), evidence: refs.hits.slice(0, 6).map(localEvidence), status: 'done' });
-      var actions = [{ kind: 'refs', command: arg, why: 'list every reference to ' + arg }];
+      var actions = defs.length ? [{ kind: 'refs', command: arg, why: 'list every reference to ' + arg }]
+        : [{ kind: 'search', command: arg, why: 'plain text search for ' + arg + ' (finds it in docs, comments and code blocks too)' }];
       var ans = defs.length
         ? '`' + arg + '` is defined in ' + defs.length + ' place' + (defs.length === 1 ? '' : 's') + ':\n\n' + defs.slice(0, 8).map(function (d) { return '- `' + d.file + '` line ' + d.line + ' (' + d.kind + ')'; }).join('\n') + '\n\nEvidence chips open each definition at its exact line.'
-        : 'No indexed definition named `' + arg + '`. It may be an external symbol, a dynamic name, or spelled differently. The reference scan above shows where the term appears.';
+        : 'No indexed definition named `' + arg + '`. It may be external, generated at runtime, spelled differently, or only written in a doc or code sample the index does not read. '
+          + (refs.hits.length ? 'The name does appear in ' + plural(refs.filesHit, 'file') + ' (see the reference scan above).'
+            : refs.aborted || refs.timedOut ? 'The reference scan stopped early on this large project, so it may still appear.' : 'The name does not appear as a whole word in any loaded file.')
+          + ' Run the text search below to look for it anywhere.';
       return { steps: steps, verdict: LOCAL_VERDICT(), actions: actions, answer: ans };
     } },
 
@@ -934,7 +1021,8 @@ var LOCAL_MENU = [
   ] },
   { group: 'INSTRUMENTS', items: [
     { label: 'Signals — what deserves attention', fill: 'signals' },
-    { label: 'Drift — what changed since last session', fill: 'drift' }
+    { label: 'Drift — what changed since last session', fill: 'drift' },
+    { label: 'Workspace: compare the loaded repos', fill: 'workspace' }
   ] }
 ];
 /* the empty-state starter set: broad, no-argument questions that give an

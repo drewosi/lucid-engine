@@ -9,6 +9,10 @@ import { startDemo } from './demo.js';
 import { askLocal } from './local.js';
 import { openLocalMenu } from './localmenu.js';
 import { runAndShowSelfTests } from './selftest.js';
+import { openShare } from './share.js';
+import { addRepo, setScope } from './workspace.js';
+import { isMulti } from './repos.js';
+import { openAnalytics } from './analytics.js';
 
 /* ============ COMMAND PALETTE (Ctrl/Cmd-K) ============
    Every palette action also exists as a visible control — the palette is
@@ -31,7 +35,12 @@ var ACTIONS = [
   { g: 'CONTEXT', n: 'Select all files', k: '', f: function () { $('selall').click(); } },
   { g: 'CONTEXT', n: 'Select no files', k: '', f: function () { $('selnone').click(); } },
   { g: 'CONTEXT', n: 'Unload project', k: '', f: function () { $('clearctx').click(); } },
+  { g: 'WORKSPACE', n: 'Add a repo (another folder) to the workspace', k: '', f: function () { if (st.files.size) addRepo(); else $('dirbtn').click(); } },
+  { g: 'WORKSPACE', n: 'Ask all repos / only the active repo', k: '', f: function () { if (isMulti()) setScope(st.ws.scope === 'repo' ? 'all' : 'repo'); else toast('Load a second repo first: the scope switch needs two.'); } },
+  { g: 'WORKSPACE', n: 'Compare the loaded repos (LOCAL)', k: '', f: function () { askLocal('workspace'); } },
   { g: 'PROJECTS', n: 'Save project (tree + settings)', k: '', f: function () { $('saveproj').click(); } },
+  { g: 'PROJECTS', n: 'Share project (link or .meridian bundle)', k: '', f: openShare },
+  { g: 'PROJECTS', n: 'Open a shared bundle (.meridian)', k: '', f: function () { $('bundlepick').click(); } },
   { g: 'CONVERSE', n: 'Focus composer', k: '', f: function () { promptEl.focus(); } },
   { g: 'CONVERSE', n: 'Stop streaming', k: '', f: function () { if (st.aborter) st.aborter.abort(); } },
   { g: 'CONVERSE', n: 'Clear conversation', k: '', f: clearConversation },
@@ -48,6 +57,7 @@ var ACTIONS = [
   { g: 'SETTINGS', n: 'Open settings', k: 'ctrl .', f: function () { openDrawer(true); } },
   { g: 'SETTINGS', n: 'Load the demo project (LOCAL)', k: '', f: function () { startDemo(); } },
   { g: 'SETTINGS', n: 'Toggle dark / light mode', k: '', f: flipMode },
+  { g: 'SETTINGS', n: 'View usage analytics (opt-in, this browser only)', k: '', f: openAnalytics },
   { g: 'SETTINGS', n: 'Show keymap', k: '?', f: openKeymap },
   { g: 'SETTINGS', n: 'Open the user guide (GitHub)', k: '', f: function () { window.open('https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md', '_blank', 'noopener'); } },
   { g: 'SETTINGS', n: 'Run self-tests (dev)', k: '', f: runAndShowSelfTests }

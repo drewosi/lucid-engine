@@ -1,6 +1,7 @@
 import { st } from './state.js';
 import { fmtTok, lsGet } from './helpers.js';
 import { LS, MODELS } from './config.js';
+import { isMulti, repoOf, workspaceNote } from './repos.js';
 /* ============ SMART CONTEXT ENGINE ============
    Instead of sending every checked file whole (FULL mode), SMART mode:
      1. scores each file — type weight + recency + path depth + query relevance,
@@ -36,30 +37,197 @@ var LOWVALUE_PATH = /(\.min\.|\.lock$|-lock\.|\.snap$|\.map$|\.d\.ts$|\bfixtures
    Python test_*.py prefix, tests/ or spec/ directories, Java FooTest / C# FooTests */
 var TEST_PATH = /(\.test\.|\.spec\.|_test\.|_spec\.|\/test_[^\/]*\.py$|\btests?\/|\bspec\/|\b__tests__\b|tests?\.(java|cs|kt|swift|php)$)/i;
 
-/* language-aware token estimate — code tokenizes denser than prose, so one
-   chars-per-token divisor per family beats a flat /4 */
-var TOK_DIV = Object.assign(Object.create(null), { js: 3.2, jsx: 3.2, ts: 3.2, tsx: 3.2, mjs: 3.2, cjs: 3.2, java: 3.2, c: 3.2, h: 3.2, cc: 3.2, cpp: 3.2, hpp: 3.2, cs: 3.2, rs: 3.2, swift: 3.2, kt: 3.2, scala: 3.2,
-                py: 3.5, go: 3.5, rb: 3.5, php: 3.5, sh: 3.5, bash: 3.5, lua: 3.5, ex: 3.5, exs: 3.5,
-                json: 3.0, yml: 3.0, yaml: 3.0, toml: 3.0, xml: 3.0, html: 3.0, css: 3.0, scss: 3.0, less: 3.0, svg: 3.0,
-                md: 4.0, mdx: 4.0, txt: 4.0, rst: 4.0 });
-function tokDiv(path) {
-  if (path) {
-    var nm = path.slice(path.lastIndexOf('/') + 1);
-    var ex = nm.indexOf('.') === -1 ? '' : nm.slice(nm.lastIndexOf('.') + 1).toLowerCase();
-    if (TOK_DIV[ex]) return TOK_DIV[ex];
-  }
-  return 3.6;
+/* Token estimate — one function for every count the app shows or budgets.
+   Calibrated against the Qwen3.5-9B tokenizer (GPT-style BPE: one token per
+   digit, short operator runs, a newline of its own, spaces mostly absorbed
+   into the next piece). A flat chars/token divisor undercounted C/C++ because
+   those files — and the "123│" line-number prefixes SMART actually sends —
+   are full of one-character tokens. The scan below counts that way.
+   EST_BIAS_PCT is a deliberate overestimate on top of the scan, not a
+   substitute for it. +8% is the pad that kept every measured C/C++ file
+   (raw and with the "123│" prefixes SMART sends), plus JS, Python, GDScript
+   demos, Markdown and JSON, at or above the Qwen3.5-9B tokenizer. The scan
+   already sits high on one-character tokens, so the measured overshoot is
+   wider than 8% — especially on C/C++. A larger pad would only have covered
+   a few Godot GDScript test scripts with smashed identifiers. The path
+   argument is accepted so existing callers keep working; the count comes
+   from the text. */
+var EST_BIAS_PCT = 108;
+/* '$' '{' '}' '@' '|' ':' and tab do not fuse into the following word.
+   ':' is the exception that matters: a colon glued to a letter ("m:match",
+   ":property") is its own token unless the pair is a very common type name.
+   Counting it separate is the high side of that coin-flip. '(' '.' '_' usually fuse. */
+var FUSE_BREAK = Object.assign(Object.create(null), { '$': 1, '{': 1, '}': 1, '@': 1, '|': 1, ':': 1, '\t': 1 });
+/* endings of long English words that stay one token; a 12+ letter lowercase
+   run with none of these is a handle or a smashed identifier */
+var COMMON_ENDING = ['tion', 'sion', 'ment', 'ness', 'able', 'ible', 'ence', 'ance', 'ity', 'ing', 'ly', 'ous', 'ive', 'ate', 'ent', 'ant', 'ers', 'ies'];
+function isLetterCP(cp) {
+  if (cp < 128) return (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122);
+  return cp >= 192 && /\p{L}/u.test(String.fromCharCode(cp));
 }
-/* Token estimate. For small files a token-ish regex count tracks real BPE more
-   closely than chars/divisor; for large files chars/divisor is faster and the
-   per-language divisor is well-calibrated (see README calibration note). */
-function estTokens(text, path) {
-  var byChar = Math.ceil(text.length / tokDiv(path));
-  if (text.length < 5000) {
-    var byTok = (text.match(/\w+|[^\s\w]/g) || []).length;
-    return Math.ceil((byChar + byTok) / 2);
+function isUpperCP(cp) {
+  if (cp < 128) return cp >= 65 && cp <= 90;
+  return /\p{Lu}/u.test(String.fromCharCode(cp));
+}
+function isLowerCP(cp) {
+  if (cp < 128) return cp >= 97 && cp <= 122;
+  return /\p{Ll}/u.test(String.fromCharCode(cp));
+}
+function isDigitCP(cp) {
+  if (cp < 128) return cp >= 48 && cp <= 57;
+  return /\p{N}/u.test(String.fromCharCode(cp));
+}
+function commonLongWord(s) {
+  for (var i = 0; i < COMMON_ENDING.length; i++) {
+    var suf = COMMON_ENDING[i];
+    if (s.length >= suf.length && s.slice(-suf.length) === suf) return true;
   }
-  return byChar;
+  return false;
+}
+function camelParts(s) {
+  var parts = [], start = 0, i;
+  for (i = 1; i < s.length; i++) {
+    var prev = s.charCodeAt(i - 1), cur = s.charCodeAt(i);
+    if (isUpperCP(cur) && isLowerCP(prev)) { parts.push(s.slice(start, i)); start = i; }
+    else if (isUpperCP(prev) && isLowerCP(cur) && i - start > 1) { parts.push(s.slice(start, i - 1)); start = i - 1; }
+  }
+  parts.push(s.slice(start));
+  return parts;
+}
+function onePiece(s) {
+  var L = s.length, i, hi = false;
+  if (!L) return 0;
+  for (i = 0; i < L; i++) if (s.charCodeAt(i) > 127) hi = true;
+  if (hi) return Math.max(2, (L + 1) >> 1);
+  var allUp = true;
+  for (i = 0; i < L; i++) if (!isUpperCP(s.charCodeAt(i))) { allUp = false; break; }
+  if (L >= 4 && allUp) return Math.max(2, Math.ceil(L / 3));
+  var title = L >= 4 && isUpperCP(s.charCodeAt(0));
+  if (title) for (i = 1; i < L; i++) if (!isLowerCP(s.charCodeAt(i))) { title = false; break; }
+  if (title) return Math.max(2, Math.ceil(L / 3));
+  if (L <= 14) return 1;
+  return 1 + Math.ceil((L - 14) / 6);
+}
+function wordYield(leading, letters, dense) {
+  var base = 0, parts, i, lower = true;
+  if (dense && letters) base = Math.max(1, Math.ceil(letters.length / 3));
+  else {
+    parts = letters ? camelParts(letters) : [];
+    for (i = 0; i < parts.length; i++) base += onePiece(parts[i]);
+    if (letters) {
+      for (i = 0; i < letters.length; i++) {
+        var cp = letters.charCodeAt(i);
+        if (cp > 127 || !isLowerCP(cp)) { lower = false; break; }
+      }
+      if (lower && letters.length >= 12 && !commonLongWord(letters)) base = Math.max(base, Math.ceil(letters.length / 3));
+    }
+    /* '.' before 4+ letters usually fails to fuse (".else", ".notest", ".gd" is
+       shorter and handled as its own miss). '_' before a long run splits too. */
+    if (leading === '.' && letters.length >= 4) base++;
+    else if (leading === '_' && letters.length >= 8) base++;
+  }
+  if (leading && (FUSE_BREAK[leading] || leading.charCodeAt(0) > 127 || (dense && leading === '/'))) base++;
+  if (base <= 0 && leading) base = 1;
+  return letters || leading ? Math.max(1, base) : 0;
+}
+function punctYield(L) {
+  if (L <= 0) return 0;
+  if (L <= 3) return 1;
+  return Math.ceil(L / 2);
+}
+/* raw scan, before the bias. One pass, no allocations beyond the words themselves. */
+function rawTokens(text) {
+  var n = text.length, i = 0, tok = 0, url = false;
+  while (i < n) {
+    var c = text.charCodeAt(i), ch = text.charAt(i);
+    if ((c === 39 || c === 0x2019) && i + 1 < n) {
+      var tail = text.slice(i + 1, i + 3).toLowerCase(), sufs = ['re', 've', 'll', 's', 't', 'm', 'd'], hit = 0;
+      for (var si = 0; si < sufs.length; si++) {
+        var suf = sufs[si];
+        if (tail.slice(0, suf.length) === suf) {
+          var after = i + 1 + suf.length;
+          if (after >= n || !isLetterCP(text.charCodeAt(after))) { tok++; i = after; hit = 1; break; }
+        }
+      }
+      if (hit) continue;
+    }
+    var lead = '', j = i;
+    if (!isLetterCP(c) && c !== 10 && c !== 13 && !isDigitCP(c) && i + 1 < n && isLetterCP(text.charCodeAt(i + 1))) {
+      lead = ch; j = i + 1;
+    }
+    if (j < n && isLetterCP(text.charCodeAt(j))) {
+      var k = j;
+      while (k < n && isLetterCP(text.charCodeAt(k))) k++;
+      tok += wordYield(lead, text.slice(j, k), url || lead === '@');
+      i = k;
+      continue;
+    }
+    if (isDigitCP(c)) { tok++; i++; continue; }
+    if (c === 32 && i + 1 < n) {
+      var ncp = text.charCodeAt(i + 1);
+      if (!isLetterCP(ncp) && !isDigitCP(ncp) && ncp !== 32 && ncp !== 9 && ncp !== 10 && ncp !== 13) {
+        j = i + 1;
+        while (j < n) {
+          var pj = text.charCodeAt(j);
+          if (isLetterCP(pj) || isDigitCP(pj) || pj === 32 || pj === 9 || pj === 10 || pj === 13) break;
+          j++;
+        }
+        var plen = j - (i + 1), pstart = i + 1, nl = false;
+        while (j < n && (text.charCodeAt(j) === 10 || text.charCodeAt(j) === 13)) { j++; nl = true; }
+        tok += punctYield(plen) + (nl ? 1 : 0);
+        if (text.slice(pstart, pstart + plen).indexOf('://') !== -1) url = true;
+        if (nl) url = false;
+        i = j;
+        continue;
+      }
+    }
+    if (!isLetterCP(c) && !isDigitCP(c) && c !== 32 && c !== 9 && c !== 10 && c !== 13) {
+      j = i;
+      while (j < n) {
+        var qj = text.charCodeAt(j);
+        if (isLetterCP(qj) || isDigitCP(qj) || qj === 32 || qj === 9 || qj === 10 || qj === 13) break;
+        j++;
+      }
+      var plen2 = j - i, pstart2 = i, nl2 = false;
+      while (j < n && (text.charCodeAt(j) === 10 || text.charCodeAt(j) === 13)) { j++; nl2 = true; }
+      tok += punctYield(plen2) + (nl2 ? 1 : 0);
+      if (text.slice(pstart2, pstart2 + plen2).indexOf('://') !== -1) url = true;
+      if (nl2) url = false;
+      i = j;
+      continue;
+    }
+    if (c === 32 || c === 9 || c === 10 || c === 13) {
+      url = false;
+      j = i;
+      var hasNl = false;
+      while (j < n) {
+        var wj = text.charCodeAt(j);
+        if (wj !== 32 && wj !== 9 && wj !== 10 && wj !== 13) break;
+        if (wj === 10 || wj === 13) hasNl = true;
+        j++;
+      }
+      if (!hasNl && j < n) {
+        var nxt = text.charCodeAt(j);
+        if (isLetterCP(nxt) || (!isDigitCP(nxt) && nxt !== 32 && nxt !== 9 && nxt !== 10 && nxt !== 13)) {
+          var run = j - i;
+          if (run > 1) { tok++; i = j - 1; continue; }
+          if (text.charAt(i) === ' ') { i = j; continue; }
+          tok++; i = j; continue;
+        }
+      }
+      tok++;
+      i = j;
+      continue;
+    }
+    tok++; i++;
+  }
+  return tok;
+}
+function estTokens(text, path) {
+  if (!text) return 0;
+  var raw = rawTokens(text);
+  if (!raw) return 0;
+  return Math.ceil(raw * EST_BIAS_PCT / 100);
 }
 
 /* query-independent importance, computed once per file at ingest */
@@ -97,7 +265,6 @@ function numberLines(text, startLineNo) {
 /* Line-number-true excerpt: file head + windows around query-term hits.
    Omitted ranges are marked so the model never cites lines it cannot see. */
 function excerptFile(f, terms, maxTokens, path) {
-  var div = tokDiv(path);
   var lines = f.content.split('\n');
   var keep = {}, HEAD = 50, WIN = 20, hits = 0, i;
   for (i = 0; i < Math.min(HEAD, lines.length); i++) keep[i] = 1;
@@ -115,17 +282,29 @@ function excerptFile(f, terms, maxTokens, path) {
       }
     }
   }
-  var out = [], chars = 0, budget = maxTokens * div, last = -1, truncated = false;
+  /* provisional char cap, then trim with estTokens so the returned count is
+     the same number the budget spends. Digits and the line-number bar are
+     about one token each, so 3 chars/token still overshoots and gets trimmed. */
+  var out = [], chars = 0, charCap = Math.max(200, maxTokens * 3), last = -1, truncated = false;
   for (var n = 0; n < lines.length; n++) {
     if (!keep[n]) continue;
-    if (chars > budget) { truncated = true; break; }
+    if (chars > charCap) { truncated = true; break; }
     if (n > last + 1) out.push('··· lines ' + (last + 2) + '–' + n + ' omitted ···');
     var row = (n + 1) + '│' + lines[n];
     out.push(row); chars += row.length + 1;
     last = n;
   }
   if (truncated || last < lines.length - 1) out.push('··· lines ' + (last + 2) + '–' + lines.length + ' omitted ···');
-  return { text: out.join('\n'), tokens: Math.ceil(chars / div) + 10 };
+  var text = out.join('\n'), tokens = estTokens(text, path), guard = 0;
+  while (out.length > 1 && tokens > maxTokens && guard++ < out.length + 2) {
+    var trailer = out[out.length - 1].indexOf('omitted') !== -1;
+    if (trailer && out.length > 2) out.splice(out.length - 2, 1);
+    else out.pop();
+    text = out.join('\n');
+    tokens = estTokens(text, path);
+  }
+  if (tokens > maxTokens) return { text: '', tokens: maxTokens + 1 };
+  return { text: text, tokens: tokens };
 }
 
 /* query intent — a debugging question wants tests; an onboarding question wants docs */
@@ -193,19 +372,32 @@ function packSmartContext(q, budgetTokens) {
     }
     scored.sort(function (a, b) { return b.s - a.s; });
   }
+  /* several repos in scope: the best-scoring file of every repo is guaranteed a
+     slot right after the pins, so a cross-repo question sees each repo */
+  var seats = [];
+  if (isMulti()) {
+    var seen = Object.create(null);
+    scored.forEach(function (x) { var r = repoOf(x.p); if (!seen[r] && !x.f.pin) { seen[r] = 1; seats.push(x); } });
+    if (seats.length < 2) seats = [];
+    seats.forEach(function (x) { x.why.push('best in repo'); });
+  }
   /* operator pins pack first (still budget-bounded) — the one explicit override */
   var pinnedFirst = scored.filter(function (x) { return x.f.pin; })
-    .concat(scored.filter(function (x) { return !x.f.pin; }));
+    .concat(seats)
+    .concat(scored.filter(function (x) { return !x.f.pin && seats.indexOf(x) === -1; }));
 
   /* greedy pack: whole small files, excerpts for big ones */
   var parts = [], used = 0, count = 0, included = [], packedSet = Object.create(null);
   for (var k = 0; k < pinnedFirst.length && count < SMART_MAX_FILES; k++) {
     var remaining = budgetTokens - used;
     if (remaining < 400) break;
-    var e = pinnedFirst[k], body, tok, whole;
+    var e = pinnedFirst[k], body = null, tok, whole;
     if (e.f.tokens <= WHOLE_FILE_MAX && e.f.tokens <= remaining) {
-      body = numberLines(e.f.content, 1); tok = e.f.tokens; whole = true;
-    } else {
+      /* count what is sent (header + line-number prefixes), not the bare file */
+      body = numberLines(e.f.content, 1); tok = estTokens('═══ FILE: ' + e.p + ' ═══\n' + body, e.p); whole = true;
+      if (tok > remaining) body = null;
+    }
+    if (body === null) {
       var ex = excerptFile(e.f, terms, Math.min(remaining, Math.max(1500, WHOLE_FILE_MAX / 2)), e.p);
       if (ex.tokens > remaining) continue;
       body = ex.text; tok = ex.tokens; whole = false;
@@ -320,10 +512,68 @@ function buildProjectMap() {
     keyTxt.push('--- KEY FILE HEAD (' + (lines.length > n ? 'first ' + n + ' of ' + lines.length + ' lines' : n + ' lines') + '): ' + p + ' ---\n'
       + numberLines(lines.slice(0, n).join('\n'), 1));
   });
-  st.mapCache = 'PROJECT MAP — the full shape of the loaded project (' + paths.length + ' files, path ≈tokens). "◆ PACKAGE" marks a directory with its own build manifest; "◇" marks manifests, READMEs and entry points. Only a question-relevant subset of files is included in full after the map. If a mapped file you cannot see would answer better, say which one.\n\n'
+  var wn = workspaceNote();
+  st.mapCache = (wn ? wn + '\n\n' : '') + 'PROJECT MAP — the full shape of the loaded project (' + paths.length + ' files, path ≈tokens). "◆ PACKAGE" marks a directory with its own build manifest; "◇" marks manifests, READMEs and entry points. Only a question-relevant subset of files is included in full after the map. If a mapped file you cannot see would answer better, say which one.\n\n'
     + out.join('\n') + (keyTxt.length ? '\n\n' + keyTxt.join('\n\n') : '');
   st.mapDirty = false;
   return st.mapCache;
+}
+
+/* the map within a token cap: the full map when it fits, otherwise a condensed
+   one (directories collapsed to a shallower depth, then key-file heads dropped,
+   then the listing capped). Deterministic for a given project + cap, so the
+   cached-prefix behavior of the map block is kept. */
+var MAP_MAX_FRAC = 0.2; /* share of the SMART budget the project map may use */
+var fitMemo = { src: null, cap: 0, out: '' };
+function fitProjectMap(maxTok) {
+  var full = buildProjectMap();
+  if (!full || estTokens(full) <= maxTok) return full;
+  if (fitMemo.src === full && fitMemo.cap === maxTok) return fitMemo.out;
+  var paths = [];
+  st.files.forEach(function (f, p) { if (f.checked) paths.push(p); });
+  paths.sort();
+  var pkgs = detectPackages(paths), pkgByDir = {};
+  pkgs.forEach(function (pk) { pkgByDir[pk.dir] = pk; });
+  var heads = [], keys = pickKeyFiles(paths, pkgs);
+  keys.slice(0, 3).forEach(function (p) {
+    var lines = st.files.get(p).content.split('\n'), n = Math.min(20, lines.length);
+    heads.push('--- KEY FILE HEAD (first ' + n + ' of ' + lines.length + ' lines): ' + p + ' ---\n' + numberLines(lines.slice(0, n).join('\n'), 1));
+  });
+  var wn = workspaceNote();
+  function render(depth, withHeads, maxRows) {
+    var agg = Object.create(null);
+    paths.forEach(function (p) {
+      var segs = p.split('/'); segs.pop();
+      var key = segs.slice(0, depth).join('/') || '.';
+      var g = agg[key] || (agg[key] = { files: 0, tok: 0, subs: Object.create(null) });
+      g.files++; g.tok += st.files.get(p).tokens;
+      if (segs.length > depth) g.subs[segs[depth]] = 1;
+    });
+    var rows = Object.keys(agg).sort(), hidden = null;
+    if (rows.length > maxRows) {
+      var keep = rows.slice().sort(function (a, b) { return agg[b].files - agg[a].files; }).slice(0, maxRows), kept = Object.create(null);
+      keep.forEach(function (k) { kept[k] = 1; });
+      hidden = { dirs: 0, files: 0 };
+      rows = rows.filter(function (k) { if (kept[k]) return true; hidden.dirs++; hidden.files += agg[k].files; return false; });
+    }
+    var out = rows.map(function (k) {
+      var g = agg[k], ns = Object.keys(g.subs).length, pkg = pkgByDir[k];
+      return (k === '.' ? './' : k + '/') + '  ' + g.files + ' file' + (g.files === 1 ? '' : 's') + ' ≈' + fmtTok(g.tok) + ' tok'
+        + (ns ? ' · ' + ns + ' subdir' + (ns === 1 ? '' : 's') : '') + (pkg ? '  ◆ PACKAGE' + (pkg.name ? ': ' + pkg.name : '') : '');
+    });
+    if (hidden) out.push('… ' + hidden.dirs + ' smaller directories (' + hidden.files + ' files) not listed');
+    return (wn ? wn + '\n\n' : '') + 'PROJECT MAP (condensed): ' + paths.length + ' files is too many to list within the context budget, so directories are collapsed to '
+      + depth + ' level' + (depth === 1 ? '' : 's') + ' deep (directory ≈tokens · file count). "◆ PACKAGE" marks a directory with its own build manifest. Only a question-relevant subset of files is included in full after the map. If a directory you cannot see would answer better, say which one.\n\n'
+      + out.join('\n') + (withHeads && heads.length ? '\n\n' + heads.join('\n\n') : '');
+  }
+  var ladder = [[3, true, 400], [2, true, 400], [1, true, 400], [2, false, 200], [1, false, 200], [1, false, 80], [1, false, 30], [1, false, 10]];
+  var best = '';
+  for (var i = 0; i < ladder.length; i++) {
+    best = render(ladder[i][0], ladder[i][1], ladder[i][2]);
+    if (estTokens(best) <= maxTok) break;
+  }
+  fitMemo = { src: full, cap: maxTok, out: best };
+  return best;
 }
 function getBudget() {
   var cap = MODELS[st.model] ? MODELS[st.model].ctx : 200000;
@@ -332,4 +582,4 @@ function getBudget() {
   return Math.min(v, cap);
 }
 
-export { AUTO_SMART_FRAC, CONFIG_NAMES, DOCS_PATH, ENTRY_NAMES, GROUND_EXCERPT_PAD, GROUND_EXCERPT_TOK, GROUND_MAX_CITES, GROUND_MAX_EVIDENCE, GROUND_MAX_TOK, README_NAMES, TEST_PATH, buildProjectMap, detectPackages, estTokens, getBudget, numberLines, packSmartContext, queryTerms, staticScore };
+export { AUTO_SMART_FRAC, CONFIG_NAMES, DOCS_PATH, ENTRY_NAMES, GROUND_EXCERPT_PAD, GROUND_EXCERPT_TOK, GROUND_MAX_CITES, GROUND_MAX_EVIDENCE, GROUND_MAX_TOK, MAP_MAX_FRAC, README_NAMES, TEST_PATH, buildProjectMap, detectPackages, estTokens, fitProjectMap, getBudget, numberLines, packSmartContext, queryTerms, staticScore };

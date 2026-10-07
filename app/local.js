@@ -3,6 +3,9 @@ import { dirOf, getIndex } from './indexer.js';
 import { CAP_LOCAL, CAP_MODEL, LOCAL_HELP, classifyIntent, computeSignals, listOrphans, pickSymbol, runInvestigation, symLookup } from './intents.js';
 import { addAiMsg, addUserMsg, attachCopy, renderRich, renderTrace, scrollEnd } from './trace.js';
 import { $, announce, fmtTok, setStatus } from './helpers.js';
+import { displayText, isMulti, repoList, repoName, scopeRepo, withScope } from './repos.js';
+import { renderWorkspaceOverview } from './workspace.js';
+import { track } from './analytics.js';
 /* ============ LOCAL ENGINE (NO API · NO AI) ============
    The deterministic project-intelligence engine. A question is routed by intent
    (classifyIntent), an investigation runs real operations over the project index
@@ -56,18 +59,31 @@ function askLocal(q) {
   var msgEl = addAiMsg();
   var txtEl = msgEl.querySelector('.txt');
   setStatus('LOCAL ENGINE — investigating…');
+  var t0 = performance.now();
 
-  var answer, trace, verdict;
+  var answer, trace, verdict, kind = 'none';
   if (!st.files.size) {
     answer = 'No project is loaded, so there is no terrain to analyze yet. Drop a folder into CONTEXT and Meridian will index it — or switch to an AI provider in settings.\n\n**Known locally:** ' + CAP_LOCAL.join(' · ') + '.\n**Requires a model:** ' + CAP_MODEL.join(' · ') + '.\n\n' + LOCAL_HELP;
     trace = { steps: [{ action: 'check loaded context', note: 'no files in memory', evidence: [] }] };
     verdict = { local: true, text: 'KNOWN LOCALLY' };
   } else {
-    var intent = classifyIntent(q);
-    var inv = runInvestigation(q, intent);
-    answer = inv.answer;
-    trace = { steps: inv.steps, actions: inv.actions || null };
+    /* the investigation runs inside the question scope (all repos, or the active one) */
+    var run = withScope(function () { var it = classifyIntent(q); return { intent: it, inv: runInvestigation(q, it) }; });
+    var inv = run.inv;
+    kind = run.intent.kind;
+    /* several repos: answer prose and step notes read repo:path, like the chips */
+    answer = displayText(inv.answer);
+    trace = { steps: inv.steps.map(function (s) { return Object.assign({}, s, { note: displayText(s.note) }); }), actions: inv.actions || null };
     verdict = inv.verdict;
+    /* in a multi-repo workspace, disclose the scope as the first step — the
+       same pattern as the pinned-evidence scope step */
+    if (isMulti()) {
+      var sr = scopeRepo(), all = repoList().map(function (r) { return repoName(r.label); });
+      trace.steps = [sr === null || run.intent.kind === 'workspace'
+        ? { action: 'scope · all ' + all.length + ' repos', note: all.join(', '), evidence: [], status: 'done' }
+        : { action: 'scope · ' + repoName(sr) + ' only', note: 'not searched: ' + all.filter(function (n) { return n !== repoName(sr); }).join(', '), evidence: [], status: 'done' }
+      ].concat(trace.steps);
+    }
   }
 
   txtEl.innerHTML = renderRich(answer);
@@ -87,6 +103,9 @@ function askLocal(q) {
   setStatus('LOCAL ENGINE IDLE — deterministic · zero network');
   announce('Local answer ready.');
   scrollEnd();
+  /* opt-in usage log (a no-op while analytics is off); LOCAL events are never sent anywhere */
+  var ms = performance.now() - t0;
+  track({ type: 'question', engine: 'local', provider: 'local', model: '__local', intent: kind, outcome: 'ok', latencyMs: ms, durationMs: ms, q: q });
 }
 
 /* ---- Project Intelligence overview: the deterministic terrain, shown on load
@@ -140,6 +159,8 @@ function renderOverview() {
     sk.appendChild(sb);
     ov.appendChild(sk);
   }
+  /* several repos loaded: per-repo stats and what they share */
+  renderWorkspaceOverview(ov, idx);
   /* honest machinery limits, stated once where orientation happens — each
      analysis repeats its own caveat in its answer */
   var lim = document.createElement('div');

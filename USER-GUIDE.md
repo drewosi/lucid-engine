@@ -21,7 +21,7 @@ It serves two readers, and marks the difference where it matters:
 - **New to this:** you write a little code, or none, and want to *understand*
   a project. Follow the guide top to bottom. Concepts are explained the first
   time they appear, and there's a [Glossary](#glossary) at the end.
-- **Experienced:** you know codebases and just want the fast path and the
+- **Experienced:** you know codebases and want the fast path and the
   internals. Skim [Quick start](#quick-start-2-minutes-no-key-needed), the
   [Command reference](#6-the-local-command-reference), and
   [For power users](#12-for-power-users-internals--self-hosting).
@@ -53,25 +53,24 @@ Call-outs marked **Power user** add depth without cluttering the main path.
 
 ## 1. What MERIDIAN actually is
 
-Most tools that "read your code with AI" send your whole project to a server.
-MERIDIAN is built the opposite way. It does two things:
+MERIDIAN keeps your project in the browser tab and does two things:
 
 1. **A deterministic index (no AI).** The moment you load a project, MERIDIAN
    scans it and builds a structured map: every **symbol** (a named function,
    class, variable…), every **import** (which file pulls in which), the entry
    points, the tests, the packages. This is plain, repeatable analysis: the same
-   input always gives the same output. It runs entirely in your browser with no
+   input always gives the same output. It runs in your browser with no
    network.
 
 2. **An optional AI layer on top.** When you want interpretation ("*why* is this
    slow?", "*how should* I refactor this?"), you connect an AI. MERIDIAN first
-   runs its own investigation, then hands the AI only the **verified evidence** it
-   found, not your whole repo, so the answer stays anchored to real lines.
+   runs its own investigation, then sends the AI the **verified evidence** it
+   found along with the files you selected, so the answer stays anchored to real
+   lines.
 
-The mental model: **MERIDIAN indexes the project before a model is involved.**
-The AI is a reasoning layer, not the foundation. And because the index is
-always there, you can get real answers with **no key, no AI, and no internet**.
-That's the **LOCAL** engine, and it's the best place to start.
+**MERIDIAN indexes the project before any model sees it**, and the AI reasons on
+top of that index. Because the index is always there, the **LOCAL** engine can
+answer with **no key, no AI and no internet**. Start there.
 
 > **Jargon, once:** a **symbol** = a named thing in code (function, class,
 > constant). An **import** = one file using another. A **token** = the unit AIs
@@ -85,7 +84,9 @@ That's the **LOCAL** engine, and it's the best place to start.
 1. Open the app: https://drewosi.github.io/lucid-engine/app.html
    (first visit shows a one-time welcome; accept to continue).
 2. Click **Load the demo project** (on the welcome screen, or press `Ctrl-K` and
-   type "demo"). A tiny sample project loads instantly.
+   type "demo"). A tiny sample project loads instantly. Shortcut: open
+   https://drewosi.github.io/lucid-engine/app.html?demo and the demo starts by
+   itself (on a first visit, accept the welcome with the demo button).
 3. The provider is already **LOCAL**: no key, no AI, no network. Type a question
    in the box at the bottom and press **Enter**:
    - `where is addTodo defined`
@@ -95,14 +96,15 @@ That's the **LOCAL** engine, and it's the best place to start.
 4. In any answer, **click an evidence chip** (the small `ctx://path:line`
    buttons) to open that file at the cited lines, with the quote highlighted.
 
-That's the whole loop: **load → ask → follow the evidence.** Everything below is
-detail you can reach for when you need it.
+The loop is **load → ask → follow the evidence.** The sections below are
+reference for when you need them.
 
 ---
 
 ## 3. The screen, explained
 
-- **Left sidebar ("the rail")**: load your project; tick which files are in play;
+- **Left sidebar ("the rail")**: load your project (or several, side by side, as a
+  **workspace**: see [§4](#work-across-several-repos)); tick which files are in play;
   and read the **PROJECT INTELLIGENCE** panel (live counts: files, directories,
   packages, entry points, tests, symbols, TODOs, orphans, signals). Each count is
   a button that runs the matching investigation. Collapse the rail with `Ctrl-B`;
@@ -126,8 +128,11 @@ Your files are read into **browser memory only**. Three ways:
   Access API, which also lets you **reload from disk in one click** later ([§10](#10-save-reload-export)).
 - **[ PICK FILES ]** to choose individual files.
 
-Load a folder while one is already open and MERIDIAN asks: **REPLACE** it or
-**ADD** to it (dropping loose files is always additive).
+Load a folder while one is already open and MERIDIAN asks: **REPLACE** it, or
+**ADD REPO** to load it beside the first one as a second repo (see
+[Work across several repos](#work-across-several-repos) below). If a repo with
+that folder's name is already loaded, the choice is **RELOAD** it from the new
+pick or add it as another repo. Dropping loose files is always additive.
 
 **What gets skipped automatically**
 
@@ -137,21 +142,68 @@ Load a folder while one is already open and MERIDIAN asks: **REPLACE** it or
 | dot-folders (except `.github`) | tooling noise |
 | binaries (images, fonts, archives, compiled files) | not source |
 | files > **512 KB** | oversized |
-| anything past **8,000 files** or **~300 MB** total | memory caps that keep the tab alive |
+| anything past the **file cap** (8,000 files by default) or **~300 MB** total | memory caps that keep the tab alive |
 
 Everything skipped is **counted and attributed**. Open **[ REVIEW SKIPPED ]** to
 see the list grouped by reason, and click **[ INCLUDE ]** on any one file to pull
 it in anyway (true binaries stay out).
 
+**File cap.** Up to 8,000 files by default, adjustable in Settings under
+**FILE CAP**. Enter a positive whole number and click **Set**; leave it blank to
+go back to 8,000. Anything else (0, a negative number, text) is rejected. The new
+cap applies to the next folder you load. A higher cap uses more memory, and the
+~300 MB text cap still applies. Shared links and bundles are held to the same cap
+when you open them.
+
 **Ignore patterns.** In Settings, add glob-style filters (one per line, `*` is
 wildcard) to skip more, e.g. `*.min.js`, `*.map`, `*.lock`. **[ Suggest ]**
-proposes common ones, but only globs that actually match a file you loaded.
+proposes common ones, but only globs that match a file you loaded.
 
 > **Power user:** the indexer skips any single line longer than 400 characters
 > (minified bundles), so imports on those lines don't enter the graph, and the
 > `orphans`/`broken` answers disclose the skipped-line count so a missing edge is
 > never presented as a certainty. Reads run through a bounded 32-wide pool so the
 > caps hold even on one giant drop.
+
+### Work across several repos
+
+A **workspace** is several project folders loaded side by side: a frontend and
+its API, a service and the shared library it imports. Everything still lives in
+this tab's memory only.
+
+- **Add a repo.** Once a folder is loaded, a **WORKSPACE** block appears under the
+  drop zone. **[ + ADD REPO ]** picks another folder; dropping or picking a folder
+  and choosing **[ ADD REPO ]** does the same. Each repo keeps its own file set and
+  its own index.
+- **Repo labels.** Every path starts with its repo's name: `web/src/app.js`,
+  `api/src/app.js`. Two repos can hold the same relative path and never collide.
+  Two folders with the same name get distinct labels (`app`, `app-2`).
+- **Switch and scope.** Click a repo's name to make it the **active repo** (`▸`).
+  **[ ASK: ALL REPOS ]** sends every question to all repos at once; click it to
+  switch to **[ ASK: &lt;repo&gt; ONLY ]**, which narrows questions to the active
+  repo. The scope applies to the LOCAL engine and to AI providers alike: a scoped
+  question searches, indexes and sends that repo only. LOCAL answers state the
+  scope as their first trace step, and the budget line says `… only` while scoped.
+- **Ask across repos.** In ALL scope, SMART packing guarantees the best-scoring
+  file of every repo a slot, and the model is told which repos are loaded and
+  that each path begins with its repo label. Ask `workspace` (or "compare the
+  repos") for the deterministic cross-repo view: per-repo files, languages,
+  entry points, tests and symbols; dependencies declared by two or more repos;
+  **repo links** (one repo depends on a package another loaded repo publishes);
+  imports that resolve across repos; and names exported by more than one repo.
+  The same summary sits at the bottom of **PROJECT INTELLIGENCE**, with each
+  repo's signal count. Dependency matching reads `package.json`,
+  `requirements.txt`, `go.mod`, `Cargo.toml`, `composer.json` and `Gemfile`.
+- **Citations.** With several repos loaded, evidence chips read
+  `ctx://web:src/app.js:12–14` and open that file in that repo. Copied citations
+  use the same `repo:path:line` form. If a model cites a path without its repo
+  label and only one repo has that path, MERIDIAN maps it; if two repos have it,
+  the chip stays greyed out rather than guess.
+- **Unload a repo** with its **✕**. Nothing on disk is touched.
+- **The caps are shared.** The file cap (8,000 by default) and ~300 MB limits cover the whole
+  workspace, not each repo. The meter under the repo list shows the total. A repo
+  added near the cap loads only partly, and **[ REVIEW SKIPPED ]** lists what was
+  left out.
 
 ---
 
@@ -162,7 +214,7 @@ provider keeps its own key.
 
 | Provider | Key? | Models | Notes |
 |---|---|---|---|
-| **LOCAL** | none | — | Answers factual questions itself. No AI, no network. **Start here.** |
+| **LOCAL** | none | none | Answers factual questions itself. No AI, no network. **Start here.** |
 | **Anthropic** | `sk-ant-…` | Sonnet 5 (1M-token context), Haiku 4.5 (200K) | Best reasoning; supports **prompt caching** (cheap multi-turn). |
 | **OpenAI** | `sk-…` | GPT-5.1 (400K), GPT-5 mini (400K) | Standard chat-completions. |
 | **Custom** | optional | your own | Any OpenAI-compatible endpoint. **On the hosted page only `localhost` endpoints work** (see below). |
@@ -184,6 +236,17 @@ save any placeholder (LM Studio accepts e.g. `lm-studio`); whatever you save is
 passed through verbatim as a `Bearer` token. Remote (non-localhost) endpoints are
 **blocked on the hosted page** by its security policy; to use one, self-host the
 workbench and widen `connect-src` ([§12](#12-for-power-users-internals--self-hosting)).
+
+**Enable CORS on a local server.** The browser only lets the hosted page talk to
+a local server that allows requests from `https://drewosi.github.io`.
+
+- **LM Studio** ships with CORS off. Turn on **Enable CORS** in its server
+  settings (or start it with `lms server start --cors`).
+- **Ollama** reads allowed origins from the `OLLAMA_ORIGINS` environment
+  variable. Set it to `https://drewosi.github.io` and restart Ollama.
+
+**[ TEST ENDPOINT ]** reports a CORS failure if one remains. On a self-hosted copy,
+allow your own page's origin instead.
 
 ---
 
@@ -207,9 +270,9 @@ REASONING** (an interpretation question; connect an AI for those).
 | `structure` | "project structure", "how is this organized" | Packages, entries, tests, top dirs, languages |
 | `tests` | "where are the tests" | Detected test files |
 | `entries` | "entry points", "main file" | index/main/app/server/cli… |
-| `dir <path>` | — | Summary of one folder |
+| `dir <path>` | n/a | Summary of one folder |
 | `recent [n]` | "what changed recently" | Most recently modified files |
-| `search <text\|regex>` | — | Text/regex search (quote for literal: `search "foo bar"`) |
+| `search <text\|regex>` | n/a | Text/regex search (quote for literal: `search "foo bar"`) |
 
 **Analyze the dependency graph & code health**
 
@@ -233,6 +296,7 @@ REASONING** (an interpretation question; connect an AI for those).
 |---|---|
 | `signals` | A ranked digest of the top few things worth attention, each pinned to evidence |
 | `drift` | What changed since your **last session** (new/removed/reshaped files), from a local metadata fingerprint (paths & counts only, never contents) |
+| `workspace` | With 2+ repos loaded: per-repo stats, shared dependencies, repo links, cross-repo imports and names exported in more than one repo ("compare the repos" works too) |
 | `help` | The in-engine reference |
 
 **Languages understood:** JavaScript/TypeScript, Python, Go, Rust, Java, Ruby,
@@ -240,7 +304,7 @@ C#, Kotlin, Swift, PHP (symbols + import resolution), plus basic support for
 others (Scala, Elixir, Dart…). Depth varies: it's regex-based, dependency-free
 analysis, not a full compiler, and the app says so where it matters.
 
-> **Power user — the intentional limits, in one place:** graph analyses
+> **Power user: the intentional limits, in one place.** Graph analyses
 > (`cycles`/`orphans`/`hubs`/`path`/`untested`) walk **statically resolved**
 > import edges only; files wired at runtime (dynamic import, DI, HTML
 > `<script>`, bundler config) can show as orphaned without being dead. Symbol
@@ -266,7 +330,8 @@ then ask anything, including the interpretive questions LOCAL declines
 - **Grounding is on by default** (`[ GROUND: ON ]`). Before the AI answers,
   MERIDIAN runs its own investigation and attaches the verified `file:line`
   evidence as a context block. The AI is told to prefer citing those exact lines,
-  so answers are anchored to what MERIDIAN actually found, not the model's guess.
+  so answers rest on what MERIDIAN found in the index. These excerpts can come
+  from any loaded file, ticked or not.
 - Press **Stop** (or the palette) to cancel a stream; partial output is kept.
 
 > **Power user:** grounding is per-question and placed *after* the cached
@@ -311,8 +376,12 @@ shell command.
     their real line numbers kept** and omitted ranges marked, so citations stay
     verifiable. SMART turns on automatically once a project exceeds ~70% of the
     model's context window.
-- **GROUND: ON/OFF**: attach MERIDIAN's verified findings (leave it on).
-- **[ PREVIEW SEND ]**: shows *exactly* what your next question will transmit: the
+- **GROUND: ON/OFF**: attach MERIDIAN's verified findings (leave it on). The
+  excerpts can come from any loaded file, ticked or not; turn GROUND off and
+  untick a file to keep it out of a request.
+- **Conversation**: earlier questions and answers in the session go with every
+  new question.
+- **[ PREVIEW SEND ]**: shows the exact payload your next question will transmit: the
   map, the file list, whole-vs-excerpt, token estimates, and the grounding block,
   computed by the **same code** the real request uses, so the preview can't drift
   from reality.
@@ -321,12 +390,14 @@ shell command.
 - **File checkboxes**: tick/untick files (tri-state per directory) to include or
   exclude them; the budget bar shows the running total.
 
-> **Power user — how SMART scores files:** static importance (file type,
+> **Power user: how SMART scores files.** Static importance (file type,
 > READMEs/manifests/entry points weigh up; tests, lockfiles, generated dirs weigh
 > down) + recency (file *and* directory) + path depth + query-keyword hits.
 > Debug-worded questions boost test files; onboarding-worded questions boost docs.
 > The winners are greedily packed into the budget. Token counts are estimates
-> (~±15–20% vs a real tokenizer); your provider bills the actual counts.
+> and run high of a real tokenizer (an 8% pad on a scan that already counts
+> digits and line-number prefixes as their own tokens, so C/C++ lands further
+> above), so the budget is a ceiling; your provider bills the actual counts.
 
 ---
 
@@ -339,10 +410,97 @@ handle, so you can **reload from disk in one click** (after the browser
 re-confirms read permission). Other browsers restore settings and ask you to
 re-drop the folder.
 
+**Save a workspace.** With two or more repos loaded, **[ SAVE PROJECT ]** saves a
+workspace (marked `⧉` in the list): the repo names, each repo's file and token
+counts, the selection, ignore patterns, the active repo and the question scope,
+and folder handles where the browser provides them. Never file contents.
+Reloading it restores the settings and lists each repo under WORKSPACE with a
+**[ PICK ]** button (or **[ ⟳ RELOAD ]** when the browser remembers the folder;
+it asks for read permission first). Pick each folder again and its saved
+selection comes back. Dropping a folder whose name matches a waiting repo works
+too.
+
 **Export the session** as **Markdown** (`Ctrl-E`) or a self-contained **HTML** page
 (top bar / palette). Both carry the answers, traces, and the *actual cited lines*
 pulled from your files; the HTML has zero external assets. You can also copy a
 single exchange with its **[ COPY ]** button.
+
+### Share a project (no server)
+
+Click **[ SHARE ]** under the file tree (or `Ctrl-K` → "Share project"). You pick
+which files go in, then either copy a **link** or download a **bundle**.
+
+- **The link carries the code itself.** Your browser compresses the ticked files
+  (paths, full text, last-modified times) and a project name into the part of the
+  address after `#`. Browsers never send that part to a server, so GitHub Pages
+  never receives it, and neither do we. **Anyone who has the link can read those
+  files**, and so can the chat app or inbox you paste it into. There is no server,
+  so a link can't be revoked or expired.
+- **Links have a size limit: 32,000 characters.** The panel shows the live size
+  against the limit. Everything is ticked by default when it fits; otherwise
+  **[ FIT TO LINK ]** picks the most important files that do (READMEs, manifests,
+  entry points first). Files that look like secrets (`.env`, private keys,
+  credential files) always start unticked.
+- **Too big for a link? Download a bundle.** A `.meridian` file holds the same
+  data as readable JSON (open it in a text editor to see what's inside)
+  and has no size limit. Send it as a file.
+- **Never included:** API keys, provider settings, the conversation, saved
+  projects, or anything else MERIDIAN keeps in your browser.
+- You tick a box confirming you understand the above before either button works.
+- **Workspaces:** the files keep their repo labels, and the link or bundle also
+  lists those labels, so the recipient sees the same repos (read-only). By
+  default the panel ticks the files in the current question scope: every repo in
+  ALL scope, only the active repo when **[ ASK ]** is narrowed to it. **[ ALL ]**
+  ticks every repo.
+
+**Opening a share.** Open the link, or use **[ OPEN SHARED ]** in the rail (or drop
+the `.meridian` file on the drop zone). The project loads **read-only**, badged
+`SHARED · READ-ONLY`: it lives in that tab's memory only, isn't saved (save
+project is blocked), and leaves nothing in browser storage. The `#share=…` part is
+removed from the address bar once loaded, so it isn't passed on by accident. Ask
+questions as usual, with **LOCAL** (no key) or your own key. Loading your own
+folder replaces it.
+
+### Usage analytics (opt-in, off by default)
+
+MERIDIAN can keep a log of how you use it, **in your browser only**. It is off
+until you turn it on, and while it is off nothing is recorded at all.
+
+- **Turn it on:** **⚙ SETTINGS → USAGE ANALYTICS → [ USAGE ANALYTICS: ON ]**.
+- **What is stored**, per event, in this browser's IndexedDB: the time, the kind of
+  question (the same intent the LOCAL engine routes by, like `def` or `cycles`),
+  the provider, whether LOCAL or a model answered, how long it took (time to the
+  first word and to the full answer), token counts if the provider reported them,
+  how many repos were loaded and the question scope, and when you created a share
+  link, saved a bundle or added a repo.
+- **What is never stored:** code, file paths or API keys.
+- **Question text** has its own switch, **[ ALSO STORE QUESTION TEXT ]**, also off
+  by default. When on, each question is kept as you typed it, cut to 300
+  characters, with anything that looks like a key removed.
+- **See it:** **[ VIEW USAGE LOG ]** (or `Ctrl-K` → "usage analytics") shows
+  totals, a breakdown by question kind and by provider, LOCAL vs model, median and
+  90th-percentile latency, and the most recent events.
+- **Export or delete it:** the same panel has **Export JSON**, **Export CSV** and
+  **Clear all data**. Turning analytics off keeps the existing log until you clear
+  it. The settings clear-all button deletes it too. The log keeps the latest
+  5,000 events.
+
+**Send events to my own endpoint (optional).** This field is blank by default and
+is meant for people who run their own copy of MERIDIAN and their own collector.
+When you fill it in and analytics is on, the same events are sent as JSON
+(`POST`, a small batch every few seconds) to that URL, with question text only if
+you store it. That is the only network request analytics ever makes. MERIDIAN has
+no collection server; the URL is yours or nothing.
+
+- Events from **LOCAL** mode are never sent, so LOCAL stays network-free.
+- If a send fails, that batch is dropped (it stays in your local log) and sending
+  pauses for a minute, then longer after each further failure, up to 30 minutes.
+  It never retries in a loop.
+- The hosted page's security policy only allows `localhost`, so on
+  drewosi.github.io a collector must run on your machine (e.g.
+  `http://localhost:8787/events`). For a remote collector, self-host and add its
+  origin to `connect-src` ([§13](#13-run-it-on-your-own-machine)). The collector
+  must allow browser CORS from the page's origin.
 
 **Session cost**: a live `$` estimate in the top bar tracks spend as answers
 stream (prompt-cache aware). Click the reset arrow to zero it. Estimates only;
@@ -403,10 +561,13 @@ tag, the app also runs a **frame-buster** and refuses to run inside an iframe.
 (Residual risk: no CSP directive restricts top-level navigation. CSP narrows
 the attack surface; it doesn't make key theft impossible.)
 
-**Self-tests.** A deterministic suite (**200+ checks**) exercises the index,
+**Self-tests.** A deterministic suite (**350+ checks**) exercises the index,
 smart packer, intent router, the analyses/instruments, the resolvers, the ingest
-caps, the bounded search, and the trace parser against a bundled multi-language
-fixture, with no network and no API. Run it three ways: the palette → **"Run self-tests
+caps, the bounded search, share links, workspaces, usage analytics (off by
+default, no writes while off, nothing sensitive stored, export, clear, no
+network with a blank endpoint) and the trace parser against a bundled
+multi-language fixture, with no network and no API. The run uses a scratch
+analytics store, so it never touches your real usage log. Run it three ways: the palette → **"Run self-tests
 (dev)"**, append **`?selftest`** to the URL, or call `__meridianSelfTest()` in the
 browser console. Headless in CI via `scripts/run-selftests.mjs` (GitHub Actions on
 every push/PR).
@@ -436,7 +597,7 @@ The hosted page's CSP only allows network to `api.anthropic.com`,
 (a hosted vLLM box, openrouter, a company gateway) is blocked there by design.
 Self-hosting lifts that in one edit:
 
-1. **Clone or fork** the repo (or just copy `app.html` + the `app/` folder; that
+1. **Clone or fork** the repo (or copy only `app.html` + the `app/` folder; that
    is the entire workbench).
 2. **Edit the one `connect-src` line** in `app.html`'s `<meta
    http-equiv="Content-Security-Policy">` tag: append your endpoint's origin,
@@ -451,7 +612,8 @@ Self-hosting lifts that in one edit:
 
 Nothing else. Same files, same zero-dependency build (none), same behavior:
 `app.html` still loads **no third-party scripts** and makes no requests except
-to the providers you configured. Neither does the landing page.
+to the providers you configured (and, only if you set one, your own analytics
+endpoint). Neither does the landing page.
 
 ---
 
@@ -473,6 +635,9 @@ to the providers you configured. Neither does the landing page.
 - **An orphan/broken result looks wrong.** It traces *static* imports only; runtime
   wiring can't be seen (and the answer says so). Also check whether the target file
   was even loaded.
+- **"This share link is damaged or incomplete."** The link was cut short, usually
+  by a chat app or email client. Ask the sender to resend it, or to send a
+  `.meridian` bundle instead. Nothing is loaded from a broken link.
 - **The answer had no trace.** Some models don't follow the format; use
   **[ RE-GROUND & RETRY ]** or enable **Force Strict Trace** in Settings.
 
@@ -483,15 +648,26 @@ to the providers you configured. Neither does the landing page.
 - **No backend.** The whole product is static files. There is no server of ours to
   receive your data.
 - **Bring your own key.** Requests go directly from your browser to the provider's
-  API under your account. Keys live in `localStorage` only, one per provider.
+  API under your account. Keys live in `localStorage` only, one per provider. What
+  a request carries is listed in [§9](#9-control-what-gets-sent-ai-only).
 - **Zero egress to us.** File contents and conversations exist in tab memory and
-  vanish on close. Saved projects persist **metadata only** (selection + settings)
-  in IndexedDB.
+  vanish on close (unless you switch on storing question text in the usage log,
+  which keeps only your questions, in this browser). Saved projects and workspaces persist **metadata only**
+  (repo names, counts, selection + settings) in IndexedDB.
 - **LOCAL uses no network at all.** And the workbench page loads **zero
   third-party scripts**.
+- **Share links and bundles contain your code.** The link's code sits after `#`,
+  which never reaches any server (GitHub Pages included), but whoever holds the
+  link or `.meridian` file can read the files in it. Keys and settings are never
+  included. See [§10](#10-save-reload-export).
+- **Usage analytics are opt-in and local.** Off by default. When on, a usage log
+  (question kind, provider, timings, counts; never code, paths or keys; question
+  text only with its own switch) is kept in this browser's IndexedDB, and you can
+  export or clear it. Nothing is sent anywhere unless you enter your own endpoint,
+  and LOCAL-mode events are never sent. See [§10](#10-save-reload-export).
 
-That architecture is the privacy model: not a policy you have to trust, but how
-the thing is built.
+The architecture is the privacy model, and you can check it in the source and in
+your browser's network inspector.
 
 ---
 
@@ -507,7 +683,11 @@ the thing is built.
   1M). Too much context → the provider rejects the request; that's what SMART mode
   and the budget prevent.
 - **Trace**: MERIDIAN's shown work: numbered steps, each with clickable evidence.
-- **Evidence chip**: a `path:line` button that opens the cited source.
+- **Evidence chip**: a `path:line` button that opens the cited source
+  (`repo:path:line` when several repos are loaded).
+- **Workspace / repo**: several project folders loaded side by side; each one is a
+  repo, labelled by its folder name, with its own files and index.
+- **Scope**: whether a question goes to every repo (ALL) or only the active repo.
 - **Grounding**: running the deterministic investigation first and feeding its
   verified findings to the AI, so answers cite real lines.
 - **Entry point**: a file a program starts from (`index`, `main`, `app`,

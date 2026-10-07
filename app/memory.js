@@ -1,14 +1,19 @@
 import { st } from './state.js';
-import { IGNORE_DIRS, afterIngest, getIgnoreText, runIngestPool, setCtxMode, setIgnoreText, syncBudgetState } from './ingest.js';
-import { $, fmtTok, lsDel, lsGet, lsSet, setStatus, toast } from './helpers.js';
+import { IGNORE_DIRS, getIgnoreText, loadHandle, runIngestPool, setCtxMode, setIgnoreText, syncBudgetState } from './ingest.js';
+import { $, fmtTok, lsDel, lsGet, lsSet, toast } from './helpers.js';
 import { LS } from './config.js';
+import { LOOSE, isMulti, repoList, repoOf } from './repos.js';
+import { startWorkspaceRestore } from './workspace.js';
 /* ============ PROJECT MEMORY (IndexedDB) ============
    Saves named projects: selection, ignore patterns and context prefs —
    NEVER file contents. When the folder was opened through
    showDirectoryPicker() the directory handle itself is persisted too, so a
    saved project can be reloaded from disk in one click (after the browser
    re-confirms read permission). Drag-dropped projects restore settings only
-   and ask you to re-drop the folder to hydrate contents.                   */
+   and ask you to re-drop the folder to hydrate contents.
+   A multi-repo workspace saves the same way (kind 'workspace'): repo labels,
+   per-repo counts and folder handles, the selection and settings. Reloading
+   it asks you to pick each folder again; contents are never stored.        */
 
 st.lastDirHandle = null;   /* set when the current project came from showDirectoryPicker */
 st.pendingProject = null;  /* saved record waiting for its files to arrive */
@@ -79,6 +84,7 @@ function walkHandle(dir, prefix) {
 }
 
 function guessProjectName() {
+  if (isMulti()) return repoList().filter(function (r) { return !r.loose; }).map(function (r) { return r.label; }).join(' + ').slice(0, 60) || 'workspace';
   var it = st.files.keys().next();
   if (it.done) return 'project';
   var p = it.value;
@@ -104,6 +110,7 @@ function applyProjectPrefs(rec) {
 
 function loadProject(rec) {
   applyProjectPrefs(rec);
+  if (rec.kind === 'workspace') { startWorkspaceRestore(rec); return; }
   st.pendingProject = rec;
   if (rec.handle && rec.handle.queryPermission) {
     rec.handle.queryPermission({ mode: 'read' }).then(function (perm) {
@@ -116,12 +123,8 @@ function loadProject(rec) {
         toast('Read permission declined — click the project again to re-authorize, or drop the folder.');
         return;
       }
-      st.files.clear(); st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
-      st.totalBytes = 0;
-      st.skippedFiles.length = 0;
-      st.lastDirHandle = rec.handle;
-      setStatus('RELOADING “' + rec.name + '”…');
-      return walkHandle(rec.handle, rec.handle.name + '/').then(afterIngest);
+      /* a full unload, then the folder as the workspace's one repo */
+      return loadHandle(rec.handle, 'replace');
     }).catch(function (e) {
       /* stale handle — folder moved/deleted since it was saved */
       var gone = e && (e.name === 'NotFoundError' || /not found|no longer exists|GONE/i.test(e.message || ''));
@@ -138,6 +141,43 @@ function loadProject(rec) {
   }
 }
 
+/* the record a save writes — metadata only: names, counts, the unchecked paths,
+   ignore patterns, prefs and folder handles. Never a file's text (pinned by a
+   self-test). Several repos loaded → a 'workspace' record with one entry per repo.
+   Older records also carried a full per-file `tree` array — it was never read
+   back, so it is no longer written (old records still load fine). */
+function buildSaveRecord(name) {
+  name = String(name || '').trim().slice(0, 60) || 'project';
+  var unchecked = [], total = 0;
+  st.files.forEach(function (f, p) {
+    total += f.tokens;
+    if (!f.checked) unchecked.push(p);
+  });
+  var rec = {
+    name: name, savedAt: Date.now(), fileCount: st.files.size, totalTokens: total,
+    unchecked: unchecked, ignore: getIgnoreText(),
+    prefs: { ctxmode: st.ctxMode, budget: parseInt(lsGet(LS.ctxbudget), 10) || 0 },
+    /* the one repo's own handle when the workspace has one (lastDirHandle can
+       outlive a repo that was unloaded) */
+    handle: (st.repos.length === 1 ? st.repos[0].handle : st.lastDirHandle) || null
+  };
+  if (isMulti()) {
+    var tok = Object.create(null);
+    st.files.forEach(function (f, p) { var r = repoOf(p); tok[r] = (tok[r] || 0) + f.tokens; });
+    rec.kind = 'workspace';
+    rec.handle = null;
+    rec.prefs.active = st.ws.active || '';
+    rec.prefs.scope = st.ws.scope === 'repo' ? 'repo' : 'all';
+    rec.repos = [];
+    rec.loose = 0;
+    repoList().forEach(function (r) {
+      if (r.label === LOOSE) { rec.loose = r.files; return; }
+      rec.repos.push({ label: r.label, fileCount: r.files, totalTokens: tok[r.label] || 0, handle: r.handle || null });
+    });
+  }
+  return rec;
+}
+
 function renderProjects() {
   idbAll().then(function (recs) {
     recs.sort(function (a, b) { return (b.savedAt || 0) - (a.savedAt || 0); });
@@ -150,12 +190,14 @@ function renderProjects() {
       row.className = 'proj-row';
       var pn = document.createElement('button');
       pn.type = 'button'; pn.className = 'pn';
-      pn.textContent = rec.name + (rec.handle ? ' ⟳' : '');
-      pn.title = rec.handle ? 'Reload from disk (one click)' : 'Restore settings; re-drop folder for contents';
+      var ws = rec.kind === 'workspace';
+      pn.textContent = rec.name + (ws ? ' ⧉' : rec.handle ? ' ⟳' : '');
+      pn.title = ws ? 'Workspace of ' + (rec.repos || []).length + ' repos: restore settings, then pick each folder again'
+        : rec.handle ? 'Reload from disk (one click)' : 'Restore settings; re-drop folder for contents';
       pn.addEventListener('click', function () { loadProject(rec); });
       var pm = document.createElement('span');
       pm.className = 'pm';
-      pm.textContent = rec.fileCount + 'f · ' + fmtTok(rec.totalTokens || 0) + ' · ' + new Date(rec.savedAt).toISOString().slice(0, 10);
+      pm.textContent = (ws ? (rec.repos || []).length + ' repos · ' : '') + rec.fileCount + 'f · ' + fmtTok(rec.totalTokens || 0) + ' · ' + new Date(rec.savedAt).toISOString().slice(0, 10);
       var px = document.createElement('button');
       px.type = 'button'; px.className = 'px'; px.textContent = '✕';
       px.setAttribute('aria-label', 'Delete saved project ' + rec.name);
@@ -172,30 +214,23 @@ function renderProjects() {
 function initMemory() {
   $('saveproj').addEventListener('click', function () {
     if (!st.files.size) { toast('Load a project first.'); return; }
-    var name = window.prompt('Save project as:', guessProjectName());
+    /* a shared snapshot is not on this disk and has nothing to reload from */
+    if (st.shared) { toast('Shared projects are read-only and are not saved. Ask the sender for a .meridian bundle to keep a copy.'); return; }
+    var name = window.prompt(isMulti() ? 'Save workspace as:' : 'Save project as:', guessProjectName());
     if (name === null) return;
-    name = name.trim().slice(0, 60) || 'project';
-    /* older records also carried a full per-file `tree` array — it was never
-       read back, so it is no longer written (old records still load fine) */
-    var unchecked = [], total = 0;
-    st.files.forEach(function (f, p) {
-      total += f.tokens;
-      if (!f.checked) unchecked.push(p);
-    });
-    var rec = {
-      name: name, savedAt: Date.now(), fileCount: st.files.size, totalTokens: total,
-      unchecked: unchecked, ignore: getIgnoreText(),
-      prefs: { ctxmode: st.ctxMode, budget: parseInt(lsGet(LS.ctxbudget), 10) || 0 },
-      handle: st.lastDirHandle || null
-    };
+    var rec = buildSaveRecord(name);
+    name = rec.name;
     idbPut(rec).then(function () {
-      toast(rec.handle
+      toast(rec.kind === 'workspace'
+        ? '“' + name + '” saved as a workspace of ' + rec.repos.length + ' repos: names, counts, selection and settings only, never contents. Reloading asks you to pick each folder again.'
+        : rec.handle
         ? '“' + name + '” saved — one-click reload enabled (selection + settings only, never contents).'
         : '“' + name + '” saved — settings + selection only; ' + (window.showDirectoryPicker ? 'open via [ PICK FOLDER ] to enable one-click reload.' : 'this browser can’t re-open folders — re-drop to reload.'));
       renderProjects();
     }).catch(function (e) {
       /* a handle that cannot be cloned (rare) — retry without it */
       rec.handle = null;
+      (rec.repos || []).forEach(function (r) { r.handle = null; });
       idbPut(rec).then(function () { toast('“' + name + '” saved (without reload handle).'); renderProjects(); })
         .catch(function () { toast('Save failed: ' + ((e && e.message) || 'IndexedDB unavailable.')); });
     });
@@ -211,4 +246,4 @@ function wipeMemory() {
   try { indexedDB.deleteDatabase('meridian-drift'); } catch (e) {} /* drift snapshots (drift.js) */
 }
 
-export { applyPendingProject, renderProjects, walkHandle, loadProject, initMemory, wipeMemory };
+export { applyPendingProject, buildSaveRecord, renderProjects, walkHandle, loadProject, initMemory, wipeMemory };

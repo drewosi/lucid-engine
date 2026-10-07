@@ -26,6 +26,7 @@ var MODELS = {
    so clearall (which iterates LS) can never miss a renamed provider key */
 var LS = { key: PROVIDERS.anthropic.keyLS, model: 'meridian.model', mode: 'meridian.app.mode', accepted: 'meridian.accepted', ctxmode: 'meridian.ctxmode', ctxbudget: 'meridian.ctxbudget', ignore: 'meridian.ignore',
            provider: 'meridian.provider', okey: PROVIDERS.openai.keyLS, ckey: PROVIDERS.custom.keyLS, curl: 'meridian.custom.url', cmodel: 'meridian.custom.model', ground: 'meridian.ground',
-           strictTrace: 'meridian.stricttrace', spendcap: 'meridian.spendcap', railw: 'meridian.rail.width', railopen: 'meridian.rail.open' };
+           strictTrace: 'meridian.stricttrace', spendcap: 'meridian.spendcap', maxfiles: 'meridian.maxfiles', railw: 'meridian.rail.width', railopen: 'meridian.rail.open',
+           analytics: 'meridian.analytics', analyticsText: 'meridian.analytics.text', analyticsUrl: 'meridian.analytics.url' };
 
 export { PROVIDERS, MODELS, LS };

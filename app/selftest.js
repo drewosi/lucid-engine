@@ -1,15 +1,27 @@
-import { estTokens, packSmartContext, staticScore } from './smart-context.js';
-import { buildIndex, detectLang } from './indexer.js';
-import { st } from './state.js';
-import { SAMPLE_PROJECT } from './demo.js';
+import { estTokens, numberLines, packSmartContext, staticScore } from './smart-context.js';
+import { buildIndex, detectLang, getIndex } from './indexer.js';
+import { invalidateAll, st } from './state.js';
+import { SAMPLE_PROJECT, wantsDemo } from './demo.js';
 import { classifyIntent } from './local.js';
-import { INTENTS, LOCAL_MENU, LOCAL_STARTERS, listOrphans, runInvestigation } from './intents.js';
+import { INTENTS, LOCAL_MENU, LOCAL_STARTERS, listOrphans, pickSymbol, runInvestigation, symLookup } from './intents.js';
 import { extractTrace } from './trace.js';
 import { httpErrorText, parseStreamEvent, splitSseEvents } from './chat.js';
-import { __setCapsForTest, ignoredDirPrefix, ingestFile, runIngestPool } from './ingest.js';
+import { DEFAULT_MAX_FILES, __setCapsForTest, capInfo, ignoredDirPrefix, ingestFile, loadMaxFiles, parseMaxFiles, runIngestPool } from './ingest.js';
 import { localSearchData } from './actions.js';
-import { buildContextBlocks } from './prompt.js';
-import { app, esc, rememberFocus, returnFocus, toast, trap } from './helpers.js';
+import { INSTRUCTIONS, buildContextBlocks } from './prompt.js';
+import { app, esc, fmtTok, lsDel, lsGet, lsSet, rememberFocus, returnFocus, toast, trap } from './helpers.js';
+import { LS } from './config.js';
+import { BUNDLE_NOTE, FILE_FIELDS, PAYLOAD_FIELDS, SHARE_LINK_MAX_CHARS, bundleText, buildSharePayload, createShareLink, decodeShareData,
+  defaultSharePaths, encodeShareData, isSecretish, measureLink, parseBundleText, payloadEntries, readBundleFile } from './share.js';
+import { citeText, displayPath, displayText, dropRepoFiles, isMulti, registerRepo, remapRoot, repoList, repoOf, resetWorkspace, resolveCitePath, scopeRepo, uniqueLabel, withScope } from './repos.js';
+import { claimLabel, selectedTokens } from './ingest.js';
+import { buildSaveRecord } from './memory.js';
+import { evidenceChip } from './trace.js';
+import { closeViewer } from './viewer.js';
+import { afterWorkspaceIngest, pendingLabelFor } from './workspace.js';
+import { projectSig } from './drift.js';
+import { AN_FORMAT, AN_Q_MAX, CSV_COLS, EVENT_FIELDS, __setAnalyticsForTest, analyticsCSV, analyticsJSON, analyticsOn, clearAnalytics, endpointUrl,
+  flushAnalyticsSend, idbStore, percentile, readEvents, sanitizeEvent, storeText, summarize, track, validEndpoint } from './analytics.js';
 /* ============ SELF-TESTS (DEV · EXPERIMENTAL) ============
    Loads a scratch multi-language fixture into a swapped-in files map, runs the
    real index/packer/trace/SSE-adapter/ingest code, asserts, then restores state.
@@ -137,7 +149,7 @@ function ingestCases(ok) {
       ok('ingest · pool enforces the file cap mid-batch', st.files.size === capFiles, st.files.size + ' vs cap ' + capFiles);
       ok('ingest · over-cap counted + reviewable', st.skipped.over - overBase === 4
         && st.skippedFiles.some(function (s) { return s.reason === 'over-cap'; }), 'over Δ=' + (st.skipped.over - overBase));
-      __setCapsForTest({ maxFiles: 8000, maxTotal: st.totalBytes + 3 });
+      __setCapsForTest({ maxFiles: DEFAULT_MAX_FILES, maxTotal: st.totalBytes + 3 });
       var memBase = st.skipped.memcap;
       return runIngestPool([
         { path: 'pool/m0.txt', getFile: function () { return Promise.resolve(new File(['abcdefgh'], 'm0.txt')); } },
@@ -150,6 +162,539 @@ function ingestCases(ok) {
     });
   });
 }
+/* FILE CAP setting — the saved LS.maxfiles value drives the real ingest guard.
+   Runs on its own scratch files map pre-filled to one below the cap, so a
+   20,000-file cap is exercised without reading 20,000 Blobs. The saved setting
+   is put back in finally; restore() puts the live caps back. */
+function fileCapCases(ok) {
+  var savedLS = lsGet(LS.maxfiles), keepFiles = st.files, keepBytes = st.totalBytes;
+  var keepCaps = __setCapsForTest({ maxTotal: 300 * 1024 * 1024 }); /* undo the memory-cap case's tiny ceiling */
+  function capRun(cap) {
+    lsSet(LS.maxfiles, String(cap));
+    loadMaxFiles();
+    st.files = new Map(); st.totalBytes = 0;
+    for (var i = 0; i < cap - 1; i++) st.files.set('capfill/' + i, { content: '', checked: true });
+    var overBase = st.skipped.over, items = [];
+    for (var k = 0; k < 3; k++) (function (n) {
+      items.push({ path: 'capnew/f' + n + '.txt', getFile: function () { return Promise.resolve(new File(['cap' + n], 'f' + n + '.txt')); } });
+    })(k);
+    return runIngestPool(items, 1).then(function () {
+      ok('file cap · custom ' + cap + ' honored by ingest', capInfo().maxFiles === cap && st.files.size === cap && st.skipped.over - overBase === 2,
+        'size ' + st.files.size + ' · over Δ=' + (st.skipped.over - overBase));
+    });
+  }
+  function done() {
+    st.files = keepFiles; st.totalBytes = keepBytes;
+    __setCapsForTest(keepCaps);
+    if (savedLS === null) lsDel(LS.maxfiles); else lsSet(LS.maxfiles, savedLS);
+  }
+  try {
+    lsDel(LS.maxfiles);
+    ok('file cap · default is 8,000 when unset', DEFAULT_MAX_FILES === 8000 && loadMaxFiles() === 8000 && capInfo().maxFiles === 8000, String(capInfo().maxFiles));
+    var bad = ['0', '-5', '-1', 'abc', '', '   ', '2.5', '1e4', '12abc', 'NaN', '99999999999999999999'];
+    var leaked = bad.filter(function (v) { lsSet(LS.maxfiles, v); return loadMaxFiles() !== 8000; });
+    ok('file cap · invalid saved values (0, negative, non-numeric, empty) fall back to 8,000', !leaked.length, leaked.join(' | '));
+    ok('file cap · parse rejects junk + null, accepts whole numbers', parseMaxFiles(null) === 8000 && parseMaxFiles(undefined) === 8000 && parseMaxFiles(0) === 8000
+      && parseMaxFiles(-3) === 8000 && parseMaxFiles(' 2000 ') === 2000 && parseMaxFiles(20000) === 20000);
+  } catch (e) { done(); return Promise.reject(e); }
+  return capRun(2000).then(function () { return capRun(20000); }).then(done, function (e) { done(); throw e; });
+}
+/* share links + bundles — real CompressionStream round-trips over the scratch
+   fixture. A sentinel key is planted in the conversation and, only when that
+   slot is EMPTY, in the Anthropic key slot (removed again before any await);
+   neither may reach a payload. */
+function settleCode(p) { return p.then(function () { return 'loaded'; }, function (e) { return (e && e.code) || 'raw:' + (e && e.message); }); }
+function shareCases(ok) {
+  var SENT = 'sk-ant-SELFTEST-SENTINEL-0000';
+  var small = Object.keys(SAMPLE_PROJECT);
+  st.files.set('src/unicode.txt', stEntry('src/unicode.txt', 'naïve café — 日本語 ✓\r\nline two'));
+  st.files.set('config/.env', stEntry('config/.env', 'API_KEY=hunter2'));
+  small.push('src/unicode.txt');
+  var planted = !lsGet(LS.key);
+  if (planted) lsSet(LS.key, SENT);
+  st.history.push({ role: 'user', content: 'my key is ' + SENT });
+  var pl, json, btxt;
+  try {
+    pl = buildSharePayload(small, { name: 'selftest', now: 1 });
+    json = JSON.stringify(pl); btxt = bundleText(pl);
+  } finally {
+    st.history.pop();
+    if (planted) lsDel(LS.key);
+  }
+  ok('share · payload carries only whitelisted fields', Object.keys(pl).every(function (k) { return PAYLOAD_FIELDS.indexOf(k) !== -1; })
+    && pl.files.every(function (f) { return Object.keys(f).every(function (k) { return FILE_FIELDS.indexOf(k) !== -1; }); }));
+  var keyNames = Object.keys(pl).concat(Object.keys(JSON.parse(btxt)));
+  pl.files.forEach(function (f) { keyNames = keyNames.concat(Object.keys(f)); });
+  var stored = [LS.key, LS.okey, LS.ckey, LS.curl].map(lsGet).filter(function (v) { return v && v.length >= 6; });
+  ok('share · no secrets: no key/provider/history fields, no stored key values',
+    !keyNames.some(function (k) { return /key|token|secret|provider|model|history|transcript|setting/i.test(k); })
+    && json.indexOf(SENT) === -1 && btxt.indexOf(SENT) === -1
+    && stored.every(function (v) { return json.indexOf(v) === -1 && btxt.indexOf(v) === -1; }), keyNames.length + ' field names checked');
+  ok('share · secret-looking paths are flagged', ['.env', 'config/.env.local', 'certs/server.pem', 'home/.ssh/id_rsa', 'app/credentials.json'].every(isSecretish)
+    && !['src/env.js', 'src/keyboard.js', 'README.md', '.env.example.md/x.js'].some(isSecretish));
+  /* deterministic high-entropy text: no compressor fits 60K of it under the limit */
+  var seed = 12345, noise = '';
+  for (var i = 0; i < 60000; i++) { seed = (Math.imul(seed, 1103515245) + 12345) | 0; noise += String.fromCharCode(33 + ((seed >>> 16) % 90)); }
+  st.files.set('share/noise.txt', stEntry('share/noise.txt', noise));
+  var d1;
+  return encodeShareData(pl).then(function (d) {
+    d1 = d;
+    ok('share · link data is versioned base64url', /^v1\.[A-Za-z0-9_-]+$/.test(d), d.slice(0, 12));
+    return decodeShareData(d);
+  }).then(function (back) {
+    ok('share · round-trip keeps every path and byte', back.name === 'selftest' && back.created === 1 && back.files.length === pl.files.length
+      && back.files.every(function (f, n) { return f.p === pl.files[n].p && f.c === pl.files[n].c; }), back.files.length + ' files');
+    ok('share · unicode + CRLF survive the round-trip', back.files.some(function (f) { return f.p === 'src/unicode.txt' && f.c === st.files.get('src/unicode.txt').content; }));
+    var ents = payloadEntries(back);
+    ok('share · decoded files rebuild as checked entries', ents.length === back.files.length
+      && ents.every(function (kv) { return kv[1].checked === true && kv[1].lines >= 1 && typeof kv[1].tokens === 'number'; }));
+    return Promise.all([measureLink(small), measureLink(['share/noise.txt']), settleCode(createShareLink(['share/noise.txt']))]);
+  }).then(function (r) {
+    ok('share · small project fits in a link under the limit', r[0].fits && r[0].url.length <= SHARE_LINK_MAX_CHARS && r[0].url.indexOf('#share=v1.') !== -1, r[0].chars + ' / ' + SHARE_LINK_MAX_CHARS);
+    ok('share · oversize selection measured over the limit, no url', !r[1].fits && r[1].url === null && r[1].chars > SHARE_LINK_MAX_CHARS, r[1].chars + ' chars');
+    ok('share · createShareLink refuses over the limit', r[2] === 'toolong', r[2]);
+    return defaultSharePaths();
+  }).then(function (def) {
+    ok('share · default selection skips secret-looking + oversize files', def.length > 0 && def.indexOf('config/.env') === -1 && def.indexOf('share/noise.txt') === -1, def.length + ' files');
+    return measureLink(def).then(function (m) { ok('share · default selection actually fits', m.fits, m.chars + ' chars'); });
+  }).then(function () {
+    var trunc = d1.slice(0, Math.floor(d1.length / 2));
+    return Promise.all([
+      decodeShareData(trunc).catch(function (e) { return e; }),
+      settleCode(decodeShareData(trunc)),
+      settleCode(decodeShareData('v1.@@not*base64')),
+      settleCode(decodeShareData('v1.QUJDREVGR0hJSktMTU5PUA')),
+      settleCode(decodeShareData('v9.' + d1.slice(3))),
+      settleCode(decodeShareData('')),
+      settleCode(decodeShareData('garbage'))
+    ]);
+  }).then(function (c) {
+    ok('share · truncated link → friendly error', c[1] === 'corrupt' && /damaged or incomplete/.test((c[0] && c[0].friendly) || ''), c[1]);
+    ok('share · invalid characters → corrupt', c[2] === 'corrupt', c[2]);
+    ok('share · non-deflate bytes → corrupt', c[3] === 'corrupt', c[3]);
+    ok('share · newer format version → version error', c[4] === 'version', c[4]);
+    ok('share · empty / unprefixed input → corrupt', c[5] === 'corrupt' && c[6] === 'corrupt', c[5] + ' · ' + c[6]);
+    function crafted(o) { return settleCode(encodeShareData(o).then(decodeShareData)); }
+    return Promise.all([
+      crafted({ format: 'not-meridian', v: 1, files: [{ p: 'a.js', c: 'x' }] }),
+      crafted({ format: 'meridian-share', v: 1, name: 'x', files: [{ p: 'a.js', c: 42 }] }),
+      crafted({ format: 'meridian-share', v: 1, name: 'x', files: [{ p: '../etc/passwd', c: 'x' }] }),
+      crafted({ format: 'meridian-share', v: 1, name: 'x', files: [{ p: 'big.txt', c: new Array(600 * 1024).join('a') }] }),
+      encodeShareData({ format: 'meridian-share', v: 1, name: 'x', apiKey: SENT, files: [{ p: 'a.js', c: 'x', key: SENT }] }).then(decodeShareData)
+    ]);
+  }).then(function (c) {
+    ok('share · wrong format / non-string content / ../ path refused', c[0] === 'invalid' && c[1] === 'invalid' && c[2] === 'invalid', c.slice(0, 3).join(' · '));
+    ok('share · oversized file in a link refused (decompression cap)', c[3] === 'toobig', c[3]);
+    ok('share · decoder drops unknown fields', !('apiKey' in c[4]) && !('key' in c[4].files[0]) && JSON.stringify(c[4]).indexOf(SENT) === -1);
+    ok('share · bundle note says the code is readable', JSON.parse(btxt).note === BUNDLE_NOTE && /anyone who has it can read it/.test(BUNDLE_NOTE));
+    return readBundleFile(new File([btxt], 'selftest.meridian'));
+  }).then(function (back) {
+    ok('share · bundle round-trip through a File', back.name === 'selftest' && back.files.length === pl.files.length
+      && back.files.every(function (f, n) { return f.p === pl.files[n].p && f.c === pl.files[n].c; }));
+    function bcode(t) { try { parseBundleText(t); return 'loaded'; } catch (e) { return e.code; } }
+    ok('share · bad bundles → friendly errors', bcode('{not json') === 'bundle' && bcode('{"format":"x"}') === 'bundle'
+      && bcode(JSON.stringify({ format: 'meridian-share', v: 99, files: [{ p: 'a', c: 'b' }] })) === 'version');
+  });
+}
+/* multi-repo workspace — two repos that share a relative path (src/util.js), a
+   dependency (react), a package link (beta depends on alpha's @acme/alpha) and an
+   exported name (formatDate). Runs on its own scratch state and restores it. */
+function workspaceFixture() {
+  return {
+    'alpha/package.json': '{ "name": "@acme/alpha", "dependencies": { "react": "^18.0.0", "lodash": "^4.17.0" } }',
+    'alpha/README.md': '# alpha\nthe shared library',
+    'alpha/src/index.js': "import { formatDate } from './util.js';\nexport function startAlpha() { return formatDate(1); }",
+    'alpha/src/util.js': 'export function formatDate(d) { return String(d); }\n// ALPHA_ONLY_MARKER',
+    'beta/package.json': '{\n  "name": "beta-web",\n  "dependencies": {\n    "react": "^18.2.0",\n    "@acme/alpha": "1.0.0"\n  }\n}',
+    'beta/src/index.js': "import { startAlpha } from '@acme/alpha';\nexport function startBeta() { return startAlpha(); }",
+    'beta/src/util.js': 'export function formatDate(d) { return "beta" + d; }\n// BETA_ONLY_MARKER'
+  };
+}
+/* the landing page's demo link (app.html?demo): which URLs start the demo, and
+   that a #share= link is never shadowed by it */
+function demoLinkCases(ok) {
+  ok('demo link · ?demo starts the demo', wantsDemo('?demo', '') === true);
+  ok('demo link · ?demo=1 and a later ?x&demo param also work', wantsDemo('?demo=1', '') && wantsDemo('?x=1&demo', ''));
+  ok('demo link · no param, no demo', wantsDemo('', '') === false && wantsDemo('?selftest', '') === false);
+  ok('demo link · a longer param name is not a match', wantsDemo('?demolition', '') === false && wantsDemo('?nodemo', '') === false);
+  ok('demo link · a #share= link wins over ?demo', wantsDemo('?demo', '#share=v1.abc') === false);
+  ok('demo link · an unrelated hash does not block it', wantsDemo('?demo', '#top') === true);
+}
+/* "where is X defined" on a project that defines a symbol named `where` (real
+   Godot + GDScript reports): the named identifier must win over grammar words,
+   and a name missing from the index is said to be missing, never swapped */
+function symbolPickCases(ok) {
+  var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty };
+  var F = {
+    'src/where.js': 'export const where = 1;\nexport function main() { return where; }',
+    'tools/gles3_builders.py': 'import os\n\n\nclass GLES3HeaderStruct:\n    pass',
+    'notes.txt': 'connect the _on_talk_submitted handler in the talk scene'
+  };
+  function inv(q) { var it = classifyIntent(q); return { it: it, r: runInvestigation(q, it) }; }
+  try {
+    st.files = new Map();
+    Object.keys(F).forEach(function (p) { st.files.set(p, stEntry(p, F[p])); });
+    invalidateAll();
+    var idx = getIndex();
+    ok('pick · fixture defines a symbol named `where`', symLookup('where', idx).length === 1);
+    var a = inv('where is GLES3HeaderStruct defined');
+    ok('pick · named identifier beats the grammar word "where"', a.it.arg === 'GLES3HeaderStruct' && /tools\/gles3_builders\.py` line 4 \(class\)/.test(a.r.answer), a.it.arg + ' · ' + a.r.answer.split('\n')[0]);
+    var b = inv('where is _on_talk_submitted defined');
+    ok('pick · a name missing from the index is reported missing', b.it.arg === '_on_talk_submitted' && /No indexed definition named `_on_talk_submitted`/.test(b.r.answer)
+      && b.r.answer.indexOf('src/where.js') === -1, b.it.arg + ' · ' + b.r.answer.split('\n')[0]);
+    ok('pick · the missing case offers the text search', (b.r.actions || []).some(function (x) { return x.kind === 'search' && x.command === '_on_talk_submitted'; }));
+    var c = inv('where is ghostFn defined in main');
+    ok('pick · the "where is X" slot wins over a later indexed word', c.it.arg === 'ghostFn' && /No indexed definition named `ghostFn`/.test(c.r.answer), c.it.arg);
+    ok('pick · grammar words never picked from the index', pickSymbol('where is it', idx) !== 'where' && pickSymbol('find the definition', idx) !== 'where', pickSymbol('where is it', idx));
+    ok('pick · "who calls X" / "find X" slots', pickSymbol('who calls main', idx) === 'main' && pickSymbol('find GLES3HeaderStruct', idx) === 'GLES3HeaderStruct'
+      && pickSymbol('where is the class GLES3HeaderStruct', idx) === 'GLES3HeaderStruct');
+    var d = inv('where is where defined');
+    ok('pick · an explicitly named grammar-word symbol still resolves', d.it.arg === 'where' && /src\/where\.js/.test(d.r.answer), d.it.arg);
+  } finally {
+    st.files = keep.files; st.projectIndex = keep.idx; st.indexDirty = keep.dirty;
+    invalidateAll();
+  }
+}
+/* SMART on a huge project (8000-file Godot report): map + grounding + packed
+   files + instructions must fit the configured budget, and the totals the
+   preview reads (cb.plan) are the totals of what is sent */
+/* Canonical estimate. Reference lengths are Qwen3.5-9B token counts (no special
+   tokens) for these exact strings. The estimate must be at least that count and
+   not a runaway (more than double), on C/C++ — including the line-number prefix
+   SMART sends — plus JS, Python, GDScript, markdown and JSON. */
+function estBiasCases(ok) {
+  ok('est · empty is zero', estTokens('') === 0 && estTokens('', 'a.cpp') === 0);
+  var cpp = 'int main() {\n  int mask = 0x0062;\n  if (mask == 0) return 1;\n  return mask;\n}\n';
+  ok('est · path does not change the count', estTokens(cpp, 'a.cpp') === estTokens(cpp, 'a.md') && estTokens(cpp) === estTokens(cpp, 'a.cpp'));
+  /* five digits are five tokens before the pad; ceil(5 * 108 / 100) is 6 */
+  ok('est · each digit is a token, then the bias', estTokens('12345') === 6, String(estTokens('12345')));
+  var samples = [
+    ['C/C++', cpp, 'src/main.cpp', 38],
+    ['numbered C/C++', numberLines(cpp, 1), 'src/main.cpp', 50],
+    ['JS', 'export function addTodo(title) {\n  const id = Date.now();\n  return { id: id, title: title, done: false };\n}\n', 'src/add.js', 34],
+    ['Python', 'def helper(name: str) -> int:\n    return len(name) + 1\n', 'pkg/helper.py', 19],
+    ['GDScript', 'extends Node\n\nfunc _ready() -> void:\n\tvar count := 3\n\tprint(count)\n', 'player.gd', 21],
+    ['markdown', '# Title\n\nA short paragraph about the project, with a [link](https://example.com).\n', 'README.md', 21],
+    ['JSON', '{"name":"lucid","version":"1.2.3","deps":{"left":"1.0.0"}}\n', 'package.json', 25]
+  ];
+  var fails = [];
+  samples.forEach(function (row) {
+    var est = estTokens(row[1], row[2]);
+    if (est < row[3] || est > row[3] * 2) fails.push(row[0] + ' est ' + est + ' ref ' + row[3]);
+  });
+  ok('est · at or above the tokenizer on C/C++, JS, Python, GDScript, markdown, JSON', fails.length === 0,
+    fails.join('; ') || samples.map(function (row) { return row[0] + ' ' + estTokens(row[1], row[2]) + '>=' + row[3]; }).join(' · '));
+}
+function smartBudgetCases(ok) {
+  var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty, ctxMode: st.ctxMode, groundMode: st.groundMode, pins: st.pinnedEv,
+    history: st.history, budget: lsGet(LS.ctxbudget), mapCache: st.mapCache, mapDirty: st.mapDirty };
+  try {
+    st.files = new Map(); st.pinnedEv = []; st.history = [];
+    var body = new Array(40).join('  int value_x = compute_thing(alpha, beta) + offset;\n');
+    for (var i = 0; i < 3000; i++) {
+      var p = 'engine/mod' + (i % 30) + '/sub' + (i % 7) + '/deep' + (i % 5) + '/file' + i + '.cpp';
+      st.files.set(p, stEntry(p, 'void fn_' + i + '() {\n' + body + '}\n'));
+    }
+    invalidateAll();
+    lsSet(LS.ctxbudget, '20000');
+    st.ctxMode = 'smart'; st.groundMode = true;
+    var q = 'where is fn_12 used';
+    var cb = buildContextBlocks(q);
+    var sent = cb.blocks.reduce(function (a, b) { return a + estTokens(b.text); }, 0) + estTokens(INSTRUCTIONS) + estTokens(q);
+    ok('smart-ctx · whole send fits the budget on a huge project', sent <= 20000, '≈' + sent + ' tok sent vs 20000 budget');
+    ok('smart-ctx · huge project map is condensed', /condensed/.test(cb.blocks[0].text) && estTokens(cb.blocks[0].text) < 20000 * 0.25, '≈' + estTokens(cb.blocks[0].text) + ' tok map');
+    ok('smart-ctx · plan totals match the send', !!cb.plan && cb.plan.total <= 20000 && Math.abs(cb.plan.total - sent) <= sent * 0.1
+      && (cb.note || '').indexOf(fmtTok(cb.plan.total)) !== -1, cb.plan ? cb.plan.total + ' vs ' + sent + ' · ' + cb.note : 'no plan');
+    ok('smart-ctx · files still pack under the shrunk budget', cb.plan && cb.plan.packed.count > 0, cb.plan ? cb.plan.packed.count + ' files' : '');
+  } finally {
+    if (keep.budget === null) lsDel(LS.ctxbudget); else lsSet(LS.ctxbudget, keep.budget);
+    st.files = keep.files; st.projectIndex = keep.idx; st.indexDirty = keep.dirty; st.ctxMode = keep.ctxMode; st.groundMode = keep.groundMode;
+    st.pinnedEv = keep.pins; st.history = keep.history;
+    invalidateAll();
+  }
+}
+function workspaceCases(ok) {
+  var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty, bytes: st.totalBytes, skipList: st.skippedFiles, skipped: st.skipped,
+    ctxMode: st.ctxMode, groundMode: st.groundMode, pins: st.pinnedEv };
+  var W = workspaceFixture();
+  function inv(q) { var it = classifyIntent(q); return runInvestigation(q, it); }
+  function load() {
+    resetWorkspace();
+    st.files = new Map(); st.totalBytes = 0; st.pinnedEv = [];
+    st.skippedFiles = []; st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
+    Object.keys(W).forEach(function (p) { st.files.set(p, stEntry(p, W[p])); st.totalBytes += W[p].length; });
+    registerRepo('alpha', null); registerRepo('beta', null);
+    invalidateAll();
+  }
+  try {
+    /* one project, no repos: nothing changes for single-project users */
+    resetWorkspace();
+    ok('workspace · single project stays unlabelled', !isMulti() && citeText('src/x.js', 1, 2) === 'src/x.js:1–2' && displayPath('src/x.js') === 'src/x.js'
+      && displayText('`alpha/src/x.js` line 2') === '`alpha/src/x.js` line 2');
+    load();
+    /* add / remove */
+    ok('workspace · two repos registered with live counts', isMulti() && repoList().length === 2 && repoList()[0].files === 4 && repoList()[1].files === 3,
+      repoList().map(function (r) { return r.label + ':' + r.files; }).join(' '));
+    var added = claimLabel('alpha', null, null); /* a second folder also named "alpha" */
+    st.files.set('alpha-2/src/util.js', stEntry('alpha-2/src/util.js', 'export const THIRD = 3;')); st.totalBytes += 'export const THIRD = 3;'.length;
+    invalidateAll();
+    ok('workspace · same-name folder joins as a new repo (alpha-2)', added === 'alpha-2' && repoList().length === 3 && repoOf('alpha-2/src/util.js') === 'alpha-2', added);
+    var bytesBefore = st.totalBytes;
+    var removed = dropRepoFiles('alpha-2');
+    ok('workspace · removing a repo unloads only its files', removed === 1 && repoList().length === 2 && !st.files.has('alpha-2/src/util.js')
+      && st.files.has('alpha/src/util.js') && st.files.has('beta/src/util.js') && st.totalBytes === bytesBefore - 'export const THIRD = 3;'.length, removed + ' removed');
+    st.ws.active = 'beta';
+    claimLabel('beta', 'beta', null); /* RELOAD: refill beta in place */
+    ok('workspace · reload empties the repo in place, keeps it active', !st.files.has('beta/src/util.js') && repoList().some(function (r) { return r.label === 'beta'; }) && st.ws.active === 'beta');
+    load();
+    /* path namespacing */
+    ok('workspace · identical relative paths never collide', st.files.has('alpha/src/util.js') && st.files.has('beta/src/util.js')
+      && st.files.get('alpha/src/util.js').content !== st.files.get('beta/src/util.js').content);
+    ok('workspace · unique labels + root remap', uniqueLabel('alpha') === 'alpha-2' && uniqueLabel('gamma') === 'gamma' && uniqueLabel('a/b:c') === 'abc'
+      && remapRoot('alpha/src/x.js', 'alpha-2') === 'alpha-2/src/x.js', uniqueLabel('alpha'));
+    ok('workspace · citations read repo:path:line', citeText('beta/src/util.js', 2, 2) === 'beta:src/util.js:2–2' && displayPath('alpha/README.md') === 'alpha:README.md');
+    ok('workspace · cited paths resolve (repo:path · unique bare · ambiguous kept)', resolveCitePath('beta:src/util.js') === 'beta/src/util.js'
+      && resolveCitePath('README.md') === 'alpha/README.md' && resolveCitePath('src/util.js') === 'src/util.js', resolveCitePath('README.md'));
+    /* cross-repo query scope */
+    st.ws.scope = 'all';
+    var allHits = inv('search ONLY_MARKER');
+    ok('scope · ALL searches every repo', /ALPHA_ONLY|alpha\/src\/util\.js/.test(JSON.stringify(allHits.steps)) && /beta\/src\/util\.js/.test(JSON.stringify(allHits.steps)));
+    st.ws.scope = 'repo'; st.ws.active = 'beta';
+    var filesRef = st.files;
+    var scopedHits = withScope(function () { return inv('search ONLY_MARKER'); });
+    var scopedEv = JSON.stringify(scopedHits.steps);
+    ok('scope · active repo only searches that repo', scopeRepo() === 'beta' && /beta\/src\/util\.js/.test(scopedEv) && scopedEv.indexOf('alpha/') === -1);
+    ok('scope · the swap is restored after the call', st.files === filesRef && st.files.size === 7);
+    ok('scope · budget counts only the scoped repo', selectedTokens().count === 3, selectedTokens().count + ' files');
+    st.ctxMode = 'full'; st.groundMode = false;
+    st.ws.scope = 'all';
+    var cbAll = buildContextBlocks('where is formatDate');
+    var allText = cbAll.blocks.map(function (b) { return b.text; }).join('\n');
+    ok('scope · model context (ALL) carries both repos + workspace note', allText.indexOf('FILE: alpha/src/util.js') !== -1 && allText.indexOf('FILE: beta/src/util.js') !== -1
+      && /WORKSPACE: 2 repositories are in scope/.test(allText) && /2 REPOS/.test(cbAll.note || ''), cbAll.note);
+    st.ws.scope = 'repo';
+    var cbOne = buildContextBlocks('where is formatDate');
+    var oneText = cbOne.blocks.map(function (b) { return b.text; }).join('\n');
+    ok('scope · model context (one repo) sends only that repo', oneText.indexOf('FILE: beta/src/util.js') !== -1 && oneText.indexOf('FILE: alpha/') === -1
+      && /scoped to the repository "beta"/.test(oneText) && /REPO BETA ONLY/.test(cbOne.note || ''), cbOne.note);
+    st.ws.scope = 'all';
+    var pk = packSmartContext('startBeta', 1000);
+    ok('scope · SMART packing seats the best file of every repo', pk.included.length >= 2 && repoOf(pk.included[0].p) !== repoOf(pk.included[1].p)
+      && pk.included.slice(0, 2).every(function (x) { return x.why.indexOf('best in repo') !== -1; }), pk.included.map(function (x) { return x.p; }).join(' '));
+    /* repo-labelled evidence chips */
+    var chip = evidenceChip({ file: 'beta/src/util.js', startLine: 2, endLine: 2, quote: 'BETA_ONLY_MARKER' });
+    ok('chips · labelled repo:path:line', chip.textContent === 'ctx://beta:src/util.js:2–2' && chip.querySelector('.repo') && chip.querySelector('.repo').textContent === 'beta'
+      && !chip.disabled && /^Open beta:src\/util\.js at 2–2/.test(chip.title), chip.textContent);
+    chip.click();
+    var vt = document.getElementById('vtitle').textContent, vb = document.getElementById('vbody').textContent;
+    closeViewer();
+    ok('chips · open the right file in the right repo', vt === 'beta:src/util.js' && vb.indexOf('BETA_ONLY_MARKER') !== -1 && vb.indexOf('ALPHA_ONLY_MARKER') === -1, vt);
+    var mt = extractTrace('x\n```meridian-trace\n{"steps":[{"action":"a","evidence":[{"file":"alpha:src/util.js","startLine":1,"endLine":1},{"file":"src/util.js","startLine":1,"endLine":1}]}]}\n```');
+    var mev = mt.trace.steps[0].evidence;
+    ok('chips · model "repo:path" citation maps to the loaded file; ambiguous stays dead', mev[0].file === 'alpha/src/util.js' && mev[1].file === 'src/util.js'
+      && evidenceChip(mev[1]).disabled === true, mev[0].file + ' · ' + mev[1].file);
+    /* the cross-repo intent */
+    ok('intent · workspace routes only with 2+ repos', classifyIntent('compare the repos').kind === 'workspace');
+    var wsInv = inv('workspace');
+    ok('intent · workspace finds the shared dependency', /`react` \(`alpha`, `beta`\)/.test(wsInv.answer), wsInv.answer.slice(0, 80));
+    ok('intent · workspace finds the repo link + cross-repo import', /`beta` → `alpha` via `@acme\/alpha`/.test(wsInv.answer) && /`beta` → `alpha` ×1/.test(wsInv.answer));
+    ok('intent · workspace finds names exported in both repos', /`formatDate` \(`alpha`, `beta`\)/.test(wsInv.answer));
+    ok('intent · workspace evidence points at real files', wsInv.steps.some(function (s) { return (s.evidence || []).some(function (e) { return e.file === 'beta/package.json' && e.startLine > 1; }); }));
+    /* LOCAL answer text reads repo:path like the chips, never the internal repo/path */
+    var wdef = inv('where is formatDate defined');
+    var wdefText = displayText(wdef.answer);
+    ok('workspace · LOCAL answer text shows repo:path', wdefText.indexOf('`alpha:src/util.js`') !== -1 && wdefText.indexOf('`beta:src/util.js`') !== -1
+      && wdefText.indexOf('alpha/src/util.js') === -1 && wdefText.indexOf('beta/src/util.js') === -1, wdefText.split('\n').slice(2, 4).join(' '));
+    ok('workspace · display leaves non-path text and URLs alone', displayText('`alpha` and `beta` share https://x.io/alpha/y') === '`alpha` and `beta` share https://x.io/alpha/y');
+    st.ws.scope = 'repo'; st.ws.active = 'beta';
+    var wsScoped = withScope(function () { return inv('workspace'); });
+    ok('intent · workspace reads every repo even when scoped', /`alpha`/.test(wsScoped.answer) && /2 repos/.test(wsScoped.answer));
+    st.ws.scope = 'all';
+    ok('drift · a workspace is identified by its repo labels', projectSig() === 'workspace:alpha+beta', projectSig());
+    /* saved workspace: metadata only */
+    st.files.get('beta/src/util.js').checked = false;
+    var rec = buildSaveRecord('ws selftest');
+    var recJson = JSON.stringify(rec);
+    var TOP = ['name', 'savedAt', 'fileCount', 'totalTokens', 'unchecked', 'ignore', 'prefs', 'handle', 'kind', 'repos', 'loose'];
+    ok('saved workspace · records repos, counts and selection', rec.kind === 'workspace' && rec.repos.length === 2 && rec.repos[0].label === 'alpha' && rec.repos[0].fileCount === 4
+      && rec.repos[1].fileCount === 3 && rec.unchecked.length === 1 && rec.unchecked[0] === 'beta/src/util.js', rec.repos.map(function (r) { return r.label + ':' + r.fileCount; }).join(' '));
+    ok('saved workspace · persists no file contents', Object.keys(rec).every(function (k) { return TOP.indexOf(k) !== -1; })
+      && rec.repos.every(function (r) { return Object.keys(r).every(function (k) { return ['label', 'fileCount', 'totalTokens', 'handle'].indexOf(k) !== -1; }); })
+      && Object.keys(W).every(function (p) { return recJson.indexOf(W[p]) === -1; }) && recJson.indexOf('ONLY_MARKER') === -1 && recJson.indexOf('formatDate') === -1, recJson.length + ' chars');
+    /* restore: re-picked folders join under their saved labels, selection comes back */
+    st.files.get('beta/src/util.js').checked = true;
+    st.pendingWorkspace = { rec: { name: 'ws selftest', unchecked: ['beta/src/util.js'], prefs: { active: 'beta', scope: 'repo' } }, waiting: [{ label: 'beta', handle: null, fileCount: 3 }] };
+    var pend = pendingLabelFor('beta');
+    afterWorkspaceIngest();
+    ok('saved workspace · re-picked repo restores its selection + scope', pend === 'beta' && st.pendingWorkspace === null
+      && st.files.get('beta/src/util.js').checked === false && st.ws.scope === 'repo' && st.ws.active === 'beta');
+    st.files.get('beta/src/util.js').checked = true;
+    st.ws.scope = 'all';
+    /* share: repo labels travel, untrusted labels are dropped */
+    var spl = buildSharePayload(['alpha/src/util.js', 'beta/src/util.js'], { name: 'ws', now: 1 });
+    var sback = parseBundleText(bundleText(spl));
+    ok('share · a workspace share carries its repo labels', JSON.stringify(spl.repos) === '["alpha","beta"]' && JSON.stringify(sback.repos) === '["alpha","beta"]');
+    var bogus = parseBundleText(JSON.stringify({ format: 'meridian-share', v: 1, name: 'x', repos: ['alpha', '../x', 'nope', 'a/b', 42], files: [{ p: 'alpha/a.js', c: 'x' }] }));
+    ok('share · repo labels are validated against the shared paths', JSON.stringify(bogus.repos) === '["alpha"]', JSON.stringify(bogus.repos));
+    resetWorkspace();
+    ok('intent · workspace with one project is honest', !isMulti() && classifyIntent('compare the repos').kind !== 'workspace' && /Only one project is loaded/.test(inv('workspace').answer));
+  } finally {
+    resetWorkspace();
+    st.files = keep.files; st.projectIndex = keep.idx; st.indexDirty = keep.dirty; st.totalBytes = keep.bytes;
+    st.skippedFiles = keep.skipList; st.skipped = keep.skipped; st.ctxMode = keep.ctxMode; st.groundMode = keep.groundMode; st.pinnedEv = keep.pins;
+    st.contextDirty = true; st.mapDirty = true;
+  }
+}
+/* usage analytics — an in-memory store that counts every call stands in for
+   IndexedDB, and a recording fetch stands in for the network. The user's own
+   analytics settings are saved first and put back in finally; a sentinel key
+   is planted only when the Anthropic slot is empty, as in shareCases. */
+function memStore() {
+  var rows = [], id = 0, ops = 0;
+  return {
+    add: function (ev) { ops++; var r = JSON.parse(JSON.stringify(ev)); r.id = ++id; rows.push(r); return Promise.resolve(id); },
+    all: function () { ops++; return Promise.resolve(rows.slice()); },
+    clear: function () { ops++; rows = []; return Promise.resolve(); },
+    ops: function () { return ops; }, rows: function () { return rows; }
+  };
+}
+function analyticsCases(ok) {
+  var SENT = 'sk-ant-SELFTEST-SENTINEL-0000';
+  var KEYS = [LS.analytics, LS.analyticsText, LS.analyticsUrl];
+  var savedLS = KEYS.map(lsGet), savedProv = st.curProvider;
+  var planted = !lsGet(LS.key);
+  var mem = memStore(), calls = [], failNext = false;
+  var prev = __setAnalyticsForTest({ store: mem, fetch: function (u, o) {
+    calls.push({ u: u, o: o });
+    return failNext ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve({ ok: true, status: 204 });
+  } });
+  function finish() {
+    KEYS.forEach(function (k, i) { if (savedLS[i] === null) lsDel(k); else lsSet(k, savedLS[i]); });
+    if (planted) lsDel(LS.key);
+    st.curProvider = savedProv;
+    __setAnalyticsForTest(prev);
+  }
+  var POISON = { type: 'question', engine: 'model', provider: 'anthropic', model: 'claude-sonnet-5', intent: 'src/store.js', outcome: 'ok',
+    latencyMs: 420, durationMs: 1800, tokensIn: 1200, tokensOut: 300, q: 'where is addTodo? key ' + SENT + ' and sk-proj-abcdefghijklmnopqrstuv',
+    path: 'src/secret/store.js', file: 'src/store.js', content: 'function addTodo() { return 1; }', code: 'const API_KEY = 1', apiKey: SENT, key: SENT, url: 'https://evil.example/x' };
+  var ev1, ev2;
+  KEYS.forEach(lsDel); /* fresh browser: nothing stored */
+  if (planted) lsSet(LS.key, SENT);
+  st.curProvider = 'anthropic';
+  ok('analytics · off by default (no switch, no text, no endpoint)', !analyticsOn() && !storeText() && endpointUrl() === '');
+  return Promise.all([
+    track(POISON), track({ type: 'share_link', files: 3 }), track({ type: 'repo_added', repos: 2 }), track({ type: 'question', engine: 'local', intent: 'cycles' })
+  ]).then(function (r) {
+    ok('analytics · off: no writes, no reads, no network', r.every(function (x) { return x === null; }) && mem.ops() === 0 && calls.length === 0, 'store ops=' + mem.ops() + ' fetch=' + calls.length);
+    lsSet(LS.analytics, '1');
+    return track(POISON);
+  }).then(function (e) {
+    ev1 = e;
+    var js = JSON.stringify(mem.rows());
+    ok('analytics · on: one event stored', !!ev1 && mem.rows().length === 1 && mem.rows()[0].type === 'question', mem.rows().length + ' rows');
+    ok('analytics · timestamp is the real current time', Math.abs(ev1.ts - Date.now()) < 60000, new Date(ev1.ts).toISOString());
+    ok('analytics · sanitized to whitelisted fields only', Object.keys(ev1).every(function (k) { return EVENT_FIELDS.indexOf(k) !== -1; })
+      && ['path', 'file', 'content', 'code', 'apiKey', 'key', 'url'].every(function (k) { return !(k in ev1); }), Object.keys(ev1).join(','));
+    ok('analytics · no code, paths or keys in what is stored', js.indexOf(SENT) === -1 && js.indexOf('src/') === -1 && js.indexOf('function') === -1
+      && js.indexOf('API_KEY') === -1 && js.indexOf('sk-proj') === -1 && js.indexOf('evil.example') === -1, js.length + ' chars');
+    ok('analytics · a path in the intent slot becomes "other"', ev1.intent === 'other' && ev1.engine === 'model' && ev1.provider === 'anthropic' && ev1.model === 'claude-sonnet-5', ev1.intent);
+    ok('analytics · question text absent while its switch is off', !('q' in ev1) && js.indexOf('addTodo') === -1);
+    ok('analytics · numbers kept, repo count + scope recorded', ev1.latencyMs === 420 && ev1.durationMs === 1800 && ev1.tokensIn === 1200 && ev1.tokensOut === 300
+      && typeof ev1.repos === 'number' && ev1.scope === 'single' && typeof ev1.files === 'number');
+    var odd = sanitizeEvent({ type: 'question', provider: 'evil', model: '../../etc', engine: 'x', outcome: 'pwned', latencyMs: -5, tokensIn: 'lots', scope: 'everything' });
+    ok('analytics · unknown enums and bad numbers are dropped or defaulted', odd.provider === 'other' && odd.model === 'other' && odd.engine === 'model' && odd.outcome === 'ok'
+      && !('latencyMs' in odd) && !('tokensIn' in odd) && odd.scope === 'single' && sanitizeEvent({ type: 'upload_files' }) === null);
+    ok('analytics · every real intent kind survives sanitizing', INTENTS.every(function (it) { return sanitizeEvent({ type: 'question', intent: it.kind }).intent === it.kind; }));
+    lsSet(LS.analyticsText, '1');
+    return track(POISON);
+  }).then(function (e) {
+    ev2 = e;
+    ok('analytics · text switch on: question kept, keys removed', typeof ev2.q === 'string' && ev2.q.indexOf('where is addTodo?') === 0
+      && ev2.q.indexOf(SENT) === -1 && ev2.q.indexOf('sk-proj') === -1 && /key removed/.test(ev2.q), ev2.q);
+    return track({ type: 'question', engine: 'local', provider: 'local', intent: 'search', q: new Array(80).join('long question ') });
+  }).then(function (e) {
+    ok('analytics · stored question text is capped', e.q.length <= AN_Q_MAX + 1, e.q.length + ' chars');
+    ok('analytics · feature events carry counts only', !('q' in sanitizeEvent({ type: 'share_link', files: 4, q: 'secret' }, { text: true }))
+      && sanitizeEvent({ type: 'share_link', files: 4 }).files === 4);
+    ok('analytics · endpoint blank: no network at all', calls.length === 0, calls.length + ' requests');
+    lsSet(LS.analyticsText, '0');
+    return flushAnalyticsSend();
+  }).then(function (sent) {
+    ok('analytics · flushing with no endpoint sends nothing', sent === false && calls.length === 0);
+    /* summaries over a fixed event set */
+    var evs = [100, 200, 300, 400, 1000].map(function (ms, i) { return { type: 'question', engine: 'model', provider: i < 3 ? 'anthropic' : 'openai', intent: i < 2 ? 'def' : 'reason', outcome: i === 4 ? 'error' : 'ok', latencyMs: ms, durationMs: ms * 2, ts: 1000 + i }; })
+      .concat([{ type: 'question', engine: 'local', provider: 'local', intent: 'def', outcome: 'ok', latencyMs: 7, ts: 2000 }, { type: 'share_link', files: 2, ts: 3000 }, { type: 'repo_added', repos: 2, ts: 4000 }]);
+    var s = summarize(evs);
+    ok('analytics · totals + LOCAL vs model', s.total === 8 && s.questions === 6 && s.model === 5 && s.local === 1 && s.errors === 1 && s.features.share_link === 1 && s.features.repo_added === 1);
+    ok('analytics · breakdown by intent and provider', s.byIntent.def === 3 && s.byIntent.reason === 3 && s.byProvider.anthropic === 3 && s.byProvider.openai === 2 && s.byProvider.local === 1);
+    ok('analytics · median / p90 latency (nearest rank)', s.latency.model.median === 300 && s.latency.model.p90 === 1000 && s.latency.modelDuration.median === 600
+      && s.latency.local.median === 7 && percentile([], 50) === null && percentile([5], 90) === 5, s.latency.model.median + ' / ' + s.latency.model.p90);
+    var stored = evs.map(function (e, i) { var c = JSON.parse(JSON.stringify(e)); c.id = i + 1; c.v = 1; return c; });
+    stored[0].q = '=HYPERLINK("http://x","click"), with a comma';
+    stored[1].junk = 'src/leak.js';
+    var j = JSON.parse(analyticsJSON(stored));
+    ok('analytics · JSON export shape', j.format === AN_FORMAT && j.v === 1 && j.count === 8 && j.events.length === 8 && typeof j.exported === 'string'
+      && j.events.every(function (e) { return Object.keys(e).every(function (k) { return EVENT_FIELDS.indexOf(k) !== -1; }); })
+      && JSON.stringify(j).indexOf('src/leak.js') === -1 && !('id' in j.events[0]));
+    var csv = analyticsCSV(stored), lines = csv.split('\r\n');
+    ok('analytics · CSV export: header, one row per event', lines[0] === CSV_COLS.join(',') && lines.length === 10 && lines[9] === '' && lines[1].indexOf('1970-01-01T00:00:01.000Z,1000,question,def,model,anthropic') === 0, lines[0]);
+    ok('analytics · CSV quotes commas and defuses formulas', lines[1].indexOf('"\'=HYPERLINK(""http://x"",""click""), with a comma"') !== -1 && csv.indexOf('src/leak.js') === -1);
+    return readEvents();
+  }).then(function (rows) {
+    ok('analytics · the log reads back what was stored', rows.length === 3 && rows.every(function (r) { return r.type === 'question'; }));
+    return clearAnalytics().then(readEvents);
+  }).then(function (rows) {
+    ok('analytics · clear empties the log', rows.length === 0 && mem.rows().length === 0);
+    /* own endpoint: validation, sanitized batches, LOCAL never sent, back-off */
+    ok('analytics · endpoint URL validation', !validEndpoint('').ok && !validEndpoint('javascript:alert(1)').ok && !validEndpoint('ftp://x.example/e').ok
+      && !validEndpoint('http://collector.example/e').ok && !validEndpoint('https://u:p@collector.example/e').ok
+      && validEndpoint('http://localhost:8787/e').ok && !validEndpoint('http://localhost:8787/e').warn
+      && validEndpoint('https://collector.example/e').ok && /connect-src/.test(validEndpoint('https://collector.example/e').warn));
+    lsSet(LS.analyticsUrl, 'http://localhost:8787/events');
+    return track(POISON).then(flushAnalyticsSend);
+  }).then(function (sent) {
+    var body = calls[0] && JSON.parse(calls[0].o.body);
+    ok('analytics · own endpoint gets one sanitized POST', sent === true && calls.length === 1 && calls[0].u === 'http://localhost:8787/events' && calls[0].o.method === 'POST'
+      && calls[0].o.credentials === 'omit' && body.format === AN_FORMAT && body.events.length === 1 && !('q' in body.events[0])
+      && calls[0].o.body.indexOf(SENT) === -1 && calls[0].o.body.indexOf('src/') === -1, calls.length + ' requests');
+    st.curProvider = 'local';
+    return Promise.all([track({ type: 'question', engine: 'local', provider: 'local', intent: 'def' }), track({ type: 'share_link', files: 1 })]).then(flushAnalyticsSend);
+  }).then(function () {
+    ok('analytics · LOCAL mode never sends, even with an endpoint', calls.length === 1 && mem.rows().length === 3, calls.length + ' requests');
+    st.curProvider = 'openai';
+    return track({ type: 'question', engine: 'local', provider: 'local', intent: 'def' }).then(flushAnalyticsSend);
+  }).then(function () {
+    ok('analytics · LOCAL answers are not sent from a model provider either', calls.length === 1);
+    failNext = true;
+    return track(POISON).then(flushAnalyticsSend);
+  }).then(function (sent) {
+    failNext = false;
+    var n = calls.length;
+    return track(POISON).then(flushAnalyticsSend).then(function (again) {
+      ok('analytics · a failed send is dropped and pauses, no retries', sent === false && n === 2 && again === false && calls.length === 2, calls.length + ' requests');
+      ok('analytics · failures never block the local log', mem.rows().length === 6, mem.rows().length + ' rows');
+    });
+  }).then(function () {
+    var before = mem.ops();
+    lsSet(LS.analytics, '0');
+    return track(POISON).then(function (r) {
+      ok('analytics · switched off again: nothing stored or sent', r === null && mem.ops() === before && calls.length === 2);
+    });
+  }).then(function () {
+    /* the real IndexedDB path, on a throwaway database that is deleted afterwards */
+    var db = idbStore('meridian-analytics-selftest');
+    return db.clear().then(function () { return db.add(sanitizeEvent({ type: 'share_link', files: 1 })); })
+      .then(function () { return db.add(sanitizeEvent({ type: 'repo_added', repos: 2 })); })
+      .then(db.all).then(function (rows) {
+        ok('analytics · IndexedDB round-trip (throwaway db)', rows.length === 2 && rows[0].type === 'share_link' && typeof rows[0].id === 'number', rows.length + ' rows');
+        return db.clear().then(db.all);
+      }).then(function (rows) {
+        ok('analytics · IndexedDB clear', rows.length === 0);
+      }).catch(function (e) {
+        ok('analytics · IndexedDB round-trip (throwaway db)', false, String(e && e.message || e));
+      }).then(function () { db.close(); try { indexedDB.deleteDatabase('meridian-analytics-selftest'); } catch (e) {} });
+  }).then(finish, function (e) { finish(); throw e; });
+}
 function runSelfTests() {
   var results = [];
   function ok(name, cond, extra) { results.push({ name: name, pass: !!cond, extra: extra || '' }); }
@@ -157,15 +702,23 @@ function runSelfTests() {
   var savedSkipped = st.skipped, savedSkipList = st.skippedFiles, savedBytes = st.totalBytes;
   var savedDriftSig = st.driftSig, savedDriftPrev = st.driftPrev, savedDriftPending = st.driftPending;
   var savedPins = st.pinnedEv;
+  var savedWs = { repos: st.repos, ws: st.ws, pending: st.pendingWorkspace, wsCache: st.wsCache, scopeCache: st.scopeCache };
   var savedCaps = __setCapsForTest({}); /* read-only snapshot — cap tests lower them, restore() puts them back */
+  /* the whole run uses a scratch analytics store and no network, so the
+     scratch fixtures can never land in the user's real usage log */
+  var savedAn = __setAnalyticsForTest({ store: memStore(), fetch: function () { return Promise.reject(new Error('self-tests make no network requests')); } });
   function restore() {
+    __setAnalyticsForTest(savedAn);
     st.files = savedFiles; st.projectIndex = savedIndex; st.indexDirty = savedDirty;
     st.skipped = savedSkipped; st.skippedFiles = savedSkipList; st.totalBytes = savedBytes;
     st.driftSig = savedDriftSig; st.driftPrev = savedDriftPrev; st.driftPending = savedDriftPending;
     st.pinnedEv = savedPins;
+    st.repos = savedWs.repos; st.ws = savedWs.ws; st.pendingWorkspace = savedWs.pending; st.wsCache = savedWs.wsCache; st.scopeCache = savedWs.scopeCache;
+    st.contextDirty = true; st.mapDirty = true; /* scratch context never leaks into the next real request */
     __setCapsForTest(savedCaps);
   }
   try {
+    resetWorkspace(); /* the scratch fixture is one project — no repos */
     st.driftPending = false;
     st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
     st.skippedFiles = [];
@@ -589,6 +1142,22 @@ function runSelfTests() {
     ok('http · 429 uses retry-after', httpErrorText(429, '', '12').indexOf('retry in 12s') !== -1);
     ok('http · 400 context too large', httpErrorText(400, JSON.stringify({ error: { message: 'prompt exceeds context length' } })).indexOf('CONTEXT TOO LARGE') === 0);
     ok('http · 529 overloaded', httpErrorText(529, '').indexOf('PROVIDER OVERLOADED') === 0);
+    /* LM Studio-style 400: the error is a bare string, not { message } */
+    var lmBody = JSON.stringify({ error: 'Trying to keep the first 130985 tokens when context the overflows. However, the model is loaded with context length of 32768' });
+    var ctxSaved = st.ctxMode;
+    st.ctxMode = 'smart';
+    var lmSmart = httpErrorText(400, lmBody);
+    st.ctxMode = 'full';
+    var lmFull = httpErrorText(400, lmBody);
+    st.ctxMode = ctxSaved;
+    ok('http · 400 over-context (string error) hints at the SMART budget', lmSmart.indexOf('CONTEXT TOO LARGE') === 0 && /lower the SMART budget in settings/.test(lmSmart), lmSmart);
+    ok('http · 400 over-context in FULL hints at fewer files or SMART', lmFull.indexOf('CONTEXT TOO LARGE') === 0 && /SMART/.test(lmFull) && !/budget/.test(lmFull), lmFull);
+    symbolPickCases(ok);
+    estBiasCases(ok);
+    smartBudgetCases(ok);
+    /* multi-repo workspace — self-contained scratch state, restored on exit */
+    workspaceCases(ok);
+    demoLinkCases(ok);
   } catch (e) {
     ok('harness executed without throwing', false, String(e && e.message || e));
     restore();
@@ -597,6 +1166,12 @@ function runSelfTests() {
   /* the ingest cases are async (real Blob reads) — run them, then restore state */
   return ingestCases(ok).catch(function (e) {
     ok('ingest harness executed without throwing', false, String(e && e.message || e));
+  }).then(function () {
+    return fileCapCases(ok).catch(function (e) { ok('file cap harness executed without throwing', false, String(e && e.message || e)); });
+  }).then(function () {
+    return shareCases(ok).catch(function (e) { ok('share harness executed without throwing', false, String(e && e.message || e)); });
+  }).then(function () {
+    return analyticsCases(ok).catch(function (e) { ok('analytics harness executed without throwing', false, String(e && e.message || e)); });
   }).then(function () {
     restore();
     return results;
@@ -611,7 +1186,7 @@ function showSelfTestResults(results) {
   }).join('');
   modal.innerHTML = '<div class="k mono">MERIDIAN // SELF-TESTS<span class="st-badge mono">DEV</span></div>'
     + '<h2>' + pass + ' / ' + results.length + ' passed</h2>'
-    + '<p class="note mono" style="color:var(--ink-3)">// deterministic checks of the index, packer, trace parser, stream adapters and ingest filters on a scratch fixture — no network, no API.</p>'
+    + '<p class="note mono" style="color:var(--ink-3)">// deterministic checks of the index, packer, trace parser, stream adapters, ingest filters, share links, multi-repo workspaces and usage analytics on scratch fixtures. no network, no API.</p>'
     + '<table>' + rows + '</table>'
     + '<div class="row"><button class="btn btn-hairline" type="button" id="selftestclose">Close</button></div>';
   veil.appendChild(modal);

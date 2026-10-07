@@ -3,20 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MERIDIAN — a code workbench that shows its evidence</title>
-<meta name="description" content="Meridian loads a project into your browser's memory and answers questions with citations that open the exact file and line. Runs entirely in your browser with your own API key, or with no key using the built-in local engine.">
+<title>MERIDIAN: ask your codebase, keep the code in the browser</title>
+<meta name="description" content="A browser-only code workbench for engineering teams. There is no backend: files stay in tab memory, and questions go straight to the model provider you already use, under your own key, or nowhere in LOCAL mode. Answers cite the file and line they rest on.">
 <link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="canonical" href="https://drewosi.github.io/lucid-engine/">
-<meta property="og:title" content="MERIDIAN — a code workbench that shows its evidence">
-<meta property="og:description" content="Load a project into your browser's memory and get answers with citations that open the exact file and line. Bring your own API key, or use the no-key local engine.">
+<link rel="preload" as="image" href="media/meridian-poster.jpg" fetchpriority="high">
+<meta property="og:title" content="MERIDIAN: ask your codebase, keep the code in the browser">
+<meta property="og:description" content="A browser-only code workbench with no backend. Your code goes to the model provider you chose, under your key, or nowhere in LOCAL mode. Answers cite the exact file and line.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://drewosi.github.io/lucid-engine/">
 <meta property="og:site_name" content="MERIDIAN">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="MERIDIAN — a code workbench that shows its evidence">
-<meta name="twitter:description" content="Load a project into your browser's memory and get answers with citations that open the exact file and line. Bring your own API key, or use the no-key local engine.">
+<meta name="twitter:title" content="MERIDIAN: ask your codebase, keep the code in the browser">
+<meta name="twitter:description" content="A browser-only code workbench with no backend. Your code goes to the model provider you chose, under your key, or nowhere in LOCAL mode. Answers cite the exact file and line.">
 <style>
   /* ============ LUCID ENGINE TOKENS · v2.0 ============ */
   #app {
@@ -40,11 +41,11 @@
     --t-entrance: 400ms;
     --t-ceremony: 600ms;
 
-    /* v2.0 — Signal Orange as a lit instrument, not a UI accent (controlled bloom) */
+    /* v2.0: Signal Orange as a lit instrument, not a UI accent (controlled bloom) */
     --flare: var(--accent);
     --flare-bloom:    0 0 0 1px rgba(255,92,10,.42), 0 0 14px -2px rgba(255,92,10,.55);
     --flare-bloom-lg: 0 0 0 1px rgba(255,92,10,.50), 0 0 24px -4px rgba(255,92,10,.52);
-    /* v2.0 — authored monochrome: film grain + light-source falloff (ground only) */
+    /* v2.0: authored monochrome, film grain + light-source falloff (ground only) */
     --grain-opacity: .05;
     --atmosphere: radial-gradient(120% 66% at 50% -14%, rgba(255,255,255,.055), transparent 62%);
     --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -68,7 +69,7 @@
     --atmosphere: radial-gradient(120% 62% at 50% -12%, rgba(17,17,16,.045), transparent 60%);
   }
 
-  /* v2.0 — authored-monochrome ground layers (below content z:1, above #app bg) */
+  /* v2.0: authored-monochrome ground layers (below content z:1, above #app bg) */
   .atmosphere { position: fixed; inset: 0; pointer-events: none; z-index: 0; background: var(--atmosphere); }
   .grain {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
@@ -90,6 +91,7 @@
   }
   .mono { font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
   .wrap { max-width: 1140px; margin: 0 auto; padding: 0 28px; }
+  @media (max-width: 520px) { .wrap { padding: 0 20px; } }
   a { color: inherit; text-decoration: none; }
   :is(a, button, input, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   kbd {
@@ -119,7 +121,8 @@
   .anchors a { font-size: 13.5px; color: var(--ink-2); padding: 4px 0; }
   .anchors a:hover, .anchors a.active { color: var(--ink); }
   .nav-actions { display: flex; gap: 10px; align-items: center; }
-  @media (max-width: 860px) { .anchors { display: none; } .nav-actions .btn-hairline { display: none; } }
+  @media (max-width: 960px) { .anchors { display: none; } .nav-actions { margin-left: auto; } }
+  @media (max-width: 520px) { .wordmark .tag { display: none; } .nav-actions .btn-mode { display: none; } }
 
   .btn { font-family: inherit; font-size: 13.5px; height: 36px; padding: 0 18px; border-radius: 3px; cursor: pointer; letter-spacing: .01em; display: inline-flex; align-items: center; gap: 8px;
     transition: transform var(--t-feedback) var(--ease-snap), filter var(--t-feedback) var(--ease-snap), border-color var(--t-feedback) var(--ease-snap), background var(--t-feedback) var(--ease-snap); }
@@ -135,52 +138,92 @@
   /* ============ HERO ============ */
   .hero { position: relative; min-height: calc(100vh - 64px); display: flex; align-items: center; overflow: hidden; }
   #field { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .hero-copy { position: relative; z-index: 2; padding: 90px 0; max-width: 620px; pointer-events: none; }
+  .hero > .wrap { width: 100%; }
+  .hero-grid { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 48px; align-items: center; padding: 64px 0; }
+  @media (max-width: 980px) { .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 52px; padding: 48px 0 64px; } }
+  .hero-copy { pointer-events: none; }
   .hero-copy a, .hero-copy .btn { pointer-events: auto; }
   .eyebrow { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11.5px; letter-spacing: .16em; color: var(--ink-3); display: flex; align-items: center; gap: 10px; }
-  .eyebrow .dot { width: 8px; height: 8px; background: var(--accent); box-shadow: var(--flare-bloom); animation: flare 1.6s var(--ease-inout-engine) infinite alternate; }
+  .eyebrow > span:not(.dot) { min-width: 0; }
+  .eyebrow .dot { flex: none; width: 8px; height: 8px; background: var(--accent); box-shadow: var(--flare-bloom); animation: flare 1.6s var(--ease-inout-engine) infinite alternate; }
   @keyframes flare { from { opacity: .4; } to { opacity: 1; } }
-  h1 { font-size: clamp(44px, 7.2vw, 88px); line-height: .98; letter-spacing: -.03em; font-weight: 700; margin: 22px 0 24px; text-wrap: balance; }
-  .hero-sub { font-size: 17px; color: var(--ink-2); max-width: 44ch; margin: 0 0 34px; }
+  h1 { font-size: clamp(38px, 3.9vw, 56px); line-height: .98; letter-spacing: -.03em; font-weight: 700; margin: 20px 0 22px; text-wrap: balance; }
+  .hero-sub { font-size: 17px; color: var(--ink-2); max-width: 46ch; margin: 0 0 30px; }
   .hero-sub b { color: var(--ink); font-weight: 500; }
   .hero-cta-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .hero-fine { margin: 18px 0 0; font-size: 11px; letter-spacing: .12em; color: var(--ink-3); }
+
+  /* the demo, framed as an object: a real capture of the product, labelled as one */
+  .hero-media { margin: 0; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); overflow: hidden; }
+  .hm-bar { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 10.5px; letter-spacing: .12em; color: var(--ink-3); }
+  .hm-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hm-btn { margin-left: auto; flex: none; background: transparent; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink-2); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10px; letter-spacing: .12em; height: 24px; padding: 0 8px; cursor: pointer; transition: border-color var(--t-feedback) var(--ease-snap), color var(--t-feedback) var(--ease-snap); }
+  .hm-btn:hover { border-color: var(--accent); color: var(--ink); }
+  .hero-media video, .hero-media .gif { display: block; width: 100%; height: auto; aspect-ratio: 1280 / 800; background: #0A0B0D; }
+  .hero-media figcaption { padding: 10px 12px; border-top: 1px solid var(--line); font-size: 11px; color: var(--ink-3); letter-spacing: .02em; }
+  .hero-media figcaption a { color: var(--ink-2); }
 
   /* ============ SECTIONS ============ */
   section.block { padding: 96px 0 0; }
+  @media (max-width: 760px) { section.block { padding-top: 72px; } }
   .sec-head { display: flex; align-items: baseline; gap: 14px; padding-bottom: 12px; margin-bottom: 36px; position: relative; }
   .sec-head::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--line-strong); transform: scaleX(0); transform-origin: left; transition: transform 400ms var(--ease-out-engine) 120ms; }
   .sec-head.in::after { transform: scaleX(1); }
   .sec-head .idx { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink-3); }
-  .sec-head h2 { font-size: clamp(24px, 3.4vw, 34px); margin: 0; letter-spacing: -.02em; }
+  .sec-head h2 { font-size: clamp(24px, 3.4vw, 34px); margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+  .sec-lede { font-size: 15.5px; color: var(--ink-2); max-width: 68ch; margin: -14px 0 32px; }
 
-  /* Capabilities */
-  .caps { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  /* Benefit / capability cards: hairline grid */
+  .caps { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
   .cap { background: var(--paper); padding: 26px 24px 30px; position: relative; transition: background var(--t-feedback) var(--ease-snap); }
   .cap:hover { background: var(--surface); }
   .cap svg { display: block; margin-bottom: 18px; stroke: var(--ink-2); }
   .cap:hover svg { stroke: var(--accent); }
   .cap h3 { margin: 0 0 8px; font-size: 17px; letter-spacing: -.01em; }
-  .cap p { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 40ch; }
+  .cap p { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 42ch; }
+  .cap .shot { display: block; margin: 0 0 20px; border: 1px solid var(--line-strong); border-radius: 3px; overflow: hidden; background: #0A0B0D; }
+  .cap .shot img { display: block; width: 100%; height: auto; aspect-ratio: 1280 / 800; }
+  .cap .shot:hover { border-color: var(--accent); }
+  .cap .k { display: block; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--ink-3); margin-bottom: 8px; }
+  .also { margin: 18px 0 0; font-size: 11.5px; letter-spacing: .06em; color: var(--ink-3); line-height: 1.7; }
+  .also b { color: var(--ink-2); font-weight: 400; }
 
-  /* System */
-  .sys-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.1fr); gap: 48px; align-items: start; }
-  @media (max-width: 860px) { .sys-grid { grid-template-columns: 1fr; } }
-  .step { border-left: 1px solid var(--line-strong); padding: 4px 0 34px 24px; position: relative; }
+  /* Who it's for / why no backend */
+  .sys-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 48px; align-items: start; }
+  @media (max-width: 860px) { .sys-grid { grid-template-columns: minmax(0, 1fr); } }
+  .step { border-left: 1px solid var(--line-strong); padding: 4px 0 30px 24px; position: relative; }
   .step:last-child { padding-bottom: 4px; }
   .step::before { content: ""; position: absolute; left: -5px; top: 8px; width: 9px; height: 9px; background: var(--paper); border: 1px solid var(--line-strong); }
   .step.lit::before { background: var(--accent); border-color: var(--accent); }
   .step .k { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .14em; color: var(--ink-3); }
   .step h3 { margin: 6px 0 6px; font-size: 19px; letter-spacing: -.01em; }
-  .step p { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 46ch; }
-  .diagram { border: 1px solid var(--line); background: var(--surface); padding: 22px; overflow-x: auto; }
+  .step p { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 48ch; }
+  .step ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; color: var(--ink-2); max-width: 50ch; }
+  .step ul b, .step p b { color: var(--ink); font-weight: 500; }
+  .diagram { border: 1px solid var(--line); background: var(--surface); padding: 22px; }
   .diagram svg { display: block; width: 100%; height: auto; }
-  .diagram text { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; letter-spacing: .1em; }
+  .diagram text { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; letter-spacing: .08em; }
+  .diagram .dnote { margin: 14px 0 0; font-size: 11px; color: var(--ink-3); letter-spacing: .02em; }
   #flowpath { stroke-dasharray: 900; stroke-dashoffset: 900; }
   .diagram.in #flowpath { transition: stroke-dashoffset 600ms var(--ease-inout-engine) 300ms; stroke-dashoffset: 0; }
 
-  /* ============ DEMO ============ */
-  .demo-media { display: block; width: 100%; border: 1px solid var(--line-strong); border-radius: 4px; background: #0A0B0D; }
-  .demo-note { font-size: 13.5px; color: var(--ink-2); margin: 14px 0 0; max-width: 72ch; }
+  /* Security review sheet: mono keys, plain answers */
+  .spec { border: 1px solid var(--line); background: var(--paper); }
+  .spec-row { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+  .spec-row:last-child { border-bottom: none; }
+  .spec-row dt { font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .14em; color: var(--ink); padding-top: 3px; }
+  .spec-row dd { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 74ch; }
+  .spec-row dd b { color: var(--ink); font-weight: 500; }
+  .spec-row.not dt { color: var(--ink-3); }
+  @media (max-width: 760px) { .spec-row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 14px 16px; } }
+  .spec-foot { margin: 16px 0 0; font-size: 13.5px; color: var(--ink-2); }
+  .ilink { color: var(--ink); border-bottom: 1px solid var(--line-strong); transition: border-color var(--t-feedback) var(--ease-snap), color var(--t-feedback) var(--ease-snap); }
+  .ilink:hover { border-color: var(--accent); }
+
+  /* Try it */
+  .try-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-bottom: 34px; }
+  @media (max-width: 860px) { .try-steps { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+  .try-steps .step { padding-bottom: 10px; }
 
   /* ============ FAQ ============ */
   .faq { border: 1px solid var(--line); }
@@ -192,15 +235,19 @@
   .faq-q .x { margin-left: auto; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 16px; color: var(--ink-3); transition: transform 200ms var(--ease-snap), color var(--t-feedback); flex: none; }
   .faq-item.open .faq-q .x { transform: rotate(45deg); color: var(--accent); }
   .faq-a { max-height: 0; overflow: hidden; transition: max-height 200ms var(--ease-inout-engine); }
-  .faq-a p { margin: 0; padding: 0 20px 20px 47px; font-size: 14px; color: var(--ink-2); max-width: 64ch; }
+  .faq-a p, .faq-a ul { margin: 0; padding: 0 20px 14px 47px; font-size: 14px; color: var(--ink-2); max-width: 70ch; }
+  .faq-a ul { padding-left: 64px; display: grid; gap: 6px; }
+  .faq-a > :last-child { padding-bottom: 20px; }
+  .faq-a b { color: var(--ink); font-weight: 500; }
+  @media (max-width: 520px) { .faq-a p { padding-left: 20px; } .faq-a ul { padding-left: 38px; } }
 
   /* ============ ACCESS / FOOTER ============ */
   .access { border-top: 1px solid var(--line-strong); margin-top: 96px; padding: 72px 0; background: var(--surface); }
-  .access-grid { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(300px, 1fr); gap: 48px; align-items: center; }
-  @media (max-width: 760px) { .access-grid { grid-template-columns: 1fr; } }
-  .access h2 { font-size: clamp(26px, 4vw, 40px); letter-spacing: -.025em; margin: 0 0 10px; text-wrap: balance; }
-  .access p { color: var(--ink-2); font-size: 15px; margin: 0; max-width: 42ch; }
-  .access-contact { margin-top: 18px; font-size: 13.5px; }
+  .access-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; }
+  @media (max-width: 760px) { .access-grid { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
+  .access h2 { font-size: clamp(26px, 4vw, 40px); line-height: 1.08; letter-spacing: -.025em; margin: 0 0 12px; text-wrap: balance; }
+  .access p { color: var(--ink-2); font-size: 15px; margin: 0; max-width: 44ch; }
+  .access .access-contact { margin-top: 18px; font-size: 13.5px; }
 
   footer.site { border-top: 1px solid var(--line); padding: 44px 0; }
   .foot-cols { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 28px; margin-bottom: 34px; }
@@ -216,7 +263,7 @@
 
   /* ============ WAYFINDER ============ */
   #wayfinder { position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 95; display: grid; gap: 14px; }
-  @media (max-width: 1000px) { #wayfinder { display: none; } }
+  @media (max-width: 1240px) { #wayfinder { display: none; } }
   .wf { position: relative; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: none; border: none; padding: 0; }
   .wf i { width: 6px; height: 6px; background: var(--line-strong); border-radius: 0; transition: background var(--t-feedback) var(--ease-snap), box-shadow var(--t-feedback) var(--ease-snap); }
   .wf.active i { background: var(--accent); box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--accent); }
@@ -248,11 +295,11 @@
     <div class="wrap nav-in">
       <a href="#top" class="wordmark">MERIDIAN <span class="tag">CODE WORKBENCH</span></a>
       <div class="anchors">
-        <a href="#capabilities" class="trace" data-sec="capabilities">Capabilities</a>
-        <a href="#system" class="trace" data-sec="system">System</a>
-        <a href="#demo" class="trace" data-sec="demo">Demo</a>
+        <a href="#teams" class="trace" data-sec="teams">For teams</a>
+        <a href="#features" class="trace" data-sec="features">Features</a>
+        <a href="#security" class="trace" data-sec="security">Security review</a>
+        <a href="#try" class="trace" data-sec="try">Try it</a>
         <a href="#faq" class="trace" data-sec="faq">FAQ</a>
-        <a href="#access" class="trace" data-sec="access">Access</a>
       </div>
       <div class="nav-actions">
         <button class="btn-mode mono" id="modebtn" type="button" aria-label="Toggle color mode">MODE: DARK</button>
@@ -265,82 +312,148 @@
   <header class="hero" id="top">
     <canvas id="field" aria-hidden="true"></canvas>
     <div class="wrap">
-      <div class="hero-copy">
-        <div class="eyebrow mono rv" style="--i:0"><span class="dot"></span>FREE BETA · RUNS IN YOUR BROWSER</div>
-        <h1 class="rv" style="--i:1">Ask your codebase.<br>See the evidence.</h1>
-        <p class="hero-sub rv" style="--i:2">Meridian loads a project folder into your browser's memory, indexes it, and answers questions with citations that open the exact file and line. It runs entirely in your browser: your API key talks straight to your provider, and the built-in local engine works with no key at all.</p>
-        <div class="hero-cta-row rv" style="--i:3">
-          <a href="app.html" class="btn btn-signal btn-hero" id="heroCta">Launch Meridian</a>
-          <a href="#demo" class="btn btn-hairline btn-hero">Watch the demo</a>
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <div class="eyebrow mono rv" style="--i:0"><span class="dot"></span><span>FREE BETA · NO BACKEND · RUNS IN YOUR BROWSER</span></div>
+          <h1 class="rv" style="--i:1">Ask your codebase.<br>We never get a copy.</h1>
+          <p class="hero-sub rv" style="--i:2">Meridian is a code workbench that runs in your browser and cites the file and line behind each answer. There is no Meridian server. Your files stay in tab memory, questions go <b>straight to the model provider you already use</b>, under your own key, and <b>LOCAL mode sends nothing at all</b>.</p>
+          <div class="hero-cta-row rv" style="--i:3">
+            <a href="app.html" class="btn btn-signal btn-hero" id="heroCta">Launch Meridian</a>
+            <a href="app.html?demo" class="btn btn-hairline btn-hero">Try the demo in 30 seconds</a>
+          </div>
+          <p class="hero-fine mono rv" style="--i:4">NO SIGNUP · NOTHING TO INSTALL · THE DEMO NEEDS NO KEY</p>
         </div>
+        <figure class="hero-media rv" style="--i:2">
+          <div class="hm-bar mono"><span>MERIDIAN WORKBENCH · BUILT-IN DEMO · LOCAL ENGINE</span><button class="hm-btn" id="vidbtn" type="button" aria-pressed="false">PAUSE</button></div>
+          <video id="demovid" src="media/meridian-demo.mp4" poster="media/meridian-poster.jpg" width="1280" height="800" autoplay muted loop playsinline preload="auto" aria-label="Screen capture of the Meridian workbench answering questions about its bundled sample project, with no key and no network">
+            <img class="gif" src="media/meridian-demo.gif" width="1280" height="800" loading="lazy" alt="Screen capture of the Meridian workbench answering questions about its bundled sample project">
+          </video>
+          <figcaption class="mono">// a screen capture of the real workbench: the LOCAL engine answers questions about the bundled sample project, with no key and no network. <a href="media/meridian-demo.gif" class="trace">GIF version</a></figcaption>
+        </figure>
       </div>
     </div>
   </header>
 
-  <!-- CAPABILITIES -->
-  <section class="block" id="capabilities">
+  <!-- FOR TEAMS -->
+  <section class="block" id="teams">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">01</span><h2>Capabilities</h2></div>
+      <div class="sec-head rv"><span class="idx mono">01</span><h2>Built for teams that have to approve their tools</h2></div>
       <div class="caps">
         <div class="cap rv" style="--i:0">
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="3" y="3" width="20" height="20"/><rect x="8" y="8" width="10" height="10"/></svg>
-          <h3>Context Engine</h3><p>Drop in a project folder. Smart selection scores every file and packs the most relevant into a token budget, with a project map so large repos still fit. Projects can be saved and reloaded.</p></div>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="5" y="11" width="16" height="11"/><path d="M9 11V7a4 4 0 018 0v4"/></svg>
+          <h3>No new vendor holding your code</h3><p>Meridian has no backend, accounts or database. Code goes to the model provider your company already approved, under your key and your agreement, or nowhere in LOCAL mode. Nothing runs on our side. The product is the static source, which you can review or self-host at a pinned commit.</p></div>
         <div class="cap rv" style="--i:1">
           <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="6" cy="20" r="2.5"/><circle cx="13" cy="8" r="2.5"/><circle cx="21" cy="15" r="2.5"/><path d="M8 18l3.5-8M15 9.5l4 4"/></svg>
-          <h3>Trace</h3><p>Every answer shows its reasoning path. Expand any conclusion to see the files and lines it cites, and export whole sessions as Markdown or self-contained HTML.</p></div>
+          <h3>Answers a reviewer can check</h3><p>Each answer carries a trace: chips for the files and lines it rests on, and each chip opens its line. The LOCAL engine answers structure questions from the index with no model involved. Export a session as Markdown or HTML for a ticket or a review.</p></div>
         <div class="cap rv" style="--i:2">
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="5" y="11" width="16" height="11"/><path d="M9 11V7a4 4 0 018 0v4"/></svg>
-          <h3>Private Core</h3><p>There is no backend. Your files and questions go from your browser straight to the provider you pick (Anthropic, OpenAI, or your own OpenAI-compatible endpoint) under your own key. Close the tab and they're gone.</p></div>
-        <div class="cap rv" style="--i:3">
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M2 13h5l3-8 4 16 3-8h7"/></svg>
-          <h3>Signal Extraction</h3><p>Ranks what deserves attention: broken imports, import cycles, untested load-bearing files, duplicate names. Each finding is pinned to file:line evidence, computed deterministically from the index with no model involved.</p></div>
-        <div class="cap rv" style="--i:4">
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><circle cx="13" cy="13" r="10"/><path d="M13 6v7l5 3"/></svg>
-          <h3>Instruments</h3><p>The model can propose read-only actions: local searches, file inspections, git commands to copy. Each one runs only when you click it, and nothing ever executes a shell command.</p></div>
-        <div class="cap rv" style="--i:5">
-          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><path d="M3 20L10 8l5 7 3-4 5 9z"/></svg>
-          <h3>Drift Watch</h3><p>Compares this session's index against your last one and reports new, removed, and reshaped files plus symbol and import drift. The comparison uses a local fingerprint of paths and counts, never file contents.</p></div>
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="1.2"><rect x="3" y="3" width="9" height="9"/><rect x="14" y="3" width="9" height="9"/><rect x="3" y="14" width="9" height="9"/><path d="M14 18.5h9M18.5 14v9"/></svg>
+          <h3>Works across your repos</h3><p>Load several repositories into one workspace and ask about one or all of them. Evidence reads <span class="mono">repo:path:line</span>. Hand a teammate a read-only snapshot as a link or a file, with no server in between.</p></div>
       </div>
     </div>
   </section>
 
-  <!-- SYSTEM -->
-  <section class="block" id="system">
+  <!-- TEAM CAPABILITIES -->
+  <section class="block" id="features">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">02</span><h2>The system</h2></div>
+      <div class="sec-head rv"><span class="idx mono">02</span><h2>Team capabilities</h2></div>
+      <p class="sec-lede rv">Screenshots of the real workbench. The workspace repos are two small samples.</p>
+      <div class="caps">
+        <div class="cap rv" style="--i:0">
+          <a class="shot" href="media/shot-workspace.jpg"><img src="media/shot-workspace.jpg" width="1280" height="800" loading="lazy" decoding="async" alt="Two repos, web and api, loaded as one workspace. The LOCAL engine finds formatDate defined in both, with evidence chips labelled by repo."></a>
+          <span class="k">MULTI-REPO WORKSPACES</span>
+          <h3>Ask across several repos</h3><p>Add repos to one workspace and scope a question to one repo or all of them, with the LOCAL engine or a model. Identical paths never collide, and the overview shows shared dependencies, cross-repo imports and names exported by more than one repo. Saved workspaces keep names and settings, never contents.</p></div>
+        <div class="cap rv" style="--i:1">
+          <a class="shot" href="media/shot-share.jpg"><img src="media/shot-share.jpg" width="1280" height="800" loading="lazy" decoding="async" alt="The share dialog: a file list, a link size meter and a box to confirm that anyone with the link can read the code."></a>
+          <span class="k">SHARE LINKS AND BUNDLES</span>
+          <h3>Pass a read-only view to a teammate</h3><p>Tick the files, and the link carries the code itself after the <span class="mono">#</span>, the part of an address browsers never send to a server. It goes only where you send it, and anyone holding it can read it. Big projects become a <span class="mono">.meridian</span> file instead. Keys and settings are never included.</p></div>
+        <div class="cap rv" style="--i:2">
+          <a class="shot" href="media/shot-usage.jpg"><img src="media/shot-usage.jpg" width="1280" height="800" loading="lazy" decoding="async" alt="The usage log panel: question counts, LOCAL versus model, latency and a breakdown by question kind, stored in this browser only."></a>
+          <span class="k">OPT-IN USAGE LOG</span>
+          <h3>Usage numbers you own</h3><p>Off by default. Turned on, it keeps question kinds, provider, timings and token counts in the browser, never code, paths or keys. Question text needs a second switch. Export JSON or CSV, or send events to an endpoint you run. There is no collector of ours.</p></div>
+      </div>
+      <p class="also mono rv"><b>ALSO IN THE WORKBENCH</b> · about two dozen deterministic LOCAL queries (definitions, references, import cycles, orphans, untested files, env reads) · ranked signals · drift between sessions · <span class="mono">PREVIEW SEND</span> shows the exact payload before a question goes · symbols and imports for 10 languages</p>
+    </div>
+  </section>
+
+  <!-- WHO + WHY -->
+  <section class="block" id="why">
+    <div class="wrap">
+      <div class="sec-head rv"><span class="idx mono">03</span><h2>Who it's for, and why there's no backend</h2></div>
       <div class="sys-grid">
         <div>
-          <div class="step rv lit" style="--i:0"><div class="k mono">STAGE 01</div><h3>Observe</h3><p>You load repositories and documents straight into the workbench. Files are read into your browser's memory one by one, and you choose exactly what's in scope.</p></div>
-          <div class="step rv lit" style="--i:1"><div class="k mono">STAGE 02</div><h3>Reason</h3><p>Questions run against the loaded project. Every conclusion carries a trace, so the path from evidence to answer stays inspectable.</p></div>
-          <div class="step rv lit" style="--i:2"><div class="k mono">STAGE 03</div><h3>Act</h3><p>The model proposes read-only actions: searches, file inspections, git commands to copy. Each one waits for your approval, and none of them is shell execution.</p></div>
+          <div class="step rv lit" style="--i:0"><div class="k mono">WHO IT'S FOR</div><h3>Engineering teams at mid-size and large companies</h3>
+            <ul>
+              <li><b>Engineering leads</b> getting people productive in large or unfamiliar codebases.</li>
+              <li><b>Security and platform reviewers</b> who have to sign off on anything that touches source.</li>
+              <li><b>Teams with data-residency or vendor-risk rules</b> that rule out hosted code assistants.</li>
+            </ul></div>
+          <div class="step rv lit" style="--i:1"><div class="k mono">WHY NO BACKEND</div><h3>No server, so we hold no copy of your code</h3>
+            <ul>
+              <li>No vendor server holds your code, so there is no copy of ours to breach, subpoena or retain.</li>
+              <li>Requests go from the browser straight to your provider, under your agreement, account settings and data terms.</li>
+              <li>Meridian adds no party that sees code, so data-residency and vendor-risk reviews have fewer parties to clear.</li>
+              <li>Saved projects and workspaces keep metadata only. Close the tab and the files are gone.</li>
+            </ul></div>
         </div>
         <div class="diagram rv" style="--i:2" id="diagram">
-          <svg viewBox="0 0 460 300" role="img" aria-label="System diagram: sources flow into the core, the core drives instruments">
+          <svg viewBox="0 0 460 300" role="img" aria-label="Data flow: project files stay in your browser tab; questions go only to your model provider, or nowhere in LOCAL mode; there is no Meridian server">
             <g fill="none" stroke="var(--line-strong)" stroke-width="1">
-              <rect x="10" y="30" width="120" height="44"/><rect x="10" y="94" width="120" height="44"/><rect x="10" y="158" width="120" height="44"/>
-              <rect x="190" y="82" width="110" height="110"/>
-              <rect x="350" y="60" width="100" height="40"/><rect x="350" y="130" width="100" height="40"/><rect x="350" y="200" width="100" height="40"/>
+              <rect x="10" y="20" width="196" height="260"/>
+              <rect x="26" y="62" width="164" height="42"/><rect x="26" y="122" width="164" height="42"/><rect x="26" y="182" width="164" height="42"/>
+              <rect x="290" y="40" width="160" height="60"/>
+              <rect x="290" y="130" width="160" height="50"/>
             </g>
-            <path id="flowpath" d="M130 52h30v85h30 M130 116h60 M130 180h30v-42h30 M300 116h20v-36h30 M300 137h50v13 M300 158h20v62h30" fill="none" stroke="var(--accent)" stroke-width="1.4"/>
-            <g fill="var(--ink-3)" font-size="10">
-              <text x="20" y="56">REPOS</text><text x="20" y="120">DOCS</text><text x="20" y="184">CONFIGS</text>
-              <text x="360" y="84">SEARCH</text><text x="360" y="154">INSPECT</text><text x="360" y="224">GIT</text>
+            <rect x="290" y="210" width="160" height="60" fill="none" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="4 4"/>
+            <path id="flowpath" d="M190 83h40v-13h60 M190 143h40v12h60" fill="none" stroke="var(--accent)" stroke-width="1.4"/>
+            <g fill="var(--ink)" font-size="10.5"><text x="26" y="44">YOUR BROWSER TAB</text></g>
+            <g fill="var(--ink-2)" font-size="9.5">
+              <text x="38" y="80">FILES</text><text x="38" y="95" fill="var(--ink-3)">tab memory only</text>
+              <text x="38" y="140">INDEX + LOCAL ENGINE</text><text x="38" y="155" fill="var(--ink-3)">no network</text>
+              <text x="38" y="200">YOUR API KEY</text><text x="38" y="215" fill="var(--ink-3)">this browser only</text>
+              <text x="302" y="64" fill="var(--ink)">YOUR PROVIDER</text><text x="302" y="81" fill="var(--ink-3)">your key, your terms</text>
+              <text x="302" y="152" fill="var(--ink)">LOCAL MODE</text><text x="302" y="168" fill="var(--ink-3)">nothing sent</text>
+              <text x="302" y="234" fill="var(--ink-3)">MERIDIAN SERVER</text><text x="302" y="252" fill="var(--ink-3)">does not exist</text>
             </g>
-            <g font-size="11" fill="var(--ink)"><text x="213" y="132">MERIDIAN</text><text x="228" y="150">CORE</text></g>
-            <text x="196" y="180" font-size="9" fill="var(--accent)">TRACE: ON</text>
+            <text x="26" y="262" font-size="9" fill="var(--accent)">EGRESS TO US: NONE</text>
           </svg>
+          <p class="dnote mono">// GitHub Pages serves the page files. It never receives your code, your questions or your key.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- DEMO -->
-  <section class="block" id="demo">
+  <!-- SECURITY REVIEW -->
+  <section class="block" id="security">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">03</span><h2>See it run</h2></div>
-      <div class="rv">
-        <video class="demo-media" src="media/meridian-demo.mp4" controls muted playsinline preload="metadata" aria-label="Screen capture of the Meridian workbench answering questions about its bundled sample project"></video>
-        <p class="demo-note">A screen capture of the workbench answering its bundled sample project with the no-key LOCAL engine. Evidence chips open the cited file at the cited line. <a href="media/meridian-demo.gif" class="trace">GIF version</a> · <a href="app.html" class="trace">run it yourself</a>.</p>
+      <div class="sec-head rv"><span class="idx mono">04</span><h2>For security and compliance reviews</h2></div>
+      <p class="sec-lede rv">The questions reviewers ask, with direct answers. You can check each point in the source and in your browser's network inspector.</p>
+      <dl class="spec rv">
+        <div class="spec-row"><dt>WHERE CODE LIVES</dt><dd>In the memory of the browser tab that loaded it, and nowhere else. Close the tab and it is gone. Saved projects and workspaces keep <b>metadata only</b> (names, file counts, selection, settings) in that browser's IndexedDB.</dd></div>
+        <div class="spec-row"><dt>WHAT LEAVES, AND WHEN</dt><dd>Only when you ask a model a question: the question, the files you ticked, short line-numbered excerpts the local index found (with GROUND on, the default; these can come from any loaded file, ticked or not), any evidence you pinned, and earlier turns of the conversation go <b>directly from the browser to the provider you configured</b>. SMART mode also sends a project map of the ticked files. <span class="mono">PREVIEW SEND</span> shows the exact payload first. In LOCAL mode, nothing is sent.</dd></div>
+        <div class="spec-row"><dt>OUR SERVERS</dt><dd>None. Meridian is static files on GitHub Pages: no accounts, no database, no telemetry sent to us. Nothing runs on our side. The product is the static source, which you can review or self-host at a pinned commit. GitHub may log standard request data (such as IP addresses) when the page loads.</dd></div>
+        <div class="spec-row"><dt>MODEL PROVIDER</dt><dd>Anthropic, OpenAI, or any OpenAI-compatible endpoint, under <b>your own key, agreement, region and data terms</b>. Local models (LM Studio, Ollama) work on the hosted page with CORS enabled for this site (see the user guide). For an internal gateway or a regional endpoint, host your own copy and add its address to the page's security policy.</dd></div>
+        <div class="spec-row"><dt>API KEYS</dt><dd>Stored in that browser's localStorage, one per provider, and sent only to that provider. Never put into share links, bundles, exports or the usage log.</dd></div>
+        <div class="spec-row"><dt>SHARE LINKS</dt><dd>The link carries the selected files in the part after <span class="mono">#</span>, which browsers never send in a request, so no server receives it. It is the code itself: anyone who has it can read it, and it can't be revoked. Secret-looking files (.env, private keys) start unticked.</dd></div>
+        <div class="spec-row"><dt>USAGE ANALYTICS</dt><dd>Off by default, and nothing is recorded while off. When on, events stay in the browser and hold no code, paths or keys; question text needs a separate switch. Optional sending goes only to an endpoint you enter (localhost on the hosted page). LOCAL-mode events are never sent.</dd></div>
+        <div class="spec-row"><dt>PAGE HARDENING</dt><dd>No third-party scripts. A content security policy allows scripts from this site only, and lets them connect only to the two provider APIs and localhost. The workbench refuses to run inside a frame.</dd></div>
+        <div class="spec-row not"><dt>NOT OFFERED</dt><dd>No certifications, SSO, admin console, central policy controls, audit-log service or SLA. Meridian is a free beta run by one person. The no-backend design is the control.</dd></div>
+      </dl>
+      <p class="spec-foot rv">Need it in writing? Send your reviewer the <a href="one-pager.html" class="ilink">one-pager</a> (it prints to one page), the <a href="privacy.html" class="ilink">privacy policy</a> and the <a href="https://github.com/drewosi/lucid-engine" class="ilink">source</a>.</p>
+    </div>
+  </section>
+
+  <!-- TRY IT -->
+  <section class="block" id="try">
+    <div class="wrap">
+      <div class="sec-head rv"><span class="idx mono">05</span><h2>Try it in 30 seconds</h2></div>
+      <div class="try-steps">
+        <div class="step rv lit" style="--i:0"><div class="k mono">STEP 01</div><h3>Open the demo</h3><p>Follow the demo link. A first visit asks you to accept the terms once, and the demo button is already focused, so that takes one click.</p></div>
+        <div class="step rv lit" style="--i:1"><div class="k mono">STEP 02</div><h3>Watch it answer</h3><p>A small sample project loads and the LOCAL engine answers its first question. No key, no AI, nothing leaves the tab.</p></div>
+        <div class="step rv lit" style="--i:2"><div class="k mono">STEP 03</div><h3>Ask your own question</h3><p>Try <span class="mono">what imports store.js?</span> and click an evidence chip to open the exact line. Then load a real repo.</p></div>
+      </div>
+      <div class="hero-cta-row rv">
+        <a href="app.html?demo" class="btn btn-signal btn-hero">Try the demo in 30 seconds</a>
+        <a href="https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md" class="btn btn-hairline btn-hero">Read the user guide</a>
       </div>
     </div>
   </section>
@@ -348,23 +461,43 @@
   <!-- FAQ -->
   <section class="block" id="faq">
     <div class="wrap">
-      <div class="sec-head rv"><span class="idx mono">04</span><h2>Questions</h2></div>
+      <div class="sec-head rv"><span class="idx mono">06</span><h2>Questions</h2></div>
       <div class="faq rv" id="faqbox">
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.01</span>Where does my data go?<span class="x">+</span></button>
-          <div class="faq-a"><p>Nowhere near us. Meridian has no backend, so your files, questions, and API key can't reach us. When you ask a question, your browser sends it, plus the files the context engine selected, directly to the provider you chose, under your own account. With the LOCAL engine, nothing leaves the tab at all. Details in the <a href="privacy.html" class="trace">privacy policy</a>.</p></div>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.01</span>Is my code safe?<span class="x">+</span></button>
+          <div class="faq-a">
+            <p>Your code never reaches us: Meridian has no backend to receive it. The tab holds your files in memory until you close it. Code leaves the browser only in these cases, and you start each one:</p>
+            <ul>
+              <li><b>You ask a model a question.</b> The question, the files you ticked, short excerpts the local index found (from any loaded file, ticked or not, while GROUND is on) and earlier turns of the conversation go straight to the provider you configured, under your key. SMART mode adds a project map of the ticked files. <span class="mono">PREVIEW SEND</span> shows the exact payload. In LOCAL mode nothing is sent.</li>
+              <li><b>You create a share link or bundle.</b> The files you tick travel inside it, to wherever you send it.</li>
+              <li><b>You export a session.</b> The cited lines are in the file you save.</li>
+            </ul>
+            <p>Outside our control: what your model provider does with requests (your agreement with them covers that), and where a share link travels once you send it. The usage log never stores code. Details in the <a href="privacy.html" class="trace">privacy policy</a>.</p>
+          </div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.02</span>What do I need to use it?<span class="x">+</span></button>
-          <div class="faq-a"><p>A modern browser. For model answers, bring your own API key (Anthropic, OpenAI, or any OpenAI-compatible endpoint); keys are stored in your browser's localStorage and sent only to that provider. Or use no key at all: the <b>LOCAL</b> engine indexes your project and answers questions about definitions, references, relationships, and structure by deterministic search, with no AI and no network.</p></div>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.02</span>What do we need to run it?<span class="x">+</span></button>
+          <div class="faq-a"><p>A modern browser. For model answers, an API key for Anthropic, OpenAI or any OpenAI-compatible endpoint; keys stay in that browser's localStorage and go only to that provider. Or no key at all: the <b>LOCAL</b> engine answers questions about definitions, references, imports and structure by deterministic search, with no AI and no network. Nothing to install, no account to create.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.03</span>What does it cost?<span class="x">+</span></button>
-          <div class="faq-a"><p>Meridian is free. Model usage is billed by your provider at their rates; the workbench shows a running cost estimate and supports an optional session spend limit. We recommend creating a key with a spend cap.</p></div>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.03</span>Can we use local or self-hosted models?<span class="x">+</span></button>
+          <div class="faq-a"><p>Yes. Point the custom provider at any OpenAI-compatible server. On the hosted page that means a server on your own machine, such as LM Studio (<span class="mono">http://localhost:1234/v1</span>) or Ollama, with CORS enabled for this site. LM Studio ships with CORS off, and Ollama needs <span class="mono">OLLAMA_ORIGINS</span> set. For a model behind your company's gateway, or a provider endpoint in a specific region, host your own copy of the static files and add that address to the security policy. The <a href="https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md" class="trace">user guide</a> covers both setups.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.04</span>Can I check the answers?<span class="x">+</span></button>
-          <div class="faq-a"><p>Every answer includes its trace. Evidence chips open the cited file at the cited lines, so you can read the source yourself. AI output can still be wrong; the trace exists so that verifying it is fast. If a trace can't be parsed, the answer says so.</p></div>
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.04</span>Who can read a share link?<span class="x">+</span></button>
+          <div class="faq-a"><p>Anyone who has it. The link carries the files you ticked, compressed, in the part after <span class="mono">#</span>. Browsers don't send that part to any server, so GitHub Pages and we never see it, but the chat app or inbox you paste it into stores it like any message. There is no server, so a link can't be revoked or expired. Treat it like sending the files. It opens read-only, in the recipient's tab, and nothing is saved.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.05</span>Does Meridian track usage?<span class="x">+</span></button>
+          <div class="faq-a"><p>Not for us. This site runs no analytics and sets no cookies. The workbench has an optional usage log for you: off by default, stored in your browser, exportable as JSON or CSV. It records question kinds, provider, timings and token counts, never code, file paths or keys, and stores question text only if you turn on a second switch. For team-wide numbers, it can send the same events to an endpoint you run (on the hosted page, one on localhost).</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.06</span>What does it cost?<span class="x">+</span></button>
+          <div class="faq-a"><p>Meridian is free during the beta. Model usage is billed by your provider at their rates; the workbench shows a running cost estimate and supports a session spend limit. Use a key with a spend cap.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button" aria-expanded="false"><span class="qi mono">Q.07</span>Can I trust the answers?<span class="x">+</span></button>
+          <div class="faq-a"><p>Check them; that's what the trace is for. Evidence chips open the cited file at the cited lines, so verifying takes seconds. LOCAL answers come straight from the index and say when a question needs a model instead. Model output can still be wrong, and if a trace can't be parsed, the answer says so.</p></div>
         </div>
       </div>
     </div>
@@ -374,15 +507,15 @@
   <section class="access" id="access">
     <div class="wrap access-grid">
       <div class="rv" style="--i:0">
-        <h2>Free to use, open to read.</h2>
-        <p>The workbench is free during the beta. No signup, no account. The full source is on GitHub.</p>
+        <h2>Point it at a real repo this afternoon.</h2>
+        <p>Free during the beta. No signup, no account, nothing to install, and the full source is on GitHub, so your reviewers can read it before you run it.</p>
       </div>
       <div class="rv" style="--i:1">
         <div class="hero-cta-row">
           <a href="app.html" class="btn btn-signal btn-hero">Launch Meridian</a>
-          <a href="https://github.com/drewosi/lucid-engine" class="btn btn-hairline btn-hero">Source on GitHub</a>
+          <a href="app.html?demo" class="btn btn-hairline btn-hero">Try the demo</a>
         </div>
-        <p class="access-contact">Questions or bug reports: <a href="mailto:drewosipenko@gmail.com" class="trace">drewosipenko@gmail.com</a></p>
+        <p class="access-contact">For your security reviewer: the <a href="one-pager.html" class="trace">one-pager</a>. Questions or bug reports: <a href="mailto:drewosipenko@gmail.com" class="trace">drewosipenko@gmail.com</a></p>
       </div>
     </div>
   </section>
@@ -397,18 +530,18 @@
         <div>
           <h4>PAGE</h4>
           <ul>
-            <li><a href="app.html">Workbench — launch</a></li>
+            <li><a href="app.html">Launch the workbench</a></li>
+            <li><a href="app.html?demo">Try the demo</a></li>
             <li><a href="one-pager.html">One-pager</a></li>
             <li><a href="https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md">User guide</a></li>
-            <li><a href="#capabilities">Capabilities</a></li>
-            <li><a href="#demo">Demo</a></li>
+            <li><a href="#security">Security review</a></li>
           </ul>
         </div>
         <div>
           <h4>PROJECT</h4>
           <ul>
             <li><a href="#faq">Questions</a></li>
-            <li><a href="https://github.com/drewosi/lucid-engine">Source — GitHub</a></li>
+            <li><a href="https://github.com/drewosi/lucid-engine">Source on GitHub</a></li>
             <li><a href="mailto:drewosipenko@gmail.com">Contact</a></li>
           </ul>
         </div>
@@ -462,9 +595,18 @@
     canvas.width = W * dpr; canvas.height = H * dpr;
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    CX = W > 860 ? W * 0.66 : W * 0.5;
-    CY = H * 0.5;
-    R = Math.min(W, H) * (W > 860 ? 0.34 : 0.42);
+    /* the field orbits the demo, so the ring frames the real product and never
+       sits behind the copy */
+    var media = document.querySelector('.hero-media');
+    if (media) {
+      var hr = hero.getBoundingClientRect(), mr = media.getBoundingClientRect();
+      CX = mr.left - hr.left + mr.width / 2;
+      CY = mr.top - hr.top + mr.height / 2;
+      R = W > 980 ? Math.min(mr.width * 0.62, H * 0.46) : mr.width * 0.5;
+    } else {
+      CX = W * 0.5; CY = H * 0.5;
+      R = Math.min(W, H) * 0.42;
+    }
   }
 
   function build(n) {
@@ -499,7 +641,7 @@
     for (var pass = 0; pass < 2; pass++) {
       var accPass = pass === 1;
       ctx.fillStyle = 'rgb(' + (accPass ? pal.acc : pal.pt) + ')';
-      /* Flare Bloom — the meridian ring ignites; controlled, on-state only */
+      /* Flare Bloom: the meridian ring ignites; controlled, on-state only */
       ctx.shadowBlur = accPass ? 6 * gz : 0;
       ctx.shadowColor = accPass ? 'rgb(' + pal.acc + ')' : 'transparent';
       for (i = 0; i < n; i++) {
@@ -558,6 +700,25 @@
   document.querySelectorAll('.hero .rv').forEach(function (el) { el.classList.add('in'); });
   if (!reduced && !formed) { resolving = true; resolveStart = performance.now(); }
 
+  /* ============ DEMO VIDEO ============
+     autoplays muted on a loop; reduced-motion visitors get the poster and start
+     it themselves. One visible control either way. */
+  var vid = $('demovid'), vidbtn = $('vidbtn');
+  function syncVid() {
+    var playing = !vid.paused;
+    vidbtn.textContent = playing ? 'PAUSE' : 'PLAY';
+    vidbtn.setAttribute('aria-pressed', playing ? 'false' : 'true');
+  }
+  if (vid && vidbtn) {
+    if (reduced) { vid.removeAttribute('autoplay'); vid.pause(); }
+    vid.addEventListener('play', syncVid);
+    vid.addEventListener('pause', syncVid);
+    vidbtn.addEventListener('click', function () {
+      if (vid.paused) { var pr = vid.play(); if (pr && pr.catch) pr.catch(function () {}); } else vid.pause();
+    });
+    syncVid();
+  }
+
   /* ============ MATERIALIZE + section machinery ============ */
   var revealables = Array.prototype.filter.call(document.querySelectorAll('.rv'), function (el) { return !el.closest('.hero'); });
   if (!reduced) {
@@ -577,9 +738,11 @@
   /* nav + wayfinder tracking */
   var SECTIONS = [
     { id: 'top', label: 'TOP' },
-    { id: 'capabilities', label: 'CAPABILITIES' },
-    { id: 'system', label: 'SYSTEM' },
-    { id: 'demo', label: 'DEMO' },
+    { id: 'teams', label: 'FOR TEAMS' },
+    { id: 'features', label: 'FEATURES' },
+    { id: 'why', label: 'WHY NO BACKEND' },
+    { id: 'security', label: 'SECURITY REVIEW' },
+    { id: 'try', label: 'TRY IT' },
     { id: 'faq', label: 'QUESTIONS' },
     { id: 'access', label: 'ACCESS' }
   ];
@@ -633,7 +796,7 @@
     }
   });
 
-  console.log('MERIDIAN — source: ' + REPO);
+  console.log('MERIDIAN · source: ' + REPO);
 })();
 </script>
 </body>

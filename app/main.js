@@ -15,7 +15,7 @@ import { st } from './state.js';
 import { $ } from './helpers.js';
 import { initShell, syncProviderUI, openDrawer, drawer, rail, railbtn, toggleRail } from './shell.js';
 import { initIngest, setCtxMode, closePreview, closeSkipReview, prevveil, skipveil } from './ingest.js';
-import { initDemo } from './demo.js';
+import { initDemo, openDemoFromUrl } from './demo.js';
 import { initMemory } from './memory.js';
 import { initChat } from './chat.js';
 import { initViewer, closeViewer, viewveil } from './viewer.js';
@@ -23,6 +23,9 @@ import { initExport, exportTraces } from './export.js';
 import { initPalette, palOpen, palClose, palOv, openKeymap, closeKeymap, keymapveil } from './palette.js';
 import { initLocalMenu, closeLocalMenu, localmenuveil } from './localmenu.js';
 import { runSelfTests, runAndShowSelfTests } from './selftest.js';
+import { initShare, closeShare, openShareFromHash, shareveil } from './share.js';
+import { initWorkspace } from './workspace.js';
+import { initAnalytics, closeAnalytics, anveil } from './analytics.js';
 
 /* frame-buster — a <meta> CSP cannot carry frame-ancestors, so refuse to run
    framed: hide the document and bounce the top window to this URL (setting a
@@ -37,11 +40,14 @@ initShell();    /* provider + model from localStorage, theme, first-run veil, se
 initIngest();   /* pickers/dropzone/tree wiring, ground + strict-trace + budget/spend state, ignore patterns */
 initDemo();     /* first-run demo buttons */
 initMemory();   /* saved-projects list + save wiring */
+initWorkspace(); /* repo list, [ + ADD REPO ], question scope */
+initShare();    /* share modal, bundle picker, #share= hashchange */
 initChat();     /* composer + streaming controls + cost chip */
 initViewer();
 initExport();
 initPalette();
 initLocalMenu(); /* "what can I ask" catalog + empty-state starter chips */
+initAnalytics(); /* opt-in usage log: settings switches, own-endpoint field, the log panel */
 
 /* ============ GLOBAL KEYS ============ */
 document.addEventListener('keydown', function (e) {
@@ -72,6 +78,8 @@ document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape') {
     if (palOv.classList.contains('on')) { palClose(); return; }
     if (localmenuveil.classList.contains('on')) { closeLocalMenu(); return; }
+    if (shareveil.classList.contains('on')) { closeShare(); return; }
+    if (anveil.classList.contains('on')) { closeAnalytics(); return; }
     if (keymapveil.classList.contains('on')) { closeKeymap(); return; }
     if (viewveil.classList.contains('on')) { closeViewer(); return; }
     if (prevveil.classList.contains('on')) { closePreview(); return; }
@@ -83,6 +91,8 @@ document.addEventListener('keydown', function (e) {
 
 syncProviderUI();
 setCtxMode(st.ctxMode); /* also renders the budget */
+openDemoFromUrl();      /* app.html?demo: the landing page's demo link; ignored when a #share= link is present */
+openShareFromHash();    /* app.html#share=… — decoded in this tab, then the fragment is cleared */
 window.__meridianSelfTest = runSelfTests; /* L3: run from the console (async — returns a Promise of results) */
 if (/[?&]selftest\b/.test(location.search)) setTimeout(runAndShowSelfTests, 300);
 console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', '— Engine v0.6 · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');

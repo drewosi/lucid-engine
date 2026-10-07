@@ -3,6 +3,7 @@ import { MODELS } from './config.js';
 import { st } from './state.js';
 import { openViewer } from './viewer.js';
 import { renderActions } from './actions.js';
+import { citeText, isMulti, repoOf, LOOSE, resolveCitePath } from './repos.js';
 /* ============ RENDERING ============ */
 function renderRich(raw) {
   /* markdown-lite: fenced code blocks, inline code, bold — everything HTML-escaped first */
@@ -94,6 +95,9 @@ function coerceTrace(t) {
     if (!s || typeof s !== 'object') return;
     if (!Array.isArray(s.evidence)) s.evidence = [];
     if (typeof s.n !== 'number') s.n = i + 1;
+    /* workspace: a model may cite "repo:path" or drop the repo label — map
+       either to the loaded path when that is unambiguous */
+    s.evidence.forEach(function (ev) { if (ev && typeof ev.file === 'string') ev.file = resolveCitePath(ev.file); });
     steps.push(s);
   });
   if (Array.isArray(t.actions)) t.actions = t.actions.filter(function (a) { return a && typeof a === 'object'; });
@@ -178,9 +182,17 @@ function evidenceChip(ev) {
   var srcSpan = document.createElement('span');
   srcSpan.className = 'src'; srcSpan.textContent = 'ctx://';
   btn.appendChild(srcSpan);
-  btn.appendChild(document.createTextNode(ev.file + ':' + a + '–' + b));
+  /* several repos loaded: the chip leads with its repo — ctx://web:src/app.js:12–14 */
+  var repo = isMulti() ? repoOf(ev.file) : LOOSE;
+  if (repo !== LOOSE) {
+    var rp = document.createElement('span');
+    rp.className = 'repo'; rp.textContent = repo;
+    btn.appendChild(rp);
+    btn.appendChild(document.createTextNode(':' + ev.file.slice(repo.length + 1) + ':' + a + '–' + b));
+    btn.setAttribute('data-repo', repo);
+  } else btn.appendChild(document.createTextNode(ev.file + ':' + a + '–' + b));
   if (known) {
-    var title = 'Open ' + ev.file + ' at ' + a + '–' + b;
+    var title = 'Open ' + citeText(ev.file, a, b).replace(/:(\d+)–(\d+)$/, ' at $1–$2');
     if (ev.quote) {
       var q60 = String(ev.quote).trim().slice(0, 60);
       if (q60 && st.files.get(ev.file).content.indexOf(q60) === -1) { title = 'Quote not found in this file — the model may have paraphrased or mis-cited these lines'; btn.classList.add('unverified'); }
@@ -221,7 +233,7 @@ function evPinBtn(ev) {
 function pinnedMarkdown() {
   return st.pinnedEv.map(function (ev) {
     var a = ev.startLine || 1, bb = ev.endLine || a;
-    return '- `' + ev.file + ':' + a + '–' + bb + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : '');
+    return '- `' + citeText(ev.file, a, bb) + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : '');
   }).join('\n');
 }
 function renderPinTray() {
@@ -262,10 +274,10 @@ function evCopyBtn(ev) {
   var btn = document.createElement('button');
   btn.type = 'button'; btn.className = 'evcopy mono'; btn.textContent = '⧉';
   btn.title = 'Copy this citation (path:line' + (ev.quote ? ' + quote' : '') + ')';
-  btn.setAttribute('aria-label', 'Copy citation ' + ev.file + ':' + a + '–' + b);
+  btn.setAttribute('aria-label', 'Copy citation ' + citeText(ev.file, a, b));
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
-    var txt = '`' + ev.file + ':' + a + '–' + b + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : '');
+    var txt = '`' + citeText(ev.file, a, b) + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : '');
     copyText(txt, 'Citation copied.');
   });
   return btn;
@@ -479,7 +491,7 @@ function exchangeMarkdown(x, i) {
       L.push((n + 1) + '. **' + String(step.action || 'step') + '**' + (step.note ? ' — ' + String(step.note) : ''));
       (Array.isArray(step.evidence) ? step.evidence : []).forEach(function (ev) {
         if (!ev || typeof ev.file !== 'string') return;
-        L.push('   - `' + ev.file + ':' + ev.startLine + '–' + ev.endLine + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : ''));
+        L.push('   - `' + citeText(ev.file, ev.startLine, ev.endLine) + '`' + (ev.quote ? ' — “' + String(ev.quote) + '”' : ''));
         var ex = evExcerpt(ev);
         if (ex) {
           L.push('');
@@ -504,4 +516,4 @@ function exchangeMarkdown(x, i) {
   }
   return L.join('\n');
 }
-export { addAiMsg, addUserMsg, atBottom, attachCopy, convoIn, evExcerpt, exchangeMarkdown, extractTrace, renderFound, renderPinTray, renderRich, renderTrace, scrollEnd };
+export { addAiMsg, addUserMsg, atBottom, attachCopy, convoIn, evExcerpt, evidenceChip, exchangeMarkdown, extractTrace, renderFound, renderPinTray, renderRich, renderTrace, scrollEnd };

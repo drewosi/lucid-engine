@@ -76,16 +76,33 @@
         </div>
 
         <h2 class="rail-hd">CONTEXT <span class="n" id="filecount"></span></h2>
+        <p class="rail-note" id="sharednote" hidden><span class="sharechip">SHARED · READ-ONLY</span><span id="sharedname"></span></p>
         <div id="dropzone">
           drop a project folder here
           <div class="pickrow">
             <button class="pick" type="button" id="dirbtn">[ PICK FOLDER ]</button>
             <button class="pick" type="button" id="filebtn">[ PICK FILES ]</button>
+            <button class="pick" type="button" id="bundlebtn" title="Open a .meridian bundle someone shared with you (or drop it here). It loads read-only, in this tab only.">[ OPEN SHARED ]</button>
           </div>
           <input type="file" id="dirpick" webkitdirectory multiple hidden aria-label="Pick a project folder">
           <input type="file" id="filepick" multiple hidden aria-label="Pick files">
+          <input type="file" id="bundlepick" accept=".meridian,application/json" hidden aria-label="Open a shared .meridian bundle">
         </div>
         <p class="rail-note">Files are read into this tab's memory only; nothing is uploaded to us. Selected files are sent to your chosen provider with each question, under your key. In LOCAL mode nothing is sent at all.</p>
+        <!-- Workspace — one row per loaded repo, rendered by app/workspace.js renderWorkspace() -->
+        <div id="wsshelf" hidden>
+          <h2 class="rail-hd">WORKSPACE <span class="n" id="wscount"></span></h2>
+          <div id="wslist"></div>
+          <div id="wsactions">
+            <button class="btn-quiet acc" type="button" id="wsadd" title="Load another project folder beside this one. Each repo keeps its own files and index, labelled by its folder name.">[ + ADD REPO ]</button>
+            <button class="btn-quiet acc" type="button" id="wsscope" aria-pressed="false" hidden title="Ask across every repo at once, or only the active repo (click a repo's name to make it active)">[ ASK: ALL REPOS ]</button>
+          </div>
+          <div id="wscap" title="Everything loaded, all repos together, against the ingest caps">
+            <div class="budget-bar" id="wscapbar"><i></i></div>
+            <div class="budget-txt"><span id="wscaptxt"></span><span id="wscapmax"></span></div>
+          </div>
+          <p class="rail-note" id="wsnote"></p>
+        </div>
         <div id="budget" hidden title="Estimated tokens vs the model's context window — the estimate is language-aware (code counts denser than prose)">
           <div class="budget-bar" id="budgetbar"><i></i></div>
           <div class="budget-txt"><span id="budgettxt">≈ 0 tokens selected</span><span id="budgetmax"></span></div>
@@ -110,6 +127,7 @@
           <button class="btn-quiet" type="button" id="selall">[ SELECT ALL ]</button>
           <button class="btn-quiet" type="button" id="selnone">[ SELECT NONE ]</button>
           <button class="btn-quiet acc" type="button" id="ignorebtn" title="Edit ignore patterns in settings — applied at ingest, saved with the project">[ IGNORE PATTERNS ]</button>
+          <button class="btn-quiet acc" type="button" id="sharebtn" title="Share these files as a link or a .meridian bundle. No server: the code travels inside the link or file.">[ SHARE ]</button>
           <button class="btn-quiet" type="button" id="clearctx">[ UNLOAD PROJECT ]</button>
         </div>
 
@@ -240,6 +258,15 @@
     </div>
     <p class="note" id="spendstate" aria-live="polite"></p>
 
+    <h3>FILE CAP</h3>
+    <p class="note">The most files Meridian loads into memory at once, across every repo in the workspace. Default 8,000. A higher cap uses more memory, and the ~300 MB text cap still applies. Takes effect on the next folder you load. Blank = default.</p>
+    <div class="key-row">
+      <label for="maxfilesin" class="sr-only">File cap (number of files)</label>
+      <input type="number" id="maxfilesin" min="1" step="1" placeholder="e.g. 20000 (default 8000)">
+      <button class="btn btn-hairline" type="button" id="savemaxfiles">Set</button>
+    </div>
+    <p class="note" id="maxfilesstate" aria-live="polite"></p>
+
     <h3>IGNORE PATTERNS</h3>
     <p class="note">One pattern per line; <b>*</b> matches anything (e.g. <b>*.test.ts</b>, <b>docs/*</b>). Applied at ingest and saved with the project. Lines starting with # are comments.</p>
     <label for="ignorein" class="sr-only">Ignore patterns</label>
@@ -252,8 +279,24 @@
     <h3>DISPLAY</h3>
     <button class="btn-mode mono" id="modebtn2" type="button" aria-label="Toggle color mode">MODE: DARK</button>
 
+    <h3>USAGE ANALYTICS</h3>
+    <p class="note">Off by default. When on, Meridian keeps a log of how you use it in this browser's IndexedDB: when you asked, the kind of question, the provider, LOCAL or model, timings, token counts the provider reported, how many repos were loaded, and when you created a share or added a repo. Never code, file paths or API keys. Nothing is sent anywhere unless you fill in your own endpoint below.</p>
+    <div class="an-tgls">
+      <button class="btn-quiet acc" type="button" id="anbtn" aria-pressed="false" title="Keep a usage log in this browser. Off by default; when off, nothing is recorded.">[ USAGE ANALYTICS: OFF ]</button>
+      <button class="btn-quiet acc" type="button" id="antextbtn" aria-pressed="false" title="Also keep the text of each question in the log. Off by default.">[ ALSO STORE QUESTION TEXT: OFF ]</button>
+      <button class="btn-quiet acc" type="button" id="anopen" title="Totals, breakdowns, latency and recent events, with JSON / CSV export and clear">[ VIEW USAGE LOG ]</button>
+    </div>
+    <p class="note">Question text is a separate switch. When on, each question is stored as you typed it, cut to 300 characters, with anything that looks like a key removed.</p>
+    <p class="note"><b>Send events to my own endpoint</b> (optional, blank by default). For owners who self-host a collector. When this is filled in and analytics is on, the same events are POSTed as JSON to this URL (question text only if you store it). It is the only network request analytics ever makes; Meridian has no collection server of its own. Events from LOCAL mode are never sent. A failed send is dropped (the local log keeps it) and sending pauses before the next try. This page's security policy allows localhost only, so a remote collector needs a self-hosted copy with its origin added to connect-src.</p>
+    <div class="key-row">
+      <label for="anurl" class="sr-only">Your own analytics endpoint URL</label>
+      <input type="text" id="anurl" placeholder="blank = off, e.g. http://localhost:8787/events" autocomplete="off" spellcheck="false">
+      <button class="btn btn-hairline" type="button" id="anurlsave">Save</button>
+    </div>
+    <p class="note" id="anurlstate" aria-live="polite"></p>
+
     <h3>LOCAL DATA</h3>
-    <p class="note">Everything Meridian stores in this browser: your API key(s), model choice, color mode, context settings, sidebar layout, ignore patterns, the terms-acceptance record, and saved-project metadata in IndexedDB (selection and settings, never file contents). Loaded file contents and the conversation live in memory only and vanish when the tab closes.</p>
+    <p class="note">Everything Meridian stores in this browser: your API key(s), model choice, color mode, context settings, sidebar layout, ignore patterns, the terms-acceptance record, saved-project metadata in IndexedDB (selection and settings, never file contents) and, only if you turn it on, the usage log. Loaded file contents and the conversation live in memory only and vanish when the tab closes (question text is kept only if you switch on that usage-log option).</p>
     <button class="btn-quiet" type="button" id="clearall">[ CLEAR ALL MERIDIAN DATA FROM THIS BROWSER ]</button>
 
     <h3>LEGAL</h3>
@@ -315,6 +358,59 @@
       <p class="note" style="margin:0 0 14px">Click a question to drop it in the composer. Items with a &lt;placeholder&gt; want a name or path before you send. These work with an AI connected too; it grounds the answer on what the engine finds.</p>
       <div id="localmenubody"></div>
       <div class="row"><button class="btn btn-hairline" type="button" id="localmenuclose">Close</button></div>
+    </div>
+  </div>
+
+  <!-- SHARE PROJECT — link (#share= fragment) or .meridian bundle, wired by app/share.js -->
+  <div class="veil" id="shareveil">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="share-title">
+      <div class="k mono">SHARE THIS PROJECT · NO SERVER</div>
+      <h2 id="share-title">Anyone with the link can read this code.</h2>
+      <ul>
+        <li>A share link carries the <b>files themselves</b>: their paths, full text and last-modified times, compressed into the part of the address after <b>#</b>. Whoever has the link can read that code, and so can any chat app or inbox it passes through.</li>
+        <li>Browsers never send the part after <b>#</b> to a server. GitHub Pages, which hosts MERIDIAN, never receives it, and neither do we. The recipient's browser unpacks it in their tab.</li>
+        <li>Never included: API keys, provider settings, this conversation, saved projects, or anything else this browser stores. Files that look like secrets (.env, private keys, credentials) start unticked.</li>
+      </ul>
+      <div class="share-tools mono">
+        <span class="share-hd">FILES · <span id="sharecount"></span></span>
+        <button class="btn-quiet acc" type="button" id="sharefit" title="Pick the most important files that fit in a link">[ FIT TO LINK ]</button>
+        <button class="btn-quiet acc" type="button" id="shareall">[ ALL ]</button>
+        <button class="btn-quiet" type="button" id="sharenone">[ NONE ]</button>
+      </div>
+      <p class="prev-note" id="sharerepos" hidden></p>
+      <div id="sharelist"></div>
+      <div id="sharesize">
+        <div class="budget-bar" id="sharebar"><i></i></div>
+        <div class="budget-txt"><span id="sharetxt"></span><span id="sharemax"></span></div>
+      </div>
+      <div class="prev-note" id="sharenote" aria-live="polite"></div>
+      <label class="share-ack"><input type="checkbox" id="shareack"><span>I understand the link or bundle contains this code, and anyone who has it can read it.</span></label>
+      <div class="key-row mt-2" id="sharelinkrow" hidden>
+        <label for="sharelink" class="sr-only">Share link</label>
+        <input type="text" id="sharelink" readonly spellcheck="false">
+      </div>
+      <div class="row">
+        <button class="btn btn-signal" type="button" id="sharecopy">Copy link</button>
+        <button class="btn btn-hairline" type="button" id="sharebundle" title="A .meridian file with the same contents as readable JSON. No size limit: send it as a file.">Download bundle</button>
+        <button class="btn btn-hairline" type="button" id="shareclose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- USAGE ANALYTICS — opt-in, local-only log, rendered by app/analytics.js -->
+  <div class="veil" id="anveil">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="an-title">
+      <div class="k mono">USAGE ANALYTICS · THIS BROWSER ONLY</div>
+      <h2 id="an-title">How Meridian has been used here.</h2>
+      <p class="note" id="anstate" aria-live="polite"></p>
+      <div id="anbody"></div>
+      <p class="prev-note">// stored: time, question kind, provider, LOCAL or model, timings, token counts, repo count and scope, shares and repo adds. never code, file paths or keys. question text only if you switched it on.</p>
+      <div class="row">
+        <button class="btn btn-hairline" type="button" id="anjson">Export JSON</button>
+        <button class="btn btn-hairline" type="button" id="ancsv">Export CSV</button>
+        <button class="btn btn-hairline" type="button" id="anclear">Clear all data</button>
+        <button class="btn btn-hairline" type="button" id="anclose">Close</button>
+      </div>
     </div>
   </div>
 
