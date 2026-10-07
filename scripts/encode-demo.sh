@@ -29,10 +29,11 @@ echo "source: $WEBM"
   "$OUT/meridian-demo.mp4"
 
 # GIF — two-pass palette for clean color at a README-friendly file size
-# (width 800, 12fps, single diff-optimized palette).
+# (width 720, 8fps, 64 colors, single diff-optimized palette; the demo runs
+# about 70 seconds, so this keeps the GIF near 8 MB).
 PAL="$REC/palette.png"
-GIF_FILT="fps=12,scale=800:-1:flags=lanczos"
-"$FFMPEG" -y -i "$WEBM" -vf "$GIF_FILT,palettegen=max_colors=128:stats_mode=diff" "$PAL"
+GIF_FILT="fps=8,scale=720:-1:flags=lanczos"
+"$FFMPEG" -y -i "$WEBM" -vf "$GIF_FILT,palettegen=max_colors=64:stats_mode=diff" "$PAL"
 "$FFMPEG" -y -i "$WEBM" -i "$PAL" \
   -lavfi "$GIF_FILT [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle:new=1" \
   "$OUT/meridian-demo.gif"

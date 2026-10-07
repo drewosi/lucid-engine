@@ -18,20 +18,24 @@ screen and prints to one PDF page. Like everything here it's one dependency-free
 
 ![MERIDIAN: LOCAL engine demo](media/meridian-demo.gif)
 
-> The clip above is a **real screen capture** of the workbench running its built-in demo: a tiny
-> `todo-api` answered entirely by the deterministic **LOCAL** engine (no key, no AI, no network).
-> The UI labels itself as it goes: `DEMO · LOCAL ENGINE`, `LOCAL · NO AI`, `KNOWN LOCALLY`.
-> An evidence chip opens the cited file at the cited line; the session exports as HTML + Markdown.
-> Higher-quality [`MP4`](media/meridian-demo.mp4).
+> The clip above is a **real screen capture** of the workbench, about 73 seconds, with captions. It
+> opens on the built-in demo, a tiny `todo-api` answered by the deterministic **LOCAL** engine (no key,
+> no AI, no network), and an evidence chip opening the cited line. It then loads two small sample repos
+> as one workspace (ADD REPO, ASK: ALL REPOS), opens the share dialog (the link size meter and the
+> "this contains the code" box, with nothing copied), shows where a key and a model go and what
+> PREVIEW SEND would transmit, and ends in Settings on FILE CAP (default 8,000) and usage analytics
+> (off by default). No key is entered and no model answer appears. Higher-quality [`MP4`](media/meridian-demo.mp4).
 
 The recording is fully reproducible, with no faked frames:
 
 ```
 npm i playwright @ffmpeg-installer/ffmpeg   # throwaway toolchain (gitignored)
-node scripts/record-demo.mjs                # drives app.html's LOCAL demo → scripts/.rec/*.webm
-bash scripts/encode-demo.sh                 # → media/meridian-demo.mp4 + .gif
-node scripts/capture-shots.mjs              # → media/meridian-poster.jpg + media/shot-*.jpg (landing-page screenshots)
+node scripts/record-demo.mjs                # drives app.html and the sample repos in scripts/sample-repos.mjs -> scripts/.rec/*.webm
+bash scripts/encode-demo.sh                 # -> media/meridian-demo.mp4 + .gif
+node scripts/capture-shots.mjs              # -> media/meridian-poster.jpg + media/shot-*.jpg (landing-page screenshots)
 ```
+
+The recorder uses Playwright's Chromium. Set `CHROME=/path/to/chrome` to use another browser.
 
 ## What MERIDIAN is
 
