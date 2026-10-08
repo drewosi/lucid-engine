@@ -290,7 +290,7 @@ REASONING** (an interpretation question; connect an AI for those).
 | `todos` | `TODO`/`FIXME`/`HACK`/`XXX` tags |
 | `env` | Environment variables the code reads |
 | `untested` | Code files with no matching test |
-| `dupes` | Symbol names defined in more than one file |
+| `dupes` | Top-level functions, classes and types defined in more than one file (a helper rewritten instead of reused). Local variables, methods and test files are skipped |
 
 **Instruments**
 

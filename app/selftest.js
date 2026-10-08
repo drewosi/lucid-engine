@@ -46,6 +46,24 @@ function selfTestFixture() {
     'src/orphanish.js': '// TODO: wire this module up\nexport function orphanHelper() { return process.env.DEMO_FLAG; }',
     'src/dupea.js': 'export function dupeSym() { return 1; }',
     'src/dupeb.js': 'export function dupeSym() { return 2; }',
+    /* noise guards (post-merge audit): import text inside strings, template literals
+       and comments is not an import; function-local variables are not duplicates */
+    'src/samplecode.js': [
+      'var SAMPLE = [',
+      "  'const { x } = require(\"./nope-a\");',",
+      "  \"import y from './nope-b';\"",
+      "].join('\\n');",
+      'var TPL = `',
+      "import z from './nope-c';",
+      'function insideTemplate() {}',
+      '`;',
+      "// import w from './nope-d';",
+      "/* import v from './nope-e'; */",
+      'export function useSample() { return SAMPLE + TPL; }'
+    ].join('\n'),
+    'src/assetuse.js': "import logo from './missing-logo.png';\nexport function showLogo() { return logo; }",
+    'src/localsa.js': 'export function alphaOne() {\n  var rowsLocal = 1;\n  return rowsLocal;\n}\nexport const makeWidget = () => 1;',
+    'src/localsb.js': 'export function betaTwo() {\n  var rowsLocal = 2;\n  return rowsLocal;\n}\nexport const makeWidget = () => 2;\nfunction insideTemplate() {}',
     /* Java: Maven layout, plain + static import, methods, filename-convention test */
     'javapkg/src/main/java/com/acme/App.java':
       'package com.acme;\nimport com.acme.util.Strings;\nimport static com.acme.util.Strings.upper;\npublic class App {\n  public static void main(String[] args) { }\n  private int count() { return 1; }\n}',
@@ -986,6 +1004,11 @@ function runSelfTests() {
     ok('intent · untested flags util.js but not store.js', ut.answer.indexOf('src/util.js') !== -1 && ut.answer.indexOf('src/store.js') === -1);
     var dp = inv('dupes');
     ok('intent · dupes finds dupeSym in both files', dp.answer.indexOf('dupeSym') !== -1 && /dupea/.test(dp.answer) && /dupeb/.test(dp.answer));
+    ok('intent · broken ignores import text in strings, templates and comments', !/nope-/.test(brk.answer), (brk.answer.match(/nope-\w/g) || []).join(','));
+    ok('intent · broken lists asset imports as not checked, not broken', brk.answer.indexOf('Not checked') !== -1 && brk.answer.indexOf('missing-logo.png') > brk.answer.indexOf('Not checked'));
+    ok('intent · dupes skips function-local variables', dp.answer.indexOf('rowsLocal') === -1);
+    ok('intent · dupes catches top-level arrow functions', dp.answer.indexOf('makeWidget') !== -1);
+    ok('intent · dupes ignores definitions inside template literals', dp.answer.indexOf('insideTemplate') === -1);
     /* routing-robustness run-level checks — the fixed routes produce real answers */
     var wu = inv('what uses addTodo');
     ok('intent · what-uses a symbol redirects to references', /referenced/.test(wu.answer) && wu.verdict.local === true, wu.answer.slice(0, 60));
