@@ -1,9 +1,17 @@
 # The MERIDIAN User Guide
 
-**MERIDIAN is a browser-only workbench for understanding a codebase.** You load a
-project folder into your browser, then ask questions about it. Every answer comes
-back with a **trace**: reasoning steps, each carrying citations you click to open
-the file at the cited lines.
+**MERIDIAN checks AI-written code without using AI.** You load a project folder
+into your browser and its deterministic checks find what coding assistants
+commonly get wrong: imports that point nowhere, import loops, helpers written
+twice, files with no tests, and what a change touches. Every finding comes back
+with a **trace**: steps, each carrying citations you click to open the file at the
+cited lines. Connecting an AI model is optional, for questions that need judgment.
+
+**Check what your AI assistant changed (2 minutes, no key):** load the project,
+then run `signals` for a ranked summary, and drill in with `broken`, `cycles`,
+`dupes` and `untested`. Before you accept a change to a file, run
+`impact <file>` to see everything that depends on it. `drift` shows which files
+are new, removed or reshaped since your last session.
 
 Nothing you load ever reaches us. Your files live in the browser tab and vanish
 when you close it. If you connect an AI, your question goes straight from your

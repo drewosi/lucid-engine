@@ -73,6 +73,7 @@ function syncProviderUI() {
   $('navprov').value = st.curProvider;
   $('provnote').textContent = PROVIDERS[st.curProvider].note;
   $('keysec').hidden = st.curProvider === 'local';
+  var ainote = $('ainote'); if (ainote) ainote.hidden = st.curProvider === 'local'; /* LOCAL answers come from the index, not a model */
   if (st.curProvider !== 'local') {
     $('keyhd').textContent = PROVIDERS[st.curProvider].label + ' API KEY';
     $('keyin').placeholder = PROVIDERS[st.curProvider].keyHint;
