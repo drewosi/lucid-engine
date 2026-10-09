@@ -85,7 +85,9 @@ answer with **no key, no AI and no internet**. Start there.
    (first visit shows a one-time welcome; accept to continue).
 2. Click **Try the demo (no key)** on the welcome screen, or **Try a demo project**
    on the empty workbench, or press `Ctrl-K` and type "demo". A tiny sample
-   project loads instantly. Shortcut: open
+   project loads instantly. It has three planted mistakes of the kind AI coding
+   assistants make (a wrong import path, a helper rewritten instead of reused, and
+   a two-file import loop), so the checks have something real to find. Shortcut: open
    https://drewosi.github.io/lucid-engine/app.html?demo and the demo starts by
    itself (on a first visit, accept the welcome with the demo button).
 3. The provider is already **LOCAL**: no key, no AI, no network. Type a question
@@ -94,6 +96,7 @@ answer with **no key, no AI and no internet**. Start there.
    - `what depends on store.js`
    - `project structure`
    - `signals`  ← a ranked "what deserves attention" digest
+   - `broken`, `dupes`, `cycles`  ← each finds one of the planted mistakes
 4. In any answer, **click an evidence chip** (the small `ctx://path:line`
    buttons) to open that file at the cited lines, with the quote highlighted.
 

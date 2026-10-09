@@ -31,6 +31,8 @@ var SAMPLE_PROJECT = {
     '- src/config.js: API_BASE_URL and PORT',
     '- src/util.js: small response helpers',
     '- src/legacy.js: old response helpers kept for reference (candidates for deletion)',
+    '- src/remove-route.js: DELETE /todos/:id handler',
+    '- src/audit.js: logs the todo count after every change',
     '- test/store.test.js: store unit tests'
   ].join('\n'),
   'package.json': [
@@ -56,12 +58,15 @@ var SAMPLE_PROJECT = {
   ].join('\n'),
   'src/store.js': [
     '// In-memory todo store. No database: state lives for the process lifetime.',
+    'const { logChange } = require("./audit");',
+    '',
     'let todos = [];',
     'let nextId = 1;',
     '',
     'function addTodo(title) {',
     '  const todo = { id: nextId++, title: title, done: false };',
     '  todos.push(todo);',
+    '  logChange("add");',
     '  return todo;',
     '}',
     '',
@@ -72,6 +77,7 @@ var SAMPLE_PROJECT = {
     'function removeTodo(id) {',
     '  const before = todos.length;',
     '  todos = todos.filter(function (t) { return t.id !== id; });',
+    '  logChange("remove");',
     '  return todos.length < before;',
     '}',
     '',
@@ -82,6 +88,7 @@ var SAMPLE_PROJECT = {
     'const { API_BASE_URL } = require("./config");',
     'const { addTodo, listTodos } = require("./store");',
     'const { json } = require("./util");',
+    'const { handleRemove } = require("./remove-route");',
     '',
     '// Build the HTTP server. Routes are mounted under API_BASE_URL.',
     'function createServer() {',
@@ -91,6 +98,9 @@ var SAMPLE_PROJECT = {
     '    }',
     '    if (req.url === API_BASE_URL + "/todos" && req.method === "POST") {',
     '      return json(res, 201, addTodo("new todo"));',
+    '    }',
+    '    if (req.url.indexOf(API_BASE_URL + "/todos/") === 0 && req.method === "DELETE") {',
+    '      return handleRemove(req, res, req.url.slice((API_BASE_URL + "/todos/").length));',
     '    }',
     '    json(res, 404, { error: "not found" });',
     '  });',
@@ -124,6 +134,37 @@ var SAMPLE_PROJECT = {
     '// TODO: remove with the rest of this file',
     'module.exports = { sendText, ok };'
   ].join('\n'),
+  /* the two files an AI assistant added for "add a delete route and an audit log".
+     Each carries one typical assistant mistake, so the demo's checks catch something
+     real: a wrong import path (broken), a helper rewritten instead of reused (dupes),
+     and a two-file import loop (cycles). */
+  'src/remove-route.js': [
+    '// DELETE /todos/:id',
+    'const { removeTodo } = require("./store");',
+    'const { parseId } = require("./utils");',
+    '',
+    'function json(res, status, body) {',
+    '  res.writeHead(status, { "Content-Type": "application/json" });',
+    '  res.end(JSON.stringify(body));',
+    '}',
+    '',
+    'function handleRemove(req, res, rawId) {',
+    '  if (removeTodo(parseId(rawId))) return json(res, 204, {});',
+    '  json(res, 404, { error: "not found" });',
+    '}',
+    '',
+    'module.exports = { handleRemove };'
+  ].join('\n'),
+  'src/audit.js': [
+    '// Audit log: prints the todo count after every change.',
+    'const { listTodos } = require("./store");',
+    '',
+    'function logChange(action) {',
+    '  console.log("[audit] " + action + ": " + listTodos().length + " todos");',
+    '}',
+    '',
+    'module.exports = { logChange };'
+  ].join('\n'),
   'src/index.js': [
     '// Entry point: boot the todo API server.',
     'const { createServer } = require("./server");',
@@ -148,10 +189,13 @@ var SAMPLE_PROJECT = {
     'console.log("store tests passed");'
   ].join('\n')
 };
-/* signals first: the opening answer is ranked, evidence-backed findings — the
-   grounding model lands before the visitor does any work. The findings are real
-   (src/legacy.js is genuinely orphaned and genuinely carries the debt tags). */
-var DEMO_QUESTIONS = ['signals', 'where is API_BASE_URL defined?', 'what imports store.js?'];
+/* signals first: the opening answer is ranked, evidence-backed findings, so the
+   grounding model lands before the visitor does any work. The findings are real:
+   src/remove-route.js imports a file that does not exist, src/store.js and
+   src/audit.js import each other, src/legacy.js is genuinely orphaned and carries
+   the debt tags. `dupes` shows the rewritten json() helper (signals only lists
+   duplicates from three names up). */
+var DEMO_QUESTIONS = ['signals', 'broken', 'dupes', 'what breaks if I change store.js'];
 
 function loadSampleProject() {
   resetWorkspace(); /* the demo is one project: no repos */
@@ -182,7 +226,7 @@ function renderDemoBanner() {
   top.innerHTML = '<span class="dm mono">DEMO · LOCAL ENGINE</span>';
   var dt = document.createElement('div');
   dt.className = 'dt';
-  dt.innerHTML = 'A sample <b>todo-api</b> project is loaded and answered by the deterministic <b>LOCAL</b> engine: no key, no AI, nothing leaves this tab. Try a question, then load your own project when ready.';
+  dt.innerHTML = 'A sample <b>todo-api</b> project is loaded. An AI assistant just added a delete route and an audit log, and made three typical mistakes. The deterministic <b>LOCAL</b> engine checks it: no key, no AI, nothing leaves this tab. Try a check, then load your own project when ready.';
   b.appendChild(top); b.appendChild(dt);
   var chips = document.createElement('div'); chips.className = 'demochips';
   DEMO_QUESTIONS.forEach(function (q) {
