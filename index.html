@@ -320,7 +320,7 @@
         <div class="hero-copy">
           <div class="eyebrow mono rv" style="--i:0"><span class="dot"></span><span>FREE BETA · NO AI IN THE CHECKS · RUNS IN YOUR BROWSER</span></div>
           <h1 class="rv" style="--i:1">AI writes your code now.<br>Who checks the AI?</h1>
-          <p class="hero-sub rv" style="--i:2">Meridian checks AI-written code <b>without using AI to do it</b>. Load a project and it maps every file, function and import, then shows what's off: imports that point nowhere, new circular dependencies, code the AI duplicated, files with no tests, and what a change touches. Every finding opens the exact line. <b>Nothing leaves your browser</b> unless you choose to ask a model.</p>
+          <p class="hero-sub rv" style="--i:2">Meridian checks AI-written code <b>without using AI to do it</b>. Load a project and it maps every file, function and import, then shows what's off: imports that point nowhere, circular dependencies, code the AI duplicated, files with no tests, and what a change touches. Every finding opens the exact line. <b>Nothing leaves your browser</b> unless you choose to ask a model.</p>
           <div class="hero-cta-row rv" style="--i:3">
             <a href="app.html" class="btn btn-signal btn-hero" id="heroCta">Launch Meridian</a>
             <a href="app.html?demo" class="btn btn-hairline btn-hero">Try the demo in 30 seconds</a>
@@ -343,7 +343,7 @@
   <section class="block" id="teams">
     <div class="wrap">
       <div class="sec-head rv"><span class="idx mono">01</span><h2>What it checks in AI-written code</h2></div>
-      <p class="sec-lede rv">Coding assistants write fast and check nothing. These are the mistakes they make most, and Meridian finds each one by reading the code's structure, not by asking another model. Every finding links to the line it's about.</p>
+      <p class="sec-lede rv">Coding assistants write fast and rarely check how the pieces connect. These are the mistakes they make most, and Meridian finds each one by reading the code's structure, not by asking another model. Every finding links to the line it's about.</p>
       <div class="caps">
         <div class="cap rv" style="--i:0">
           <span class="k">BROKEN</span>
@@ -353,7 +353,7 @@
           <h3>Code it wrote twice</h3><p>Assistants often rebuild a helper that already exists somewhere else. Meridian finds functions and classes with the same name in different files.</p></div>
         <div class="cap rv" style="--i:2">
           <span class="k">CYCLES</span>
-          <h3>Circular dependencies</h3><p>File A imports B, which imports A. These cause hard-to-trace bugs. Meridian walks the whole import graph and lists every loop.</p></div>
+          <h3>Circular dependencies</h3><p>File A imports B, which imports A. These cause hard-to-trace bugs. Meridian walks the whole import graph and lists the loops it finds, up to 10 at a time.</p></div>
         <div class="cap rv" style="--i:3">
           <span class="k">UNTESTED</span>
           <h3>Files nothing tests</h3><p>Which code files have no matching test: no test file shares their name and no test imports them. Untested files that much of the project depends on also surface in the signals digest.</p></div>
@@ -389,7 +389,7 @@
           <div class="step rv" style="--i:4"><div class="k mono">WHY NOT JUST ASK AN AI?</div><h3>Checking AI with AI moves the problem</h3>
             <ul>
               <li><b>It's repeatable.</b> Run the same check twice and get the same result. A model can answer differently each time.</li>
-              <li><b>It can't make things up.</b> A finding exists only if the line exists. Click it and you're there.</li>
+              <li><b>Every finding points at a real line.</b> A finding exists only if the line exists. Click it and you're there.</li>
               <li><b>It knows its limits.</b> If a question needs judgement, it says so instead of guessing.</li>
               <li><b>It's free and offline.</b> No key, no per-question cost, no network.</li>
             </ul></div>
@@ -501,8 +501,8 @@
       <div class="sec-head rv"><span class="idx mono">06</span><h2>Try it in 30 seconds</h2></div>
       <div class="try-steps">
         <div class="step rv lit" style="--i:0"><div class="k mono">STEP 01</div><h3>Open the demo</h3><p>Follow the demo link. A first visit asks you to accept the terms once, and the demo button is already focused, so that takes one click.</p></div>
-        <div class="step rv lit" style="--i:1"><div class="k mono">STEP 02</div><h3>Watch it answer</h3><p>A small sample project loads and the LOCAL engine answers its first question. No key, no AI, nothing leaves the tab.</p></div>
-        <div class="step rv lit" style="--i:2"><div class="k mono">STEP 03</div><h3>Run a check</h3><p>Try <span class="mono">signals</span>, <span class="mono">broken</span> or <span class="mono">what breaks if I change store.js</span>, and click an evidence chip to open the exact line. Then load a real repo.</p></div>
+        <div class="step rv lit" style="--i:1"><div class="k mono">STEP 02</div><h3>Watch it catch</h3><p>A small sample project loads, with three mistakes an AI assistant typically makes. The LOCAL engine runs <span class="mono">signals</span> and ranks what it finds. No key, no AI, nothing leaves the tab.</p></div>
+        <div class="step rv lit" style="--i:2"><div class="k mono">STEP 03</div><h3>Run a check</h3><p>Try <span class="mono">broken</span>, <span class="mono">dupes</span> or <span class="mono">what breaks if I change store.js</span>, and click an evidence chip to open the exact line. Then load a real repo.</p></div>
       </div>
       <div class="hero-cta-row rv">
         <a href="app.html?demo" class="btn btn-signal btn-hero">Try the demo in 30 seconds</a>

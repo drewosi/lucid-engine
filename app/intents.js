@@ -200,12 +200,42 @@ function classifiedSet(idx) {
   return s;
 }
 /* unresolved relative imports — shared by the broken investigation and signals */
-function listBroken(idx) {
-  var broken = [];
+/* images, video, audio and fonts are never loaded (text files only), so an import of
+   one can't be checked: listed separately instead of being called broken */
+var ASSET_IMPORT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|mp4|webm|mov|mp3|wav|ogg|woff2?|ttf|otf|eot|pdf|glb|gltf)(\?.*)?$/i;
+function unresolvedRelative(idx, wantAssets) {
+  var out = [];
   idx.importsByFile.forEach(function (list, f) {
-    list.forEach(function (x) { if (!x.resolved && (x.raw.charAt(0) === '.' || x.raw.charAt(0) === '/')) broken.push({ file: f, raw: x.raw, line: x.line }); });
+    list.forEach(function (x) {
+      if (x.resolved || (x.raw.charAt(0) !== '.' && x.raw.charAt(0) !== '/')) return;
+      if (ASSET_IMPORT_RE.test(x.raw) === !!wantAssets) out.push({ file: f, raw: x.raw, line: x.line });
+    });
   });
-  return broken;
+  return out;
+}
+function listBroken(idx) { return unresolvedRelative(idx, false); }
+function listAssetImports(idx) { return unresolvedRelative(idx, true); }
+function assetNote(idx) {
+  var a = listAssetImports(idx);
+  return a.length ? '\n\nNot checked: ' + plural(a.length, 'import') + ' of images, video, audio or fonts (first: `' + a[0].file + '` line ' + a[0].line + ' → `' + a[0].raw + '`). Meridian only loads text files, so it cannot tell whether those exist.' : '';
+}
+/* duplicate definitions, shared by the dupes investigation and signals. Counts only
+   top-level functions, classes and types (and variables holding one), outside test
+   files, and skips conventional entry-point names every script repeats. Local
+   variables like `rows` or `base` in two files are normal code, not a finding. */
+var DUPE_CONVENTION = Object.assign(Object.create(null), { main: 1, init: 1, __init__: 1, setup: 1, teardown: 1, render: 1, constructor: 1, toString: 1, handler: 1 });
+function listDupes(idx) {
+  var testSet = Object.create(null), dupes = [];
+  idx.tests.forEach(function (t) { testSet[t] = 1; });
+  idx.symbols.forEach(function (defsArr, name) {
+    if (name.length < 4 || DUPE_CONVENTION[name]) return;
+    var perFile = Object.create(null);
+    defsArr.forEach(function (d) { if (d.top && d.unit && !testSet[d.file] && !perFile[d.file]) perFile[d.file] = d; });
+    var files = Object.keys(perFile);
+    if (files.length > 1) dupes.push({ name: name, defs: files.map(function (f) { return perFile[f]; }) });
+  });
+  dupes.sort(function (a, b) { return b.defs.length - a.defs.length || (a.name < b.name ? -1 : 1); });
+  return dupes;
 }
 /* code files with no matching test — shared by the untested investigation and signals */
 function listUntestedGaps(idx) {
@@ -244,7 +274,14 @@ function computeSignals(idx) {
   if (sigCache.idx === idx) return sigCache.out;
   var out = [];
   var broken = listBroken(idx);
-  if (broken.length) out.push({ severity: 5, count: broken.length, title: plural(broken.length, 'broken relative import') + ': likely real breakage, or files not loaded', evidence: evAt(broken[0].file, broken[0].line), drill: 'broken' });
+  if (broken.length) {
+    /* CRITICAL only when production code is affected; broken imports confined to
+       test files are real but lower stakes */
+    var testSet = Object.create(null); idx.tests.forEach(function (t) { testSet[t] = 1; });
+    var prod = broken.filter(function (b) { return !testSet[b.file]; });
+    if (prod.length) out.push({ severity: 5, count: broken.length, title: plural(broken.length, 'broken relative import') + ': likely real breakage, or files not loaded', evidence: evAt(prod[0].file, prod[0].line), drill: 'broken' });
+    else out.push({ severity: 3, count: broken.length, title: plural(broken.length, 'broken relative import') + ' in test files only', evidence: evAt(broken[0].file, broken[0].line), drill: 'broken' });
+  }
   var cycles = findCycles(idx, 10);
   if (cycles.length) out.push({ severity: 4, count: cycles.length, title: plural(cycles.length, 'import cycle') + (cycles.length >= 10 ? ' (search capped at 10: more may exist)' : '') + ' in the dependency graph', evidence: evAt(cycles[0].from, cycles[0].line), drill: 'cycles' });
   var hubGaps = listUntestedGaps(idx).filter(function (p) { return (idx.importedBy.get(p) || []).length >= 3; });
@@ -252,14 +289,8 @@ function computeSignals(idx) {
     hubGaps.sort(function (a, b) { return (idx.importedBy.get(b) || []).length - (idx.importedBy.get(a) || []).length; });
     out.push({ severity: 3, count: hubGaps.length, title: plural(hubGaps.length, 'untested load-bearing file') + ' (imported by 3+, no test)', evidence: evAt(hubGaps[0], 1), drill: 'untested' });
   }
-  var dupeNames = [];
-  idx.symbols.forEach(function (defsArr, name) {
-    if (name.length < 4) return;
-    var files = Object.create(null);
-    defsArr.forEach(function (d) { files[d.file] = 1; });
-    if (Object.keys(files).length > 1) dupeNames.push({ name: name, def: defsArr[0] });
-  });
-  if (dupeNames.length >= 3) out.push({ severity: 2, count: dupeNames.length, title: plural(dupeNames.length, 'symbol name') + ' defined in more than one file', evidence: evAt(dupeNames[0].def.file, dupeNames[0].def.line), drill: 'dupes' });
+  var dupeNames = listDupes(idx);
+  if (dupeNames.length >= 3) out.push({ severity: 2, count: dupeNames.length, title: plural(dupeNames.length, 'top-level function or class name') + ' defined in more than one file', evidence: evAt(dupeNames[0].defs[0].file, dupeNames[0].defs[0].line), drill: 'dupes' });
   var orphans = listOrphans(idx);
   if (orphans.length) out.push({ severity: 2, count: orphans.length, title: plural(orphans.length, 'code file') + ' never imported: possible dead weight', evidence: evAt(orphans[0], 1), drill: 'orphans' });
   var byFileTodo = Object.create(null), maxOneFile = 0;
@@ -574,7 +605,7 @@ var INTENTS = [
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: (broken.length
           ? plural(broken.length, 'relative import') + ' resolve' + (broken.length === 1 ? 's' : '') + ' to no loaded file:\n\n' + broken.slice(0, 20).map(function (b) { return '- `' + b.file + '` line ' + b.line + ' → `' + b.raw + '`'; }).join('\n') + '\n\nEither the target is genuinely missing, or it was not loaded (check ignore filters). Bare specifiers (npm/stdlib packages) are treated as external, not broken.'
-          : 'Every relative import resolves to a loaded file. Bare module specifiers (packages, stdlib) are treated as external by design.') + longLineNote(idx) };
+          : 'Every relative import resolves to a loaded file. Bare module specifiers (packages, stdlib) are treated as external by design.') + assetNote(idx) + longLineNote(idx) };
     } },
 
   /* before `hubs`/`importers`: blast-radius phrasings ("what breaks", "transitively",
@@ -758,22 +789,15 @@ var INTENTS = [
     route: function (s, lo) { return /\b(duplicate|colliding|shadow(ed|ing)?)\b[\s\S]*\b(symbols?|names?|definitions?|functions?|classes)\b/.test(lo) ? { arg: '' } : null; },
     run: function (arg, q, idx) {
       var steps = [];
-      var dupes = [];
-      idx.symbols.forEach(function (defsArr, name) {
-        if (name.length < 4) return;
-        var perFile = Object.create(null);
-        defsArr.forEach(function (d) { if (!perFile[d.file]) perFile[d.file] = d; });
-        var files = Object.keys(perFile);
-        if (files.length > 1) dupes.push({ name: name, defs: files.map(function (f) { return perFile[f]; }) });
-      });
-      dupes.sort(function (a, b) { return b.defs.length - a.defs.length || (a.name < b.name ? -1 : 1); });
+      var dupes = listDupes(idx);
       var top = dupes.slice(0, 15), evs = [];
       top.forEach(function (d) { d.defs.slice(0, 2).forEach(function (x) { if (evs.length < 12) evs.push(evAt(x.file, x.line)); }); });
-      steps.push({ action: 'scan the symbol index for names defined in multiple files', note: plural(dupes.length, 'duplicated name'), evidence: evs, status: 'done' });
+      steps.push({ action: 'scan the symbol index for top-level functions, classes and types defined in multiple files', note: plural(dupes.length, 'duplicated name'), evidence: evs, status: 'done' });
       return { steps: steps, verdict: LOCAL_VERDICT(),
         answer: dupes.length
-          ? plural(dupes.length, 'symbol name') + ' (≥4 chars) defined in more than one file: collision and confusion candidates:\n\n' + top.map(function (d) { return '- `' + d.name + '`: ' + d.defs.map(function (x) { return '`' + x.file + '` line ' + x.line; }).join(', '); }).join('\n')
-          : 'No symbol name (≥4 chars) is defined in more than one file.' };
+          ? plural(dupes.length, 'top-level function, class or type name') + ' (≥4 chars) defined in more than one file: a helper may have been rewritten instead of reused:\n\n' + top.map(function (d) { return '- `' + d.name + '`: ' + d.defs.map(function (x) { return '`' + x.file + '` line ' + x.line; }).join(', '); }).join('\n')
+            + '\n\nCounted: top-level functions, classes, types, and variables that hold a function or class. Not counted: local variables, methods, test files, and entry-point names like `main`.'
+          : 'No top-level function, class or type name (≥4 chars) is defined in more than one file. Local variables, methods and test files are not counted.' };
     } },
 
   { kind: 'listType', aliases: [], ground: 'file', helpCmd: '', needsModel: false,

@@ -73,6 +73,7 @@ function syncProviderUI() {
   $('navprov').value = st.curProvider;
   $('provnote').textContent = PROVIDERS[st.curProvider].note;
   $('keysec').hidden = st.curProvider === 'local';
+  var ainote = $('ainote'); if (ainote) ainote.hidden = st.curProvider === 'local'; /* LOCAL answers come from the index, not a model */
   if (st.curProvider !== 'local') {
     $('keyhd').textContent = PROVIDERS[st.curProvider].label + ' API KEY';
     $('keyin').placeholder = PROVIDERS[st.curProvider].keyHint;
@@ -182,7 +183,9 @@ export { curKeyLS, drawer, flipMode, openDrawer, rail, railbtn, syncProviderUI, 
 
 export function initShell() {
   st.curProvider = lsGet(LS.provider);
-  if (!PROVIDERS[st.curProvider]) st.curProvider = 'anthropic';
+  /* no saved choice: start on LOCAL (no key, no AI), unless an Anthropic key is
+     already saved from before the provider choice was remembered */
+  if (!PROVIDERS[st.curProvider]) st.curProvider = lsGet(LS.key) ? 'anthropic' : 'local';
   syncCustomModel();
   st.model = lsGet(LS.model);
   if (!MODELS[st.model]) st.model = 'claude-sonnet-5';

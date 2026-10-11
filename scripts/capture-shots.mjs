@@ -94,8 +94,8 @@ try {
   await page.locator('#setbtn').click();
   await page.locator('#anbtn').click();
   await page.locator('#setbtn').click();
-  await ask(page, 'where is API_BASE_URL defined?');
-  await ask(page, 'what imports store.js?');
+  await ask(page, 'broken');
+  await ask(page, 'what breaks if I change store.js');
 
   /* 2 — share dialog over the demo project */
   await page.locator('#sharebtn').click();

@@ -1,6 +1,6 @@
 # MERIDIAN
 
-**A browser-only code workbench with evidence traces, in free beta.** This repo also contains the Lucid Engine design system it's built with.
+**A non-AI checker for AI-written code that runs in your browser, in free beta.** This repo also contains the Lucid Engine design system it's built with.
 
 ## Live
 
@@ -39,7 +39,7 @@ The recorder uses Playwright's Chromium. Set `CHROME=/path/to/chrome` to use ano
 
 ## What MERIDIAN is
 
-A **browser-only AI workbench**. You bring your own API key (Anthropic, OpenAI, or any OpenAI-compatible endpoint), load a project folder into your browser's memory, and ask questions. Every answer streams back with a **trace**: the reasoning steps, pinned to the files and lines they rest on, as clickable evidence chips that open the cited file at the cited range.
+A **browser-only checker for AI-written code that uses no AI itself**. Load a project folder into your browser's memory and the deterministic LOCAL engine finds broken imports, import cycles, duplicate names, untested files and what a change touches, with no key and no network. A model is optional: bring your own API key (Anthropic, OpenAI, or any OpenAI-compatible endpoint) for questions that need judgement. Every answer streams back with a **trace**: the reasoning steps, pinned to the files and lines they rest on, as clickable evidence chips that open the cited file at the cited range.
 
 Underneath the chat, MERIDIAN is a **deterministic project-intelligence engine** that indexes the project before any model sees it: symbols, import/importer edges, entry points, tests, packages, surfaced as a **PROJECT INTELLIGENCE** overview. The AI model is an optional reasoning layer on top of that index, not the foundation.
 

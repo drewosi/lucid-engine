@@ -46,6 +46,24 @@ function selfTestFixture() {
     'src/orphanish.js': '// TODO: wire this module up\nexport function orphanHelper() { return process.env.DEMO_FLAG; }',
     'src/dupea.js': 'export function dupeSym() { return 1; }',
     'src/dupeb.js': 'export function dupeSym() { return 2; }',
+    /* noise guards (post-merge audit): import text inside strings, template literals
+       and comments is not an import; function-local variables are not duplicates */
+    'src/samplecode.js': [
+      'var SAMPLE = [',
+      "  'const { x } = require(\"./nope-a\");',",
+      "  \"import y from './nope-b';\"",
+      "].join('\\n');",
+      'var TPL = `',
+      "import z from './nope-c';",
+      'function insideTemplate() {}',
+      '`;',
+      "// import w from './nope-d';",
+      "/* import v from './nope-e'; */",
+      'export function useSample() { return SAMPLE + TPL; }'
+    ].join('\n'),
+    'src/assetuse.js': "import logo from './missing-logo.png';\nexport function showLogo() { return logo; }",
+    'src/localsa.js': 'export function alphaOne() {\n  var rowsLocal = 1;\n  return rowsLocal;\n}\nexport const makeWidget = () => 1;',
+    'src/localsb.js': 'export function betaTwo() {\n  var rowsLocal = 2;\n  return rowsLocal;\n}\nexport const makeWidget = () => 2;\nfunction insideTemplate() {}',
     /* Java: Maven layout, plain + static import, methods, filename-convention test */
     'javapkg/src/main/java/com/acme/App.java':
       'package com.acme;\nimport com.acme.util.Strings;\nimport static com.acme.util.Strings.upper;\npublic class App {\n  public static void main(String[] args) { }\n  private int count() { return 1; }\n}',
@@ -319,6 +337,33 @@ function demoLinkCases(ok) {
   ok('demo link · a longer param name is not a match', wantsDemo('?demolition', '') === false && wantsDemo('?nodemo', '') === false);
   ok('demo link · a #share= link wins over ?demo', wantsDemo('?demo', '#share=v1.abc') === false);
   ok('demo link · an unrelated hash does not block it', wantsDemo('?demo', '#top') === true);
+}
+/* the demo must show what the landing page sells: indexed on its own, the sample
+   project's planted assistant mistakes are each caught, and nothing else is flagged
+   as broken (post-merge audit finding 8) */
+function demoCatchCases(ok) {
+  var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty };
+  function inv(q) { return runInvestigation(q, classifyIntent(q)); }
+  try {
+    st.files = new Map();
+    Object.keys(SAMPLE_PROJECT).forEach(function (p) { st.files.set(p, stEntry(p, SAMPLE_PROJECT[p])); });
+    invalidateAll();
+    getIndex();
+    var sg = inv('signals');
+    ok('demo catch · signals leads with the broken import, CRITICAL', /CRITICAL/.test(sg.answer.split('\n').slice(0, 4).join('\n')) && /broken relative import/.test(sg.answer), sg.answer.split('\n')[0]);
+    ok('demo catch · signals shows the import cycle', /import cycle/.test(sg.answer));
+    var br = inv('broken');
+    ok('demo catch · broken names the wrong path, and only that one', /src\/remove-route\.js` line 3/.test(br.answer) && /\.\/utils`/.test(br.answer) && /^1 relative import/.test(br.answer), br.answer.split('\n')[0]);
+    var cy = inv('cycles');
+    ok('demo catch · cycles finds store.js and audit.js', /src\/store\.js/.test(cy.answer) && /src\/audit\.js/.test(cy.answer));
+    var dp = inv('dupes');
+    ok('demo catch · dupes finds json() rewritten in remove-route.js', /`json`/.test(dp.answer) && /src\/util\.js/.test(dp.answer) && /src\/remove-route\.js/.test(dp.answer), dp.answer.split('\n')[0]);
+    var im = inv('what breaks if I change store.js');
+    ok('demo catch · impact on store.js reaches the new route', /src\/remove-route\.js/.test(im.answer) && /src\/audit\.js/.test(im.answer));
+  } finally {
+    st.files = keep.files; st.projectIndex = keep.idx; st.indexDirty = keep.dirty;
+    invalidateAll();
+  }
 }
 /* "where is X defined" on a project that defines a symbol named `where` (real
    Godot + GDScript reports): the named identifier must win over grammar words,
@@ -986,6 +1031,11 @@ function runSelfTests() {
     ok('intent · untested flags util.js but not store.js', ut.answer.indexOf('src/util.js') !== -1 && ut.answer.indexOf('src/store.js') === -1);
     var dp = inv('dupes');
     ok('intent · dupes finds dupeSym in both files', dp.answer.indexOf('dupeSym') !== -1 && /dupea/.test(dp.answer) && /dupeb/.test(dp.answer));
+    ok('intent · broken ignores import text in strings, templates and comments', !/nope-/.test(brk.answer), (brk.answer.match(/nope-\w/g) || []).join(','));
+    ok('intent · broken lists asset imports as not checked, not broken', brk.answer.indexOf('Not checked') !== -1 && brk.answer.indexOf('missing-logo.png') > brk.answer.indexOf('Not checked'));
+    ok('intent · dupes skips function-local variables', dp.answer.indexOf('rowsLocal') === -1);
+    ok('intent · dupes catches top-level arrow functions', dp.answer.indexOf('makeWidget') !== -1);
+    ok('intent · dupes ignores definitions inside template literals', dp.answer.indexOf('insideTemplate') === -1);
     /* routing-robustness run-level checks — the fixed routes produce real answers */
     var wu = inv('what uses addTodo');
     ok('intent · what-uses a symbol redirects to references', /referenced/.test(wu.answer) && wu.verdict.local === true, wu.answer.slice(0, 60));
@@ -1158,6 +1208,7 @@ function runSelfTests() {
     /* multi-repo workspace — self-contained scratch state, restored on exit */
     workspaceCases(ok);
     demoLinkCases(ok);
+    demoCatchCases(ok);
   } catch (e) {
     ok('harness executed without throwing', false, String(e && e.message || e));
     restore();

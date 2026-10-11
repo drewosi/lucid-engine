@@ -34,6 +34,12 @@ var CS_NAMESPACE_RE = /^\s*namespace\s+([\w.]+)/;
 var DEF_ASSIGN_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:const|let|var|public|private|protected|static|readonly)?\s*([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s+)?(?:function\*?\b|\([^()]*\)\s*(?::[^={]+)?=>|class\b|\([^)]*\)\s*\{)/;
 var DEF_GO_METHOD_RE = /^\s*func\s*\([^)]*\)\s*([A-Za-z_]\w*)/;       /* Go receiver methods: func (r *R) M() */
 var DEF_PY_ASSIGN_RE = /^([A-Za-z_]\w*)\s*(?::[^=\n]+)?=(?!=)\s*\S/;  /* Python module-level NAME = … (no indent, not ==) */
+/* definition kinds that name a reusable unit (for duplicate detection). Excluded on
+   purpose: impl/extension (re-opening a type is normal), method (same-named methods
+   on different types are normal), attr, plain const/let/var values. */
+var UNIT_KINDS = Object.assign(Object.create(null), { 'function': 1, 'function*': 1, 'class': 1, 'interface': 1, 'type': 1, 'struct': 1, 'enum': 1,
+  'trait': 1, 'def': 1, 'fn': 1, 'func': 1, 'module': 1, 'mod': 1, 'sub': 1, 'proc': 1, 'record': 1, 'protocol': 1, 'actor': 1,
+  'object': 1, 'typealias': 1, 'fun': 1, 'arrow': 1 });
 function assignKind(ln) {
   if (/=>\s*/.test(ln) && /\([^()]*\)\s*(?::[^={]+)?=>/.test(ln)) return 'arrow';
   if (/\bclass\b/.test(ln)) return 'class';
@@ -66,6 +72,32 @@ var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.g
    are detected off the already-matched definition instead — no second pass. */
 var EXPORT_BRACES_RE = /^\s*(?:export\s*\{([^}]+)\}|module\.exports\s*=\s*\{([^}]+)\})/;
 var EXPORT_ASSIGN_RE = /^\s*(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=/;
+/* Quote/comment state for the JS-shaped import rules. Import-looking text inside
+   a string (sample projects, test fixtures) or a comment is text, not an import:
+   counting it is how a real repo ends up with CRITICAL "broken imports" that are
+   example code. Only template literals and block comments carry across lines,
+   and only in JS-family files; everything else restarts clean on each line. */
+var JS_CARRY_LANGS = Object.assign(Object.create(null), { js: 1, ts: 1, svelte: 1, vue: 1 });
+var NO_JS_IMPORT_LANGS = Object.assign(Object.create(null), { markdown: 1, json: 1, yaml: 1, toml: 1, css: 1 });
+/* returns the state at column `end`: '' (code), a quote char, '/*', or '//' */
+function quoteStateAt(ln, end, state) {
+  var q = state || '';
+  for (var i = 0; i < end && i < ln.length; i++) {
+    var c = ln.charAt(i);
+    if (q === '//') break;
+    if (q === '/*') { if (c === '*' && ln.charAt(i + 1) === '/') { q = ''; i++; } continue; }
+    if (q) { if (c === '\\') { i++; continue; } if (c === q) q = ''; continue; }
+    if (c === '/' && ln.charAt(i + 1) === '/') { q = '//'; break; }
+    if (c === '/' && ln.charAt(i + 1) === '*') { q = '/*'; i++; continue; }
+    if (c === "'" || c === '"' || c === '`') q = c;
+  }
+  return q;
+}
+/* the state the next line starts in: only a template literal or block comment survives */
+function carryState(ln, state) {
+  var q = quoteStateAt(ln, ln.length, state);
+  return q === '`' || q === '/*' ? q : '';
+}
 /* code-health scans, same single pass */
 var TODO_RE = /\b(TODO|FIXME|HACK|XXX)\b/;
 var ENV_RE = /\bprocess\.env\.([A-Z_][A-Z0-9_]*)|\bprocess\.env\[['"]([A-Z_][A-Z0-9_]*)['"]\]|\bimport\.meta\.env\.([A-Z_][A-Z0-9_]*)|\bos\.environ(?:\.get)?\s*[([]\s*['"]([A-Z_][A-Z0-9_]*)['"]|\bos\.getenv\(\s*['"]([A-Z_][A-Z0-9_]*)['"]|\bos\.Getenv\(\s*"([A-Z_][A-Z0-9_]*)"|\benv::var\(\s*"([A-Z_][A-Z0-9_]*)"|\bENV\[['"]([A-Z_][A-Z0-9_]*)['"]\]/;
@@ -405,12 +437,13 @@ function buildIndex() {
     if (ENTRY_NAMES.test(name) && !TEST_PATH.test(p)) entries.push(p);
 
     var isGo = ext === 'go', inGoImport = false;
+    var carry = JS_CARRY_LANGS[lang] ? '' : null; /* null: no cross-line state for this language */
     var lines = f.content.split('\n');
     for (var i = 0; i < lines.length; i++) {
       var ln = lines[i];
       if (ln.length > 400) { /* skip minified/one-liners — but count, so answers can disclose */
         longLineCount++; longLinesByFile[p] = (longLinesByFile[p] || 0) + 1;
-        continue;
+        continue; /* quote state is not advanced across skipped lines (minified code rarely spans template literals) */
       }
 
       /* Go import blocks: import ( "a"\n "b" ) — stateful, plus single-line form */
@@ -442,9 +475,16 @@ function buildIndex() {
         if (ext === 'py') { var mp = DEF_PY_ASSIGN_RE.exec(ln); if (mp) { kind = 'const'; sym = mp[1]; } }
         else { var ma = DEF_ASSIGN_RE.exec(ln); if (ma) { kind = assignKind(ln); sym = ma[1]; } }
       }
+      /* a line that starts inside a template literal or block comment is text: no definition */
+      if (carry) sym = null;
       if (sym && sym.length > 1) {
         var arr = symbols.get(sym) || (symbols.set(sym, []), symbols.get(sym));
-        if (arr.length < 200) { arr.push({ file: p, line: i + 1, kind: kind }); symbolCount++; symCountByFile[p] = (symCountByFile[p] || 0) + 1; }
+        /* top: declared at column 0 (not inside a function or class body).
+           unit: a function/class/type-like name, not a plain value; variables
+           count only when they hold a function or class. Both feed `dupes`. */
+        var isVarKind = kind === 'const' || kind === 'let' || kind === 'var' || kind === 'val';
+        var unit = UNIT_KINDS[kind] === 1 || (isVarKind && DEF_ASSIGN_RE.test(ln));
+        if (arr.length < 200) { arr.push({ file: p, line: i + 1, kind: kind, top: !/^\s/.test(ln), unit: unit }); symbolCount++; symCountByFile[p] = (symCountByFile[p] || 0) + 1; }
         /* declaration exports, off the definition just matched: JS/TS `export …`,
            Rust `pub …`, Go's uppercase-initial convention, Java/C# `public` */
         if (/^\s*export\b/.test(ln)) recordExport(p, sym, i + 1, kind);
@@ -497,11 +537,18 @@ function buildIndex() {
         }
       }
 
+      var lineState = carry || '';
       for (var r = 0; r < IMPORT_RES.length; r++) {
         if (IMPORT_RES[r].lang && !IMPORT_RES[r].lang[lang]) continue;
+        if (!IMPORT_RES[r].lang && NO_JS_IMPORT_LANGS[lang]) continue; /* docs/config: code samples, not imports */
         var im = IMPORT_RES[r].re.exec(ln);
-        if (im) { recordImport(p, im[1], i + 1); break; }
+        if (im) {
+          /* JS-shaped rules match anywhere on the line: skip text inside a string or comment */
+          if (!IMPORT_RES[r].lang && quoteStateAt(ln, im.index, lineState) !== '') break;
+          recordImport(p, im[1], i + 1); break;
+        }
       }
+      if (carry !== null) carry = carryState(ln, carry);
     }
   });
 

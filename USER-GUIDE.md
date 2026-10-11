@@ -1,9 +1,17 @@
 # The MERIDIAN User Guide
 
-**MERIDIAN is a browser-only workbench for understanding a codebase.** You load a
-project folder into your browser, then ask questions about it. Every answer comes
-back with a **trace**: reasoning steps, each carrying citations you click to open
-the file at the cited lines.
+**MERIDIAN checks AI-written code without using AI.** You load a project folder
+into your browser and its deterministic checks find what coding assistants
+commonly get wrong: imports that point nowhere, import loops, helpers written
+twice, files with no tests, and what a change touches. Every finding comes back
+with a **trace**: steps, each carrying citations you click to open the file at the
+cited lines. Connecting an AI model is optional, for questions that need judgment.
+
+**Check what your AI assistant changed (2 minutes, no key):** load the project,
+then run `signals` for a ranked summary, and drill in with `broken`, `cycles`,
+`dupes` and `untested`. Before you accept a change to a file, run
+`impact <file>` to see everything that depends on it. `drift` shows which files
+are new, removed or reshaped since your last session.
 
 Nothing you load ever reaches us. Your files live in the browser tab and vanish
 when you close it. If you connect an AI, your question goes straight from your
@@ -85,7 +93,9 @@ answer with **no key, no AI and no internet**. Start there.
    (first visit shows a one-time welcome; accept to continue).
 2. Click **Try the demo (no key)** on the welcome screen, or **Try a demo project**
    on the empty workbench, or press `Ctrl-K` and type "demo". A tiny sample
-   project loads instantly. Shortcut: open
+   project loads instantly. It has three planted mistakes of the kind AI coding
+   assistants make (a wrong import path, a helper rewritten instead of reused, and
+   a two-file import loop), so the checks have something real to find. Shortcut: open
    https://drewosi.github.io/lucid-engine/app.html?demo and the demo starts by
    itself (on a first visit, accept the welcome with the demo button).
 3. The provider is already **LOCAL**: no key, no AI, no network. Type a question
@@ -94,6 +104,7 @@ answer with **no key, no AI and no internet**. Start there.
    - `what depends on store.js`
    - `project structure`
    - `signals`  ← a ranked "what deserves attention" digest
+   - `broken`, `dupes`, `cycles`  ← each finds one of the planted mistakes
 4. In any answer, **click an evidence chip** (the small `ctx://path:line`
    buttons) to open that file at the cited lines, with the quote highlighted.
 
@@ -290,7 +301,7 @@ REASONING** (an interpretation question; connect an AI for those).
 | `todos` | `TODO`/`FIXME`/`HACK`/`XXX` tags |
 | `env` | Environment variables the code reads |
 | `untested` | Code files with no matching test |
-| `dupes` | Symbol names defined in more than one file |
+| `dupes` | Top-level functions, classes and types defined in more than one file (a helper rewritten instead of reused). Local variables, methods and test files are skipped |
 
 **Instruments**
 
