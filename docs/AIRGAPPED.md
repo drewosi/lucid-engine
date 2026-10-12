@@ -58,7 +58,7 @@ docker run --rm -p 8080:8080 \
 
 At start-up the container builds `connect-src` from those variables, validates each as a bare `https://host[:port]`
 origin (anything else aborts start-up), and rewrites the meta CSP in `app.html` so the header and the meta tag
-agree. `sh deploy/test-csp.sh` exercises that logic without Docker, and CI runs it. **The Dockerfile itself was
+agree. `sh deploy/test-csp.sh` exercises that logic without Docker. It is not in the GitHub Actions workflow yet (pushing a workflow change needs a token with `workflow` scope); to add it, append `- run: sh deploy/test-csp.sh` to `.github/workflows/selftests.yml`. **The Dockerfile itself was
 written in an environment without Docker and has not been built or run yet**; treat the first build as the test.
 
 ## Audit log (optional, firm-controlled)
