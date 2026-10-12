@@ -67,6 +67,22 @@ var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.g
    and CommonJS. Declaration exports (export function x / pub fn / Go capitals)
    are detected off the already-matched definition instead — no second pass. */
 var EXPORT_BRACES_RE = /^\s*(?:export\s*\{([^}]+)\}|module\.exports\s*=\s*\{([^}]+)\})/;
+/* `const x = require('y')` / `= await import('y')` bind an IMPORT, not a definition: no symbol */
+var REQUIRE_INIT_RE = /=\s*(?:await\s+)?(?:require\s*\(|import\s*\()/;
+/* top-level destructuring: `const { a, b: c = 1, ...rest } = obj`, single- or multi-line */
+var DESTRUCT_OPEN_RE = /^(?:export\s+)?(?:const|let|var)\s*\{([^}]*)$/;
+var DESTRUCT_ONE_RE = /^(?:export\s+)?(?:const|let|var)\s*\{([^}]*)\}\s*(?::[^=]+)?=\s*(.*)$/;
+var DESTRUCT_CLOSE_RE = /^([^}]*)\}\s*(?::[^=]+)?=\s*(.*)$/;
+function destructNames(text) {
+  var out = [];
+  text.replace(/\/\*.*?\*\//g, '').split(',').forEach(function (piece) {
+    piece = piece.trim().replace(/^\.\.\./, '');
+    if (!piece || piece.indexOf('{') !== -1 || piece.indexOf('[') !== -1) return; /* nested patterns: skipped */
+    var nm = piece.split('=')[0].split(':').pop().trim();
+    if (/^[A-Za-z_$][\w$]*$/.test(nm)) out.push(nm);
+  });
+  return out;
+}
 /* openers of a brace list that continues on later lines, and the helpers that read one */
 var EXPORT_OPEN_RE = /^\s*(?:export\s*(?:type\s*)?\{|module\.exports\s*=\s*\{)([^}]*)$/;
 var PY_ALL_RE = /^__all__\s*\+?=\s*[\[(](.*)$/;
@@ -466,6 +482,15 @@ function buildIndexCore(files, opts) {
     if (resolved) (importedBy.get(resolved) || (importedBy.set(resolved, []), importedBy.get(resolved))).push({ file: file, line: line });
     importCount++;
   }
+  /* col-0 destructured bindings are real top-level names (unit:false: never a duplicate-definition signal) */
+  function recordDestructured(file, names, line, exported) {
+    names.forEach(function (nm) {
+      if (nm.length < 2) return;
+      var a = symbols.get(nm) || (symbols.set(nm, []), symbols.get(nm));
+      if (a.length < 200) { a.push({ file: file, line: line, kind: 'const', top: true, unit: false }); symbolCount++; symCountByFile[file] = (symCountByFile[file] || 0) + 1; }
+      if (exported) recordExport(file, nm, line, 'const');
+    });
+  }
   function recordExport(file, name, line, kind) {
     var arr = exportsByFile.get(file) || (exportsByFile.set(file, []), exportsByFile.get(file));
     if (arr.length < EXPORT_FILE_CAP) arr.push({ name: name, line: line, kind: kind });
@@ -493,12 +518,14 @@ function buildIndexCore(files, opts) {
     var genWhy = generatedReason(p, f.content, skipLong);
     if (genWhy) { generated.push({ file: p, why: genWhy }); totalLines += f.content.split('\n').length; continue; }
     var isGo = ext === 'go', inGoImport = false, braceOpenAt = -1;
+    var destructBuf = null;
     var exportBuf = null, pyAllBuf = null, rsUseBuf = null; /* multi-line export lists in flight */
     var carry = JS_CARRY_LANGS[lang] ? '' : null; /* null: no cross-line state for this language */
     var lines = f.content.split('\n');
     totalLines += lines.length;
     for (var i = 0; i < lines.length; i++) {
       var ln = lines[i];
+      if (ln.charCodeAt(ln.length - 1) === 13) ln = ln.slice(0, -1); /* CRLF files: `.` and `$` anchors must not see the  */
       if (ln.length > skipLong) { /* skip minified/one-liners — but count, so answers can disclose */
         longLineCount++; longLinesByFile[p] = (longLinesByFile[p] || 0) + 1;
         continue; /* quote state is not advanced across skipped lines (minified code rarely spans template literals) */
@@ -532,6 +559,23 @@ function buildIndexCore(files, opts) {
       if (!sym) {
         if (ext === 'py') { var mp = DEF_PY_ASSIGN_RE.exec(ln); if (mp) { kind = 'const'; sym = mp[1]; } }
         else { var ma = DEF_ASSIGN_RE.exec(ln); if (ma) { kind = assignKind(ln); sym = ma[1]; } }
+      }
+      /* TypeScript `const enum X` reads as a const named "enum" to the generic rule */
+      if (md && md[1] === 'const' && sym === 'enum') { var mce = /\bconst\s+enum\s+([A-Za-z_$][\w$]*)/.exec(ln); if (mce) { kind = 'enum'; sym = mce[1]; } }
+      /* `const x = require('y')` is an import binding, not a definition */
+      if (sym && JS_CARRY_LANGS[lang] && (kind === 'const' || kind === 'let' || kind === 'var') && REQUIRE_INIT_RE.test(ln)) sym = null;
+      /* top-level destructuring (JS-family, column 0 only) */
+      if (JS_CARRY_LANGS[lang] && carry === '' && !sym) {
+        if (destructBuf) {
+          destructBuf.text += ' ' + ln.replace(/\/\/.*$/, '');
+          var dc = DESTRUCT_CLOSE_RE.exec(destructBuf.text);
+          if (dc) { if (!REQUIRE_INIT_RE.test('= ' + dc[2])) recordDestructured(p, destructNames(dc[1]), destructBuf.line, destructBuf.exp); destructBuf = null; }
+          else if (/\}/.test(ln) || ++destructBuf.n > 60) destructBuf = null;
+        } else if (/^(?:export\s+)?(?:const|let|var)\s*\{/.test(ln)) {
+          var d1 = DESTRUCT_ONE_RE.exec(ln);
+          if (d1) { if (!REQUIRE_INIT_RE.test('= ' + d1[2])) recordDestructured(p, destructNames(d1[1]), i + 1, /^export\b/.test(ln)); }
+          else { var d0 = DESTRUCT_OPEN_RE.exec(ln); if (d0) destructBuf = { line: i + 1, text: d0[1].replace(/\/\/.*$/, ''), n: 0, exp: /^export\b/.test(ln) }; }
+        }
       }
       /* a line that starts inside a template literal or block comment is text: no definition */
       if (carry) sym = null;
@@ -637,6 +681,8 @@ function buildIndexCore(files, opts) {
         if (IMPORT_RES[r].lang && !IMPORT_RES[r].lang[lang]) continue;
         if (!IMPORT_RES[r].lang && NO_JS_IMPORT_LANGS[lang]) continue; /* docs/config: code samples, not imports */
         var im = IMPORT_RES[r].re.exec(ln);
+        /* `runtime.import('/x')` / `mod.require('y')` are method calls on something else, not module loads */
+        if (im && !IMPORT_RES[r].lang && im.index > 0 && ln.charAt(im.index - 1) === '.') continue;
         if (im) {
           /* JS-shaped rules match anywhere on the line: skip text inside a string or comment */
           if (!IMPORT_RES[r].lang && quoteStateAt(ln, im.index, lineState) !== '') break;

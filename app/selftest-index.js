@@ -81,6 +81,20 @@ function extractionCases(ok) {
   ok('exports · Python single-line __all__', names('p/one.py', 'all') === 'pair,solo', names('p/one.py'));
   ok('exports · Rust `pub use` single, aliased and multi-line forms; plain `use` is not an export', names('r/lib.rs', 'reexport') === 'b,f,d,h,i'.split(',').sort().join(','), names('r/lib.rs'));
 
+  /* precision fixes found by the real-repo eval (scripts/eval-index.mjs) */
+  var pf = buildIndexCore(mk({
+    'lib/a.js': "const express = require('express');\nconst { Router } = require('express');\nconst lazy = await import('./lazy.js');\nconst real = 1;\nfunction helper() {}\nruntime.import('/not/a/module.js');\nthing.require('also-not');\nconst { x1, y1: yy, z1 = 3, ...others } = config;\nconst {\n  multiA,\n  multiB, // note\n} = config;\nexport const { exA } = config;",
+    'lib/b.ts': 'const enum Mode { A, B }\nexport declare const enum Flag { X }\nconst enum   Spaced { Q }',
+    'lib/crlf.js': "import a from './a';\r\nconst {\r\n  c1,\r\n  c2\r\n} = a;\r\nexport {\r\n  c1\r\n};\r\nmodule.exports = { c2 };\r\n"
+  }), {});
+  var sn = Array.from(pf.symbols.keys()).sort().join(',');
+  ok('precision · require()/import() bindings are not definitions', !pf.symbols.has('express') && !pf.symbols.has('Router') && !pf.symbols.has('lazy') && pf.symbols.has('real') && pf.symbols.has('helper'), sn);
+  ok('precision · obj.import(\'x\') / obj.require(\'x\') are method calls, not module loads', importsOf(pf, 'lib/a.js') === 'express@1,express@2,./lazy.js@3', importsOf(pf, 'lib/a.js'));
+  ok('precision · `const enum X` is the enum X, not a const named "enum"', pf.symbols.has('Mode') && pf.symbols.has('Flag') && pf.symbols.has('Spaced') && !pf.symbols.has('enum') && pf.symbols.get('Mode')[0].kind === 'enum', sn);
+  ok('recall · top-level destructuring (single-line, aliased, default, rest, multi-line) defines names', ['x1', 'yy', 'z1', 'others', 'multiA', 'multiB', 'exA'].every(function (n) { return pf.symbols.has(n); }) && !pf.symbols.has('y1'), sn);
+  ok('recall · destructured exports are exports', (pf.exportsByFile.get('lib/a.js') || []).some(function (e) { return e.name === 'exA'; }));
+  ok('crlf · CRLF files index like LF files', pf.symbols.has('c1') && pf.symbols.has('c2') && importsOf(pf, 'lib/crlf.js') === './a@1' && (pf.exportsByFile.get('lib/crlf.js') || []).map(function (e) { return e.name; }).sort().join() === 'c1,c2', importsOf(pf, 'lib/crlf.js') + ' | ' + JSON.stringify(pf.exportsByFile.get('lib/crlf.js')));
+
   var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty };
   try {
     var lines = []; for (var i = 0; i < 12; i++) lines.push(longLine); for (var j = 0; j < 30; j++) lines.push('// filler ' + j);
