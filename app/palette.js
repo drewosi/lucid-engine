@@ -13,6 +13,7 @@ import { openShare } from './share.js';
 import { addRepo, setScope } from './workspace.js';
 import { isMulti } from './repos.js';
 import { openAnalytics } from './analytics.js';
+import { cancelIndexing } from './index-run.js';
 
 /* ============ COMMAND PALETTE (Ctrl/Cmd-K) ============
    Every palette action also exists as a visible control — the palette is
@@ -32,6 +33,7 @@ var ACTIONS = [
   { g: 'CONTEXT', n: 'Toggle smart / full context', k: '', f: function () { setCtxMode(st.ctxMode === 'smart' ? 'full' : 'smart'); toast('Context mode: ' + st.ctxMode.toUpperCase() + '.'); } },
   { g: 'CONTEXT', n: 'Preview what will be sent', k: '', f: openPreview },
   { g: 'CONTEXT', n: 'Review skipped files', k: '', f: function () { if (st.skippedFiles.length) openSkipReview(); else toast('No skipped files recorded.'); } },
+  { g: 'CONTEXT', n: 'Cancel background indexing (keep the partial index)', k: '', f: function () { if (cancelIndexing()) toast('Indexing cancelled: LOCAL answers use the partial index and say so.'); else toast('No indexing is running.'); } },
   { g: 'CONTEXT', n: 'Select all files', k: '', f: function () { $('selall').click(); } },
   { g: 'CONTEXT', n: 'Select no files', k: '', f: function () { $('selnone').click(); } },
   { g: 'CONTEXT', n: 'Unload project', k: '', f: function () { $('clearctx').click(); } },

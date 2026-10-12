@@ -6,6 +6,7 @@ import { $, announce, fmtTok, setStatus } from './helpers.js';
 import { displayText, isMulti, repoList, repoName, scopeRepo, withScope } from './repos.js';
 import { renderWorkspaceOverview } from './workspace.js';
 import { track } from './analytics.js';
+import { cancelIndexing, indexingState } from './index-run.js';
 /* ============ LOCAL ENGINE (NO API · NO AI) ============
    The deterministic project-intelligence engine. A question is routed by intent
    (classifyIntent), an investigation runs real operations over the project index
@@ -144,6 +145,18 @@ function renderOverview() {
   });
   var langCount = idx.langs ? Object.keys(idx.langs).length : langs.length;
   ov.querySelector('.ov-index').textContent = '// indexed ' + idx.symbolCount + ' symbol' + (idx.symbolCount === 1 ? '' : 's') + ' · ' + (idx.importCount || 0) + ' import' + ((idx.importCount || 0) === 1 ? '' : 's') + ' · ' + langCount + ' language' + (langCount === 1 ? '' : 's');
+  if (idx.partial) {
+    var pb = document.createElement('div');
+    pb.className = 'ov-skip mono';
+    pb.appendChild(document.createTextNode('// partial index: ' + idx.scanned + ' of ' + idx.fileCount + ' files so far. counts are provisional. '));
+    if (indexingState().running) {
+      var cb = document.createElement('button');
+      cb.type = 'button'; cb.className = 'kbd-link mono'; cb.textContent = '[ CANCEL INDEXING ]';
+      cb.addEventListener('click', function () { cancelIndexing(); renderOverview(); });
+      pb.appendChild(cb);
+    }
+    ov.appendChild(pb);
+  }
   ov.querySelector('.ov-langs').textContent = '// languages: ' + (langs.slice(0, 6).map(function (e) { return e + ' ·' + idx.byExt[e]; }).join('  ') || 'none');
   ov.querySelector('.ov-cap').textContent = '// ✓ known locally: ' + CAP_LOCAL.join(' · ') + '   ○ requires a model: ' + CAP_MODEL.join(' · ');
   /* skipped files belong on the orientation surface, not only in the rail — the

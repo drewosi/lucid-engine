@@ -50,7 +50,7 @@ export function invalidateSelection() {
 }
 
 /* content changed (files added/removed/reloaded): everything is stale, per-repo caches included */
-export function invalidateAll() { invalidateSelection(); st.indexDirty = true; st.wsCache = null; st.scopeCache = Object.create(null); }
+export function invalidateAll() { if (st.onInvalidate) st.onInvalidate(); invalidateSelection(); st.indexDirty = true; st.wsCache = null; st.scopeCache = Object.create(null); }
 
 /* every path currently loaded, alphabetical — the shared iteration order */
 export function sortedPaths() { return Array.from(st.files.keys()).sort(); }

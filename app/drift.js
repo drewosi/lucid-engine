@@ -72,7 +72,7 @@ function makeFingerprint(idx) {
 function recordSession() {
   if (!st.files.size || !window.indexedDB) return;
   var sig = projectSig(), cur;
-  try { cur = makeFingerprint(getIndex()); } catch (e) { return; }
+  try { cur = getIndex(); if (cur.partial) return; cur = makeFingerprint(cur); } catch (e) { return; }
   if (st.driftSig !== sig) {
     st.driftSig = sig; st.driftPrev = null; st.driftPending = true;
     driftGet(sig)

@@ -119,6 +119,11 @@ function pickPathish(q) {
 
 var LOCAL_VERDICT = function () { return { local: true, text: 'KNOWN LOCALLY' }; };
 
+/* the index is still being built (or its build was cancelled): say so on every answer */
+function partialNote(idx) {
+  return '\n\n**Partial index:** ' + idx.scanned + ' of ' + idx.fileCount + ' files indexed so far. Counts, orphans and import edges can change when indexing finishes; ask again then for a complete answer.';
+}
+
 /* honest-labeling note for graph answers: the indexer skips >400-char lines, so
    import edges on them are invisible — orphans/broken must say so, not imply certainty */
 function longLineNote(idx) {
@@ -1081,7 +1086,9 @@ function classifyIntent(q) {
 function runInvestigation(q, intent) {
   var idx = getIndex();
   var entry = BY_KIND[intent.kind] || BY_KIND.plain;
-  return entry.run(intent.arg, q, idx, intent);
+  var out = entry.run(intent.arg, q, idx, intent);
+  if (idx.partial && out && typeof out.answer === 'string') out.answer += partialNote(idx);
+  return out;
 }
 
 /* grounding label map for prompt.js — kind → evidence-kind, from the registry */
@@ -1091,4 +1098,4 @@ function groundKinds() {
   return out;
 }
 
-export { CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, LOCAL_MENU, LOCAL_STARTERS, classifyIntent, computeSignals, evAt, groundKinds, listOrphans, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };
+export { partialNote, CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, LOCAL_MENU, LOCAL_STARTERS, classifyIntent, computeSignals, evAt, groundKinds, listOrphans, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };

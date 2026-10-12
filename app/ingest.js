@@ -11,6 +11,7 @@ import { openBundleFile, syncSharedUI } from './share.js';
 import { dropRepoFiles, hasRepo, isMulti, registerRepo, remapRoot, repoList, repoName, resetWorkspace, scopeFilter, scopeRepo, uniqueLabel, withScope } from './repos.js';
 import { afterWorkspaceIngest, pendingLabelFor, renderWorkspace } from './workspace.js';
 import { track } from './analytics.js';
+import { startBackgroundIndex } from './index-run.js';
 /* ============ CONTEXT ENGINE ============ */
 var SKIP_LIST_MAX = 500;
 function recordSkip(path, reason, size, ref) {
@@ -238,8 +239,11 @@ function afterIngest() {
      load-bearing: recordSessionDrift must run after renderOverview's rebuild. */
   setStatus('INDEXING: ' + st.files.size + ' files…');
   var finish = function () {
+    /* big projects index in a worker: the overview paints from the partial index
+       and re-renders when the full one lands (meridian:index-ready) */
+    var bg = startBackgroundIndex();
     renderOverview();
-    setStatus('IDLE: ' + st.files.size + ' files in memory');
+    if (!bg) setStatus('IDLE: ' + st.files.size + ' files in memory');
     /* graceful scaling: warn as the in-memory file cap approaches or is hit */
     var wsCap = isMulti() ? ' The cap covers every repo in the workspace together; unload a repo to make room.' : '';
     if (st.skipped.memcap) toast('Memory cap reached (~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB of text): ' + st.skipped.memcap + ' file' + (st.skipped.memcap === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.' + wsCap);
@@ -248,7 +252,7 @@ function afterIngest() {
     maybeAutoSmart();
     /* last: renderOverview above has already rebuilt the index. A shared
        project is someone else's snapshot — nothing about it is persisted. */
-    if (!st.shared) recordSessionDrift();
+    if (!st.shared && !bg) recordSessionDrift();
   };
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { setTimeout(finish, 0); });
   else setTimeout(finish, 0);
@@ -854,6 +858,10 @@ function capInfo() { return { maxFiles: MAX_FILES, maxTotal: MAX_TOTAL, maxFile:
 export { DEFAULT_MAX_FILES, IGNORE_DIRS, __setCapsForTest, afterIngest, capInfo, loadMaxFiles, parseMaxFiles, claimLabel, clearContext, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, loadHandle, maybeAutoSmart, openPreview, openSkipReview, pickFolder, prevveil, recordSkip, refreshSkipUI, renderBudget, renderTree, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
 
 export function initIngest() {
+  document.addEventListener('meridian:index-ready', function () {
+    renderOverview();
+    if (!st.shared) recordSessionDrift();
+  });
   st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
   st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
   st.totalBytes = 0;

@@ -20,6 +20,7 @@ import { evidenceChip } from './trace.js';
 import { closeViewer } from './viewer.js';
 import { afterWorkspaceIngest, pendingLabelFor } from './workspace.js';
 import { projectSig } from './drift.js';
+import { indexCases } from './selftest-index.js';
 import { AN_FORMAT, AN_Q_MAX, CSV_COLS, EVENT_FIELDS, __setAnalyticsForTest, analyticsCSV, analyticsJSON, analyticsOn, clearAnalytics, endpointUrl,
   flushAnalyticsSend, idbStore, percentile, readEvents, sanitizeEvent, storeText, summarize, track, validEndpoint } from './analytics.js';
 /* ============ SELF-TESTS (DEV · EXPERIMENTAL) ============
@@ -1223,6 +1224,8 @@ function runSelfTests() {
     return shareCases(ok).catch(function (e) { ok('share harness executed without throwing', false, String(e && e.message || e)); });
   }).then(function () {
     return analyticsCases(ok).catch(function (e) { ok('analytics harness executed without throwing', false, String(e && e.message || e)); });
+  }).then(function () {
+    return indexCases(ok).catch(function (e) { ok('index worker harness executed without throwing', false, String(e && e.message || e)); });
   }).then(function () {
     restore();
     return results;

@@ -2,6 +2,7 @@ import { st } from './state.js';
 import { fmtTok, lsGet } from './helpers.js';
 import { LS, MODELS } from './config.js';
 import { isMulti, repoOf, workspaceNote } from './repos.js';
+import { CONFIG_NAMES, DOCS_PATH, ENTRY_NAMES, MANIFEST_RE, README_NAMES, TEST_PATH, detectPackages as detectPackagesIn } from './paths.js';
 /* ============ SMART CONTEXT ENGINE ============
    Instead of sending every checked file whole (FULL mode), SMART mode:
      1. scores each file — type weight + recency + path depth + query relevance,
@@ -29,14 +30,8 @@ var GROUND_EXCERPT_PAD  = 6;      /* lines of context padded around a single-lin
 /* null-prototype: keyed by project-supplied extensions — a file named
    `x.constructor` must miss cleanly, not return an inherited function */
 var SRC_EXT = Object.assign(Object.create(null), { ts: 9, tsx: 9, js: 9, jsx: 9, mjs: 9, cjs: 9, py: 9, go: 9, rs: 9, java: 8, rb: 8, php: 8, c: 8, h: 8, cc: 8, cpp: 8, hpp: 8, cs: 8, swift: 8, kt: 8, scala: 8, svelte: 9, vue: 9, html: 7, css: 6, scss: 6, less: 6, sql: 7, sh: 7, bash: 7, zsh: 7, md: 8, mdx: 8, rst: 7, txt: 5, json: 5, yml: 6, yaml: 6, toml: 6, xml: 4, ini: 5, cfg: 5, env: 5, graphql: 7, proto: 7, tf: 6, lua: 7, ex: 8, exs: 8, erl: 7, ml: 7, hs: 7, zig: 8, dart: 8, r: 7, jl: 7 });
-var CONFIG_NAMES = /^(package\.json|tsconfig[^\/]*\.json|jsconfig\.json|pyproject\.toml|setup\.(py|cfg)|pipfile|go\.(mod|sum)|cargo\.toml|gemfile|mix\.exs|makefile|justfile|dockerfile|docker-compose\.ya?ml|\.env\.example|vite\.config\.[jt]s|webpack\.config\.[jt]s|next\.config\.[jt]s|rollup\.config\.[jt]s|requirements\.txt|composer\.json|build\.gradle(\.kts)?|pom\.xml|[^\/]+\.csproj|[^\/]+\.sln|cmakelists\.txt)$/i;
-var ENTRY_NAMES = /^(index|main|__main__|app|server|cli|core|__init__|mod|lib|program|application)\.[a-z]+$/i;
-var README_NAMES = /^readme(\.|$)/i;
 var LOWVALUE_PATH = /(\.min\.|\.lock$|-lock\.|\.snap$|\.map$|\.d\.ts$|\bfixtures?\b|\b__snapshots__\b|\bmigrations\b|\bgenerated\b)/i;
-/* test detection across ecosystems: JS/TS .test/.spec, Go/py _test., Ruby _spec.,
-   Python test_*.py prefix, tests/ or spec/ directories, Java FooTest / C# FooTests */
-var TEST_PATH = /(\.test\.|\.spec\.|_test\.|_spec\.|\/test_[^\/]*\.py$|\btests?\/|\bspec\/|\b__tests__\b|tests?\.(java|cs|kt|swift|php)$)/i;
-
+var LOWVALUE_PATH = /(\.min\.|\.lock$|-lock\.|\.snap$|\.map$|\.d\.ts$|\bfixtures?\b|\b__snapshots__\b|\bmigrations\b|\bgenerated\b)/i;
 /* Token estimate — one function for every count the app shows or budgets.
    Calibrated against the Qwen3.5-9B tokenizer (GPT-style BPE: one token per
    digit, short operator runs, a newline of its own, spaces mostly absorbed
@@ -310,7 +305,6 @@ function excerptFile(f, terms, maxTokens, path) {
 /* query intent — a debugging question wants tests; an onboarding question wants docs */
 var DEBUG_RE = /\b(bug|bugs|error|errors|fix|fixes|fail|fails|failing|failure|crash|crashes|broken|debug|exception|traceback|stack\s?trace|regression|flaky)\b/i;
 var ONBOARD_RE = /\b(overview|architecture|structure|onboard|onboarding|getting\s+started|introduction|intro|explain|understand|learn|documentation|docs|readme|tour|walkthrough)\b/i;
-var DOCS_PATH = /(^|\/)docs?\//i;
 
 /* Score all checked files against the question and pack the winners into the budget. */
 function packSmartContext(q, budgetTokens) {
@@ -417,28 +411,7 @@ function packSmartContext(q, budgetTokens) {
 
 /* PROJECT MAP — full shape of the project in few tokens; cached until context changes */
 
-/* monorepo awareness: a "package" is any directory holding a build manifest */
-var MANIFEST_RE = /^(package\.json|cargo\.toml|pyproject\.toml|go\.mod|composer\.json|build\.gradle(\.kts)?|pom\.xml|gemfile|mix\.exs|[^\/]+\.csproj)$/i;
-function detectPackages(paths) {
-  var byDir = {};
-  paths.forEach(function (p) {
-    var name = p.slice(p.lastIndexOf('/') + 1);
-    if (!MANIFEST_RE.test(name)) return;
-    var dir = p.indexOf('/') === -1 ? '.' : p.slice(0, p.lastIndexOf('/'));
-    if (byDir[dir]) return; /* one manifest per dir is enough */
-    var label = '', f = st.files.get(p), m;
-    if (f) {
-      if (/(package|composer)\.json$/i.test(name)) { m = f.content.match(/"name"\s*:\s*"([^"]+)"/); if (m) label = m[1]; }
-      else if (/\.(toml)$/i.test(name)) { m = f.content.match(/^\s*name\s*=\s*["']([^"']+)["']/m); if (m) label = m[1]; }
-      else if (/go\.mod$/i.test(name)) { m = f.content.match(/^module\s+(\S+)/m); if (m) label = m[1]; }
-      else if (/pom\.xml$/i.test(name)) { m = f.content.match(/<artifactId>([^<]+)<\/artifactId>/); if (m) label = m[1]; }
-      else if (/mix\.exs$/i.test(name)) { m = f.content.match(/app:\s*:(\w+)/); if (m) label = m[1]; }
-      else if (/\.csproj$/i.test(name)) { label = name.replace(/\.csproj$/i, ''); }
-    }
-    byDir[dir] = { dir: dir, manifest: p, name: label };
-  });
-  return Object.keys(byDir).sort().map(function (d) { return byDir[d]; });
-}
+function detectPackages(paths) { return detectPackagesIn(paths, st.files); }
 
 function pickKeyFiles(paths, pkgs) {
   var picks = [];
