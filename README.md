@@ -2,6 +2,8 @@
 
 **A non-AI checker for AI-written code that runs in your browser, in free beta.** This repo also contains the Lucid Engine design system it's built with.
 
+> **License:** the source code is [MIT](LICENSE). The hosted [Terms](terms.html) and [Privacy](privacy.html) apply only to the public demo at drewosi.github.io; running your own copy of the code is governed by the MIT license alone.
+
 ## Live
 
 | Page | URL |
