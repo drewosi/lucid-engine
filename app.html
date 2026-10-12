@@ -384,6 +384,20 @@
         <div class="budget-txt"><span id="sharetxt"></span><span id="sharemax"></span></div>
       </div>
       <div class="prev-note" id="sharenote" aria-live="polite"></div>
+      <fieldset class="share-protect">
+        <legend class="mono">PROTECTION</legend>
+        <div class="key-row">
+          <label for="sharepass" class="sr-only">Passphrase</label>
+          <input type="text" id="sharepass" autocomplete="off" spellcheck="false" placeholder="passphrase (8+ characters), or generate a token">
+          <button class="btn-quiet acc" type="button" id="sharegen" title="A random one-time token with 100 bits of entropy. Send it separately from the link.">[ GENERATE TOKEN ]</button>
+        </div>
+        <div class="share-opts">
+          <label>EXPIRES <select id="shareexp"><option value="24h">in 24 hours</option><option value="7d" selected>in 7 days</option><option value="never">never</option></select></label>
+          <label class="share-once"><input type="checkbox" id="shareonce"><span>self-destruct after the first open</span></label>
+        </div>
+        <label class="share-ack"><input type="checkbox" id="sharepermit"><span>No passphrase: make a permanent, unprotected link instead. Not for company code.</span></label>
+        <p class="prev-note">// the contents are encrypted with the passphrase and stay in the part after #. honest limit: with no server, a link already copied cannot be recalled. expiry and one-time use are enforced by the opening Meridian, on that browser's clock and storage, so they stop old links resurfacing, not a determined recipient. the passphrase is the real lock; for true revocation share through something you operate.</p>
+      </fieldset>
       <label class="share-ack"><input type="checkbox" id="shareack"><span>I understand the link or bundle contains this code, and anyone who has it can read it.</span></label>
       <div class="key-row mt-2" id="sharelinkrow" hidden>
         <label for="sharelink" class="sr-only">Share link</label>
@@ -394,6 +408,26 @@
         <button class="btn btn-hairline" type="button" id="sharebundle" title="A .meridian file with the same contents as readable JSON. No link size limit, so it suits big projects. Send it as a file.">Download bundle</button>
         <button class="btn btn-hairline" type="button" id="shareclose">Close</button>
       </div>
+    </div>
+  </div>
+
+  <!-- PASSPHRASE PROMPT for protected share links and bundles, driven by app/share.js -->
+  <div class="veil" id="passveil">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pass-title">
+      <div class="k mono">PROTECTED SHARE</div>
+      <h2 id="pass-title">Enter the passphrase to open this project.</h2>
+      <p class="prev-note" id="passmeta"></p>
+      <form id="passform" autocomplete="off">
+        <div class="key-row">
+          <label for="passin" class="sr-only">Passphrase</label>
+          <input type="password" id="passin" autocomplete="off" spellcheck="false" placeholder="passphrase or token">
+        </div>
+        <p class="prev-note" id="passerr" role="alert" aria-live="polite"></p>
+        <div class="row">
+          <button class="btn btn-signal" type="submit" id="passgo">Open</button>
+          <button class="btn btn-hairline" type="button" id="passcancel">Cancel</button>
+        </div>
+      </form>
     </div>
   </div>
 

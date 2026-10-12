@@ -504,6 +504,13 @@
   #sharesize { margin: 12px 0 6px; }
   .share-ack { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: 13px; color: var(--ink); cursor: pointer; line-height: 1.5; }
   .share-ack input { accent-color: var(--accent); margin: 3px 0 0; flex: none; }
+  .share-protect { border: 1px solid var(--line-strong); border-radius: 4px; margin: 14px 0 0; padding: 10px 14px 12px; display: grid; gap: 10px; }
+  .share-protect legend { font-size: 10px; letter-spacing: .14em; color: var(--ink-3); padding: 0 6px; }
+  .share-protect .share-ack { margin-top: 0; }
+  .share-opts { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center; font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 11px; letter-spacing: .06em; color: var(--ink-2); }
+  .share-opts select { background: var(--paper); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 3px; height: 30px; padding: 0 8px; font: inherit; }
+  .share-once { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .share-once input { accent-color: var(--accent); }
 
   /* ============ USAGE ANALYTICS — settings switches + the log panel ============
      Switches reuse the drawer's [ … : ON ] quiet buttons; the panel reuses the
