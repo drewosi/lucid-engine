@@ -14,6 +14,7 @@ import { addRepo, setScope } from './workspace.js';
 import { isMulti } from './repos.js';
 import { openAnalytics } from './analytics.js';
 import { cancelIndexing } from './index-run.js';
+import { openDiagnostics } from './diagnostics.js';
 
 /* ============ COMMAND PALETTE (Ctrl/Cmd-K) ============
    Every palette action also exists as a visible control — the palette is
@@ -62,6 +63,7 @@ var ACTIONS = [
   { g: 'SETTINGS', n: 'View usage analytics (opt-in, this browser only)', k: '', f: openAnalytics },
   { g: 'SETTINGS', n: 'Show keymap', k: '?', f: openKeymap },
   { g: 'SETTINGS', n: 'Open the user guide (GitHub)', k: '', f: function () { window.open('https://github.com/drewosi/lucid-engine/blob/main/USER-GUIDE.md', '_blank', 'noopener'); } },
+  { g: 'SETTINGS', n: 'Diagnostics: redacted report for support (no source, no paths)', k: '', f: openDiagnostics },
   { g: 'SETTINGS', n: 'Run self-tests (dev)', k: '', f: runAndShowSelfTests }
 ];
 var palSel = 0, palMatches = [];

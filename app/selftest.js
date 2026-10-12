@@ -23,6 +23,7 @@ import { projectSig } from './drift.js';
 import { indexCases } from './selftest-index.js';
 import { sealCases } from './selftest-seal.js';
 import { verifyCases } from './selftest-verify.js';
+import { diagCases } from './selftest-diag.js';
 import { AN_FORMAT, AN_Q_MAX, CSV_COLS, EVENT_FIELDS, __setAnalyticsForTest, analyticsCSV, analyticsJSON, analyticsOn, clearAnalytics, endpointUrl,
   flushAnalyticsSend, idbStore, percentile, readEvents, sanitizeEvent, storeText, summarize, track, validEndpoint } from './analytics.js';
 /* ============ SELF-TESTS (DEV · EXPERIMENTAL) ============
@@ -1213,6 +1214,7 @@ function runSelfTests() {
     demoLinkCases(ok);
     demoCatchCases(ok);
     verifyCases(ok);
+    diagCases(ok);
   } catch (e) {
     ok('harness executed without throwing', false, String(e && e.message || e));
     restore();

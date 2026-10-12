@@ -1,4 +1,5 @@
 import { st } from './state.js';
+import { openDiagnostics } from './diagnostics.js';
 import { $, app, esc, lsDel, lsGet, lsSet, toast, trap } from './helpers.js';
 import { LS, MODELS, PROVIDERS } from './config.js';
 import { maybeAutoSmart, renderBudget } from './ingest.js';
@@ -261,6 +262,7 @@ export function initShell() {
   $('clearkey').addEventListener('click', function () {
     lsDel(curKeyLS()); syncKeyState(); toast(PROVIDERS[st.curProvider].label + ' key removed from this browser.');
   });
+  $('diagbtn').addEventListener('click', openDiagnostics);
   $('clearall').addEventListener('click', function () {
     Object.keys(LS).forEach(function (k) { lsDel(LS[k]); });
     lsDel('meridian.waitlist');
