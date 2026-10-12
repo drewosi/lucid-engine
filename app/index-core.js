@@ -10,7 +10,7 @@ import { CONFIG_NAMES, DOCS_PATH, ENTRY_NAMES, README_NAMES, TEST_PATH, detectPa
 /* definition-shaped lines across common languages — captures the declared name.
    Practical regex, not a parser: covers declarations and `NAME = function|class|(=>)`. */
 /* declarations across JS/TS, Python, Go (top-level func), Rust (pub/mod), Java, C#, Ruby */
-var DEF_DECL_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:pub(?:\([^)]*\))?\s+|public\s+|private\s+|protected\s+|internal\s+|static\s+|abstract\s+|final\s+|sealed\s+|partial\s+)*(?:async\s+)?(function\*?|class|interface|type|struct|enum|trait|impl|def|fn|func|module|mod|const|let|var|sub|proc|record)\s+([A-Za-z_$][\w$]*)/;
+var DEF_DECL_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:pub(?:\([^)]*\))?\s+|declare\s+|public\s+|private\s+|protected\s+|internal\s+|static\s+|abstract\s+|final\s+|sealed\s+|partial\s+)*(?:async\s+)?(function\*?|class|interface|type|struct|enum|trait|impl|def|fn|func|module|mod|const|let|var|sub|proc|record)\s+([A-Za-z_$][\w$]*)/;
 /* Java/C# method declarations: ≥1 modifier keeps call statements/`if (`/`return (` out;
    `=` excluded from the type-token class keeps field initializers out; `new` is
    deliberately not a modifier. Gated to .java/.cs files. */
@@ -67,6 +67,28 @@ var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.g
    and CommonJS. Declaration exports (export function x / pub fn / Go capitals)
    are detected off the already-matched definition instead — no second pass. */
 var EXPORT_BRACES_RE = /^\s*(?:export\s*\{([^}]+)\}|module\.exports\s*=\s*\{([^}]+)\})/;
+/* openers of a brace list that continues on later lines, and the helpers that read one */
+var EXPORT_OPEN_RE = /^\s*(?:export\s*(?:type\s*)?\{|module\.exports\s*=\s*\{)([^}]*)$/;
+var PY_ALL_RE = /^__all__\s*\+?=\s*[\[(](.*)$/;
+var RS_PUB_USE_RE = /^\s*pub(?:\([^)]*\))?\s+use\s+(.*)$/;
+function braceNames(text) {
+  var out = [];
+  text.split(',').forEach(function (piece) {
+    var nm = piece.replace(/\/\*.*?\*\//g, '').trim().split(/\s+as\s+/).pop().split(':')[0].trim();
+    if (/^[A-Za-z_$][\w$]*$/.test(nm)) out.push(nm);
+  });
+  return out;
+}
+/* `pub use a::b::{c, d as e};` / `pub use a::b;` -> the names the module re-exports */
+function rustReexports(text) {
+  var t = text.replace(/;.*$/, '').trim(), out = [], bi = t.indexOf('{');
+  var parts = bi === -1 ? [t] : t.slice(bi + 1, t.lastIndexOf('}') === -1 ? undefined : t.lastIndexOf('}')).split(',');
+  parts.forEach(function (piece) {
+    var nm = piece.trim().split(/\s+as\s+/).pop().split('::').pop().trim();
+    if (/^[A-Za-z_]\w*$/.test(nm) && nm !== 'self' && nm !== 'super' && nm !== 'crate') out.push(nm);
+  });
+  return out;
+}
 var EXPORT_ASSIGN_RE = /^\s*(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=/;
 /* Quote/comment state for the JS-shaped import rules. Import-looking text inside
    a string (sample projects, test fixtures) or a comment is text, not an import:
@@ -471,6 +493,7 @@ function buildIndexCore(files, opts) {
     var genWhy = generatedReason(p, f.content, skipLong);
     if (genWhy) { generated.push({ file: p, why: genWhy }); totalLines += f.content.split('\n').length; continue; }
     var isGo = ext === 'go', inGoImport = false, braceOpenAt = -1;
+    var exportBuf = null, pyAllBuf = null, rsUseBuf = null; /* multi-line export lists in flight */
     var carry = JS_CARRY_LANGS[lang] ? '' : null; /* null: no cross-line state for this language */
     var lines = f.content.split('\n');
     totalLines += lines.length;
@@ -545,16 +568,53 @@ function buildIndexCore(files, opts) {
         if (mns && !csNamespaces[mns[1]]) { csNamespaces[mns[1]] = p; csNsCount++; }
       }
 
+      /* multi-line export lists: JS/TS `export {` / `module.exports = {`, Python __all__, Rust `pub use` */
+      var inMulti = false;
+      if (exportBuf) {
+        inMulti = true;
+        var xp = ln.replace(/\/\/.*$/, ''), xc = xp.indexOf('}');
+        exportBuf.text += ' ' + (xc === -1 ? xp : xp.slice(0, xc));
+        if (xc !== -1 || ++exportBuf.n > 100) { braceNames(exportBuf.text).forEach(function (nm) { recordExport(p, nm, exportBuf.line, exportBuf.kind); }); exportBuf = null; }
+      } else if (pyAllBuf) {
+        inMulti = true;
+        pyAllBuf.text += ' ' + ln.replace(/#.*$/, '');
+        if (/[\])]/.test(ln) || ++pyAllBuf.n > 100) {
+          pyAllBuf.text.replace(/['"]([A-Za-z_]\w*)['"]/g, function (_, nm) { recordExport(p, nm, pyAllBuf.line, 'all'); return ''; });
+          pyAllBuf = null;
+        }
+      } else if (rsUseBuf) {
+        inMulti = true;
+        rsUseBuf.text += ' ' + ln;
+        if (ln.indexOf(';') !== -1 || ++rsUseBuf.n > 100) { rustReexports(rsUseBuf.text).forEach(function (nm) { recordExport(p, nm, rsUseBuf.line, 'reexport'); }); rsUseBuf = null; }
+      } else if (JS_CARRY_LANGS[lang] && carry === '' && EXPORT_OPEN_RE.test(ln)) {
+        var xo = EXPORT_OPEN_RE.exec(ln);
+        exportBuf = { line: i + 1, text: xo[1].replace(/\/\/.*$/, ''), n: 0, kind: /^\s*module/.test(ln) ? 'commonjs' : 'named' };
+        inMulti = true;
+      } else if (ext === 'py') {
+        var pa = PY_ALL_RE.exec(ln);
+        if (pa) {
+          if (/[\])]/.test(pa[1])) pa[1].replace(/['"]([A-Za-z_]\w*)['"]/g, function (_, nm) { recordExport(p, nm, i + 1, 'all'); return ''; });
+          else pyAllBuf = { line: i + 1, text: pa[1].replace(/#.*$/, ''), n: 0 };
+        }
+      } else if (ext === 'rs') {
+        var ru = RS_PUB_USE_RE.exec(ln);
+        if (ru) {
+          if (ru[1].indexOf(';') !== -1) rustReexports(ru[1]).forEach(function (nm) { recordExport(p, nm, i + 1, 'reexport'); });
+          else rsUseBuf = { line: i + 1, text: ru[1], n: 0 };
+        }
+      }
       /* non-declaration export forms: export { a, b as c }, module.exports = {…}, exports.x = */
-      var eb = EXPORT_BRACES_RE.exec(ln);
-      if (eb) {
+      var eb = inMulti ? null : EXPORT_BRACES_RE.exec(ln);
+      if (inMulti) { /* consumed by a multi-line list above */ }
+      else if (eb) {
         (eb[1] || eb[2]).split(',').forEach(function (piece) {
           var nm = piece.trim().split(/\s+as\s+/).pop().split(':')[0].trim();
           if (/^[A-Za-z_$][\w$]*$/.test(nm)) recordExport(p, nm, i + 1, 'named');
         });
       } else {
         var ea = EXPORT_ASSIGN_RE.exec(ln);
-        if (ea) recordExport(p, ea[1], i + 1, 'commonjs');
+        if (/^\s*export\s+\*\s+(?:as\s+([A-Za-z_$][\w$]*)\s+)?from\s/.test(ln)) recordExport(p, (/^\s*export\s+\*\s+as\s+([A-Za-z_$][\w$]*)/.exec(ln) || [0, '*'])[1], i + 1, 'reexport-all');
+        else if (ea) recordExport(p, ea[1], i + 1, 'commonjs');
         else if (!sym && /^\s*export\s+default\b/.test(ln)) recordExport(p, 'default', i + 1, 'default');
       }
 

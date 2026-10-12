@@ -64,6 +64,23 @@ function extractionCases(ok) {
   ok('generated · ordinary source next to them is still indexed', ix.symbols.has('realFn') && !gen['src/real.js']);
   ok('index · lineCount is reported for the skipped-lines ratio', ix.lineCount > 10);
 
+  /* exports: multi-line lists, __all__, pub use, export *, ambient declarations */
+  var ex = buildIndexCore(mk({
+    'a/multi.js': 'export {\n  alpha,\n  beta as gamma, // renamed\n  delta\n};\nmodule.exports = {\n  one,\n  two: 2\n};',
+    'a/star.ts': "export * from './multi';\nexport * as ns from './multi';\nexport declare function amb(): void;\ndeclare const AMB: number;",
+    'p/mod.py': 'import os\n__all__ = [\n  "alpha",\n  \'beta\',  # trailing comment\n]\ndef alpha(): pass\ndef beta(): pass',
+    'p/one.py': '__all__ = ["solo", "pair"]\ndef solo(): pass',
+    'r/lib.rs': 'pub use crate::a::b;\npub use crate::c::{d, e as f};\npub use g::{\n    h,\n    i,\n};\nuse not::exported;'
+  }), {});
+  function names(f, kind) { return (ex.exportsByFile.get(f) || []).filter(function (e) { return !kind || e.kind === kind; }).map(function (e) { return e.name; }).sort().join(','); }
+  ok('exports · multi-line `export { … }` keeps renames and drops comments', names('a/multi.js', 'named') === 'alpha,delta,gamma', names('a/multi.js'));
+  ok('exports · multi-line `module.exports = { … }` is read', names('a/multi.js', 'commonjs') === 'one,two', names('a/multi.js'));
+  ok('exports · `export *` and `export * as ns` are recorded as re-exports', names('a/star.ts', 'reexport-all') === '*,ns', names('a/star.ts'));
+  ok('exports · TypeScript `export declare function` is a symbol and an export', ex.symbols.has('amb') && names('a/star.ts').indexOf('amb') !== -1, names('a/star.ts'));
+  ok('exports · Python __all__ (multi-line, quotes, comments) lists the public surface', names('p/mod.py', 'all') === 'alpha,beta', names('p/mod.py'));
+  ok('exports · Python single-line __all__', names('p/one.py', 'all') === 'pair,solo', names('p/one.py'));
+  ok('exports · Rust `pub use` single, aliased and multi-line forms; plain `use` is not an export', names('r/lib.rs', 'reexport') === 'b,f,d,h,i'.split(',').sort().join(','), names('r/lib.rs'));
+
   var keep = { files: st.files, idx: st.projectIndex, dirty: st.indexDirty };
   try {
     var lines = []; for (var i = 0; i < 12; i++) lines.push(longLine); for (var j = 0; j < 30; j++) lines.push('// filler ' + j);
