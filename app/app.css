@@ -297,6 +297,10 @@
   .msg-a .bd pre code { background: none; border: none; padding: 0; font-size: 12px; line-height: 1.6; }
   .msg-a .bd .cursor { display: inline-block; width: 1ch; background: var(--accent); box-shadow: var(--flare-bloom); height: 1.1em; vertical-align: text-bottom; animation: flare 1s steps(2) infinite; }
   @keyframes flare { from { opacity: .4; } to { opacity: 1; } }
+  .integrity { margin-top: 12px; border: 1px solid var(--line-strong); border-radius: 3px; padding: 8px 12px; font-size: 11.5px; letter-spacing: .03em; line-height: 1.55; color: var(--ink-2); }
+  .integrity.verified { border-color: var(--accent); color: var(--accent); }
+  .integrity.unverified { border-color: var(--err); color: var(--err); }
+  .integrity ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink-2); overflow-wrap: anywhere; }
   .msg-a .errline { color: var(--err); font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 12px; letter-spacing: .03em; }
 
   /* trace console */
