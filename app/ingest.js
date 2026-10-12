@@ -327,6 +327,21 @@ function pickFolder(opts) {
     });
   } else { nextPick = opts; $('dirpick').click(); }
 }
+/* the webkitdirectory picker hands us a flat FileList with no directory objects to skip,
+   so ignored dirs are tallied once per distinct ignored directory here, matching the
+   directory-level skip of the drop (collectEntry) and File System Access (collectHandle)
+   walks. Exported so a self-test can prove all three agree. */
+function collectFromFileList(list, label) {
+  var seenIgnored = Object.create(null), items = [];
+  list.forEach(function (f) {
+    var path = f.webkitRelativePath || f.name;
+    var pref = ignoredDirPrefix(path);
+    if (pref) { if (!seenIgnored[pref]) { seenIgnored[pref] = 1; st.skipped.dirs++; } return; }
+    if (label) path = remapRoot(path, label);
+    items.push({ path: path, getFile: function () { return Promise.resolve(f); } });
+  });
+  return items;
+}
 function pickHandler(input) {
   var list = Array.prototype.slice.call(input.files || []);
   var opts = nextPick || {};
@@ -337,17 +352,7 @@ function pickHandler(input) {
      ignored dirs would otherwise be counted once per file (drop/FSA count them
      once per directory). Pre-filter here and tally each distinct ignored dir
      once, so the skip count means the same thing regardless of load path. */
-  function collect(label) {
-    var seenIgnored = Object.create(null), items = [];
-    list.forEach(function (f) {
-      var path = f.webkitRelativePath || f.name;
-      var pref = ignoredDirPrefix(path);
-      if (pref) { if (!seenIgnored[pref]) { seenIgnored[pref] = 1; st.skipped.dirs++; } return; }
-      if (label) path = remapRoot(path, label);
-      items.push({ path: path, getFile: function () { return Promise.resolve(f); } });
-    });
-    return items;
-  }
+  function collect(label) { return collectFromFileList(list, label); }
   var rel = list.length ? (list[0].webkitRelativePath || '') : '';
   if (rel.indexOf('/') === -1) {
     /* loose files are additive and belong to no repo */
@@ -855,7 +860,7 @@ function __setCapsForTest(o) {
 /* the ingest caps, for the workspace meter (they cover every repo together) */
 function capInfo() { return { maxFiles: MAX_FILES, maxTotal: MAX_TOTAL, maxFile: MAX_FILE }; }
 
-export { DEFAULT_MAX_FILES, IGNORE_DIRS, __setCapsForTest, afterIngest, capInfo, loadMaxFiles, parseMaxFiles, claimLabel, clearContext, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, loadHandle, maybeAutoSmart, openPreview, openSkipReview, pickFolder, prevveil, recordSkip, refreshSkipUI, renderBudget, renderTree, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
+export { collectEntry, collectFromFileList, DEFAULT_MAX_FILES, IGNORE_DIRS, __setCapsForTest, afterIngest, capInfo, loadMaxFiles, parseMaxFiles, claimLabel, clearContext, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, loadHandle, maybeAutoSmart, openPreview, openSkipReview, pickFolder, prevveil, recordSkip, refreshSkipUI, renderBudget, renderTree, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
 
 export function initIngest() {
   document.addEventListener('meridian:index-ready', function () {

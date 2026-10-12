@@ -7,6 +7,7 @@ import { displayText, isMulti, repoList, repoName, scopeRepo, withScope } from '
 import { renderWorkspaceOverview } from './workspace.js';
 import { track } from './analytics.js';
 import { cancelIndexing, indexingState } from './index-run.js';
+import { tierLine } from './lang-tiers.js';
 /* ============ LOCAL ENGINE (NO API · NO AI) ============
    The deterministic project-intelligence engine. A question is routed by intent
    (classifyIntent), an investigation runs real operations over the project index
@@ -158,6 +159,8 @@ function renderOverview() {
     ov.appendChild(pb);
   }
   ov.querySelector('.ov-langs').textContent = '// languages: ' + (langs.slice(0, 6).map(function (e) { return e + ' ·' + idx.byExt[e]; }).join('  ') || 'none');
+  var tl = tierLine(idx.langs);
+  if (tl) { var tle = document.createElement('div'); tle.className = 'ov-langs ov-tier mono'; tle.textContent = tl; ov.querySelector('.ov-langs').after(tle); }
   ov.querySelector('.ov-cap').textContent = '// ✓ known locally: ' + CAP_LOCAL.join(' · ') + '   ○ requires a model: ' + CAP_MODEL.join(' · ');
   /* skipped files belong on the orientation surface, not only in the rail — the
      same review modal, reached through the already-wired control */
@@ -178,7 +181,7 @@ function renderOverview() {
      analysis repeats its own caveat in its answer */
   var lim = document.createElement('div');
   lim.className = 'ov-lim mono';
-  lim.textContent = '// machinery limits: static import edges only (regex extraction per language · >400-char lines not indexed): cycles/orphans/hubs/untested read that graph; dynamic loading, DI and bundler wiring are invisible. each analysis states its own caveats in its answer.';
+  lim.textContent = '// machinery limits: static import edges only (regex extraction per language, not a parser · >400-char lines and generated/minified files not indexed): cycles/orphans/hubs/untested read that graph; dynamic loading, DI and bundler wiring are invisible. each analysis states its own caveats in its answer.';
   ov.appendChild(lim);
 }
 

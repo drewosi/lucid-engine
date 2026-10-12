@@ -1,4 +1,5 @@
 import { sortedPaths, st } from './state.js';
+import { tierNote } from './lang-tiers.js';
 import { queryTerms } from './smart-context.js';
 import { dirOf, fileExt, getIndex } from './indexer.js';
 import { localSearchData, searchLimitNote } from './actions.js';
@@ -127,7 +128,7 @@ function partialNote(idx) {
 /* honest-labeling note for graph answers: the indexer skips >400-char lines, so
    import edges on them are invisible — orphans/broken must say so, not imply certainty */
 function longLineNote(idx) {
-  var out = '';
+  var out = tierNote(idx.langs);
   if (idx.longLineCount) {
     out += '\n\nNote: ' + plural(idx.longLineCount, 'line') + ' over 400 chars in ' + plural(Object.keys(idx.longLinesByFile).length, 'file')
       + ' were not indexed (minified/one-line content): imports on those lines are invisible, so such files can appear orphaned or their targets unresolved.';

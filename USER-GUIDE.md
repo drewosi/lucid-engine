@@ -312,10 +312,18 @@ REASONING** (an interpretation question; connect an AI for those).
 | `workspace` | With 2+ repos loaded: per-repo stats, shared dependencies, repo links, cross-repo imports and names exported in more than one repo ("compare the repos" works too) |
 | `help` | The in-engine reference |
 
-**Languages understood:** JavaScript/TypeScript, Python, Go, Rust, Java, Ruby,
-C#, Kotlin, Swift, PHP (symbols + import resolution), plus basic support for
-others (Scala, Elixir, Dart…). Depth varies: it's regex-based, dependency-free
-analysis, not a full compiler, and the app says so where it matters.
+**Languages understood, and how far to trust each:**
+
+| Tier | Languages | What it means |
+|---|---|---|
+| **Core** | JavaScript/TypeScript, Python, Go, Rust | Symbols, imports, exports and import resolution with fixture tests and measured precision (see the README table). Still regex, not a parser |
+| **Best-effort** | Java, Ruby, PHP, C#, Kotlin, Swift | Rules and resolution exist and are tested on small fixtures, but not measured on real repositories. Expect misses; an "orphan" or "unresolved" here may be a miss, not a fact |
+| **Basic** | C/C++, Scala, Elixir, Lua, shell, Svelte/Vue… | Counted and searchable. Only generic declaration rules apply, no import resolution |
+
+The workbench labels this where it matters: a reliability line in the project
+overview, and a note on graph answers (orphans, broken, impact…) when
+best-effort or basic languages are present. It's regex-based, dependency-free
+analysis, not a full compiler.
 
 > **Power user: the intentional limits, in one place.** Graph analyses
 > (`cycles`/`orphans`/`hubs`/`path`/`untested`) walk **statically resolved**
