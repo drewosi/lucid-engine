@@ -1,0 +1,736 @@
+import { CONFIG_NAMES, DOCS_PATH, ENTRY_NAMES, README_NAMES, TEST_PATH, detectPackages } from './paths.js';
+/* ============ INDEX CORE (pure) ============
+   The scan that turns loaded files into the project index: symbols, import and
+   importer edges, exports, TODOs, env reads. No DOM and no app state, so it runs
+   identically on the main thread (regex fallback / small projects) and inside the
+   indexing worker (index-worker.js). Input: Map(path -> {content, lang?}).
+   Options: onProgress(done,total), shouldCancel(), onSnapshot(partialIndex),
+   firstSnapshot, longLine. Returns the index, or null when cancelled.            */
+
+/* definition-shaped lines across common languages — captures the declared name.
+   Practical regex, not a parser: covers declarations and `NAME = function|class|(=>)`. */
+/* declarations across JS/TS, Python, Go (top-level func), Rust (pub/mod), Java, C#, Ruby */
+var DEF_DECL_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:pub(?:\([^)]*\))?\s+|declare\s+|public\s+|private\s+|protected\s+|internal\s+|static\s+|abstract\s+|final\s+|sealed\s+|partial\s+)*(?:async\s+)?(function\*?|class|interface|type|struct|enum|trait|impl|def|fn|func|module|mod|const|let|var|sub|proc|record)\s+([A-Za-z_$][\w$]*)/;
+/* Java/C# method declarations: ≥1 modifier keeps call statements/`if (`/`return (` out;
+   `=` excluded from the type-token class keeps field initializers out; `new` is
+   deliberately not a modifier. Gated to .java/.cs files. */
+var DEF_CJ_METHOD_RE = /^\s*(?:(?:public|private|protected|internal|static|final|abstract|sealed|override|virtual|async|partial|synchronized|native)\s+)+(?:[\w$.<>\[\],?]+\s+)*([A-Za-z_$][\w$]*)\s*\(/;
+/* C# properties: `public int Count { get; set; }` — the `{ get|set|init` tail is the gate */
+var DEF_CS_PROP_RE = /^\s*(?:(?:public|private|protected|internal|static|virtual|override|abstract|sealed|required)\s+)+(?:[\w$.<>\[\],?]+\s+)*([A-Za-z_$][\w$]*)\s*\{\s*(?:get|set|init)\b/;
+/* Ruby attribute declarations are the class's public surface */
+var DEF_RB_ATTR_RE = /^\s*attr_(?:accessor|reader|writer)\s+(:\w+(?:\s*,\s*:\w+)*)/;
+/* Kotlin declarations, gated to .kt — `fun`/`object`/`val` ungated would index
+   Markdown prose ("fun facts…"). Optional generics + extension receivers so
+   `fun <T> map()` and `fun String.shout()` capture the real name. */
+var DEF_KT_RE = /^\s*(?:(?:public|private|protected|internal|open|abstract|final|sealed|data|inner|inline|suspend|operator|override|const|lateinit|annotation|value|enum)\s+)*(fun|class|interface|object|val|var|typealias)\s+(?:<[^>]*>\s*)?(?:[A-Za-z_][\w.<>]*\.)?([A-Za-z_]\w*)/;
+/* Swift declarations the global regex misses (protocol/extension/actor/open-prefixed) */
+var DEF_SWIFT_RE = /^\s*(?:(?:public|private|internal|fileprivate|open|final|static|indirect|mutating|override)\s+)*(protocol|extension|actor|class|struct|enum|func|typealias)\s+([A-Za-z_]\w*)/;
+/* C# namespace declarations (braced and file-scoped) — recorded for using-resolution */
+var CS_NAMESPACE_RE = /^\s*namespace\s+([\w.]+)/;
+var DEF_ASSIGN_RE = /^\s*(?:export\s+)?(?:default\s+)?(?:const|let|var|public|private|protected|static|readonly)?\s*([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s+)?(?:function\*?\b|\([^()]*\)\s*(?::[^={]+)?=>|class\b|\([^)]*\)\s*\{)/;
+var DEF_GO_METHOD_RE = /^\s*func\s*\([^)]*\)\s*([A-Za-z_]\w*)/;       /* Go receiver methods: func (r *R) M() */
+var DEF_PY_ASSIGN_RE = /^([A-Za-z_]\w*)\s*(?::[^=\n]+)?=(?!=)\s*\S/;  /* Python module-level NAME = … (no indent, not ==) */
+/* definition kinds that name a reusable unit (for duplicate detection). Excluded on
+   purpose: impl/extension (re-opening a type is normal), method (same-named methods
+   on different types are normal), attr, plain const/let/var values. */
+var UNIT_KINDS = Object.assign(Object.create(null), { 'function': 1, 'function*': 1, 'class': 1, 'interface': 1, 'type': 1, 'struct': 1, 'enum': 1,
+  'trait': 1, 'def': 1, 'fn': 1, 'func': 1, 'module': 1, 'mod': 1, 'sub': 1, 'proc': 1, 'record': 1, 'protocol': 1, 'actor': 1,
+  'object': 1, 'typealias': 1, 'fun': 1, 'arrow': 1 });
+function assignKind(ln) {
+  if (/=>\s*/.test(ln) && /\([^()]*\)\s*(?::[^={]+)?=>/.test(ln)) return 'arrow';
+  if (/\bclass\b/.test(ln)) return 'class';
+  if (/\bfunction\b/.test(ln)) return 'function';
+  return 'const';
+}
+/* import-shaped lines. `lang: null` applies to every file; otherwise the entry only
+   runs when the file's detected language matches — gating stops the Python `import`
+   rule from mangling Java lines and keeps C#'s `using` away from C/C++. */
+var IMPORT_RES = [
+  { re: /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/, lang: null },                      /* dynamic import('m') — check before static */
+  { re: /\bimport\s+(?:[\w${},*\s]+\s+from\s+)?['"]([^'"]+)['"]/, lang: null },     /* import x from 'm' | import 'm' */
+  { re: /\bexport\s+(?:[\w${},*\s]+)\s+from\s+['"]([^'"]+)['"]/, lang: null },      /* export … from 'm' */
+  { re: /\brequire\(\s*['"]([^'"]+)['"]\s*\)/, lang: null },                        /* require('m') */
+  { re: /^\s*(?:pub\s+)?use\s+([A-Za-z_][\w:]*)/, lang: { rust: 1 } },              /* rust: use crate::a::b */
+  { re: /^\s*(?:pub\s+)?mod\s+([A-Za-z_]\w*)\s*;/, lang: { rust: 1 } },             /* rust: mod foo; */
+  { re: /^\s*require(?:_relative)?\s+['"]([^'"]+)['"]/, lang: { ruby: 1 } },        /* ruby: require 'x' | require_relative 'x' */
+  { re: /^\s*use\s+(?:function\s+|const\s+)?([A-Za-z_][\w\\]*)/, lang: { php: 1 } },/* php: use App\Ns\Class; (full backslashed path) */
+  { re: /^\s*(?:require|include)(?:_once)?\s+(?:__DIR__\s*\.\s*)?['"]([^'"]+)['"]\s*;/, lang: { php: 1 } }, /* php: require 'x.php'; */
+  { re: /^\s*import\s+([\w.]+?)(?:\.\*)?(?:\s+as\s+\w+)?\s*;?\s*$/, lang: { kotlin: 1 } }, /* kotlin: import a.b.C [as D] — no semicolons */
+  { re: /^\s*import\s+(?:(?:class|struct|func|enum|protocol|typealias|var|let)\s+)?([A-Za-z_][\w.]*)\s*$/, lang: { swift: 1 } }, /* swift: import Module */
+  { re: /^\s*(?:global\s+)?using\s+(?:static\s+)?(?:\w+\s*=\s*)?([A-Za-z_][\w.]*)\s*;/, lang: { 'c#': 1 } }, /* c#: using Ns; — shape excludes using-statements */
+  { re: /^\s*import\s+(?:static\s+)?([\w.]+?)(?:\.\*)?\s*;/, lang: { java: 1 } },   /* java: import a.b.C; | import static a.b.C.m; | a.b.* */
+  { re: /^\s*from\s+([.\w]+)\s+import\b/, lang: { python: 1 } },                    /* py: from m import … (incl. relative) */
+  { re: /^\s*import\s+([\w.]+)/, lang: { python: 1 } }                              /* py: import m */
+];
+var RESOLVE_EXTS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.rb', '.php', '.java', '.cs', '.vue', '.svelte', '.kt', '.swift'];
+/* export-shaped lines the definition regexes don't cover: JS/TS named re-exports
+   and CommonJS. Declaration exports (export function x / pub fn / Go capitals)
+   are detected off the already-matched definition instead — no second pass. */
+var EXPORT_BRACES_RE = /^\s*(?:export\s*\{([^}]+)\}|module\.exports\s*=\s*\{([^}]+)\})/;
+/* `const x = require('y')` / `= await import('y')` bind an IMPORT, not a definition: no symbol */
+var REQUIRE_INIT_RE = /=\s*(?:await\s+)?(?:require\s*\(|import\s*\()/;
+/* top-level destructuring: `const { a, b: c = 1, ...rest } = obj`, single- or multi-line */
+var DESTRUCT_OPEN_RE = /^(?:export\s+)?(?:const|let|var)\s*\{([^}]*)$/;
+var DESTRUCT_ONE_RE = /^(?:export\s+)?(?:const|let|var)\s*\{([^}]*)\}\s*(?::[^=]+)?=\s*(.*)$/;
+var DESTRUCT_CLOSE_RE = /^([^}]*)\}\s*(?::[^=]+)?=\s*(.*)$/;
+function destructNames(text) {
+  var out = [];
+  text.replace(/\/\*.*?\*\//g, '').split(',').forEach(function (piece) {
+    piece = piece.trim().replace(/^\.\.\./, '');
+    if (!piece || piece.indexOf('{') !== -1 || piece.indexOf('[') !== -1) return; /* nested patterns: skipped */
+    var nm = piece.split('=')[0].split(':').pop().trim();
+    if (/^[A-Za-z_$][\w$]*$/.test(nm)) out.push(nm);
+  });
+  return out;
+}
+/* openers of a brace list that continues on later lines, and the helpers that read one */
+var EXPORT_OPEN_RE = /^\s*(?:export\s*(?:type\s*)?\{|module\.exports\s*=\s*\{)([^}]*)$/;
+var PY_ALL_RE = /^__all__\s*\+?=\s*[\[(](.*)$/;
+var RS_PUB_USE_RE = /^\s*pub(?:\([^)]*\))?\s+use\s+(.*)$/;
+function braceNames(text) {
+  var out = [];
+  text.split(',').forEach(function (piece) {
+    var nm = piece.replace(/\/\*.*?\*\//g, '').trim().split(/\s+as\s+/).pop().split(':')[0].trim();
+    if (/^[A-Za-z_$][\w$]*$/.test(nm)) out.push(nm);
+  });
+  return out;
+}
+/* `pub use a::b::{c, d as e};` / `pub use a::b;` -> the names the module re-exports */
+function rustReexports(text) {
+  var t = text.replace(/;.*$/, '').trim(), out = [], bi = t.indexOf('{');
+  var parts = bi === -1 ? [t] : t.slice(bi + 1, t.lastIndexOf('}') === -1 ? undefined : t.lastIndexOf('}')).split(',');
+  parts.forEach(function (piece) {
+    var nm = piece.trim().split(/\s+as\s+/).pop().split('::').pop().trim();
+    if (/^[A-Za-z_]\w*$/.test(nm) && nm !== 'self' && nm !== 'super' && nm !== 'crate') out.push(nm);
+  });
+  return out;
+}
+var EXPORT_ASSIGN_RE = /^\s*(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=/;
+/* Quote/comment state for the JS-shaped import rules. Import-looking text inside
+   a string (sample projects, test fixtures) or a comment is text, not an import:
+   counting it is how a real repo ends up with CRITICAL "broken imports" that are
+   example code. Only template literals and block comments carry across lines,
+   and only in JS-family files; everything else restarts clean on each line. */
+var JS_CARRY_LANGS = Object.assign(Object.create(null), { js: 1, ts: 1, svelte: 1, vue: 1 });
+var NO_JS_IMPORT_LANGS = Object.assign(Object.create(null), { markdown: 1, json: 1, yaml: 1, toml: 1, css: 1 });
+/* returns the state at column `end`: '' (code), a quote char, '/*', or '//' */
+function quoteStateAt(ln, end, state) {
+  var q = state || '';
+  for (var i = 0; i < end && i < ln.length; i++) {
+    var c = ln.charAt(i);
+    if (q === '//') break;
+    if (q === '/*') { if (c === '*' && ln.charAt(i + 1) === '/') { q = ''; i++; } continue; }
+    if (q) { if (c === '\\') { i++; continue; } if (c === q) q = ''; continue; }
+    if (c === '/' && ln.charAt(i + 1) === '/') { q = '//'; break; }
+    if (c === '/' && ln.charAt(i + 1) === '*') { q = '/*'; i++; continue; }
+    if (c === "'" || c === '"' || c === '`') q = c;
+  }
+  return q;
+}
+/* the state the next line starts in: only a template literal or block comment survives */
+function carryState(ln, state) {
+  var q = quoteStateAt(ln, ln.length, state);
+  return q === '`' || q === '/*' ? q : '';
+}
+/* Generated / vendored / minified files: their "symbols" and "imports" are noise
+   (a bundler's output, protobuf stubs, a vendored library). They stay loaded and
+   searchable, but are not mined for definitions or edges, and the index lists them
+   so answers can say what was left out. Path patterns first (cheap), then a content
+   sniff: a generator banner in the head, or a few very long lines. */
+var GENERATED_PATH_RE = /(\.min\.(?:js|css|mjs)$|\.bundle\.(?:js|mjs)$|(?:^|\/)(?:dist|vendor|third[_-]party|node_modules)\/|\.pb\.go$|_pb2?(?:_grpc)?\.(?:py|js|ts)$|\.generated\.|_generated\.|\.g\.dart$|\.designer\.cs$|-lock\.|\.lock$)/i;
+var GENERATED_HEAD_RE = /(@generated|\bcode generated\b[^\n]*\bdo not edit\b|\bauto-?generated\b[^\n]*\b(?:do not|don't) (?:edit|modify)\b|\bthis file (?:is|was) (?:auto-?)?generated\b)/i;
+function generatedReason(path, content, longLine) {
+  if (GENERATED_PATH_RE.test(path)) return 'path';
+  if (GENERATED_HEAD_RE.test(content.slice(0, 600))) return 'banner';
+  /* minified without a .min name: a big file whose first lines are mostly over the cap */
+  if (content.length > 2000) {
+    var sample = content.slice(0, 6000).split('\n'), long = 0;
+    for (var i = 0; i < sample.length; i++) if (sample[i].length > longLine) long++;
+    if (long >= 2 && long / sample.length > 0.5) return 'minified';
+  }
+  return '';
+}
+/* multi-line JS/TS import/export lists: the specifier lives on the closing line,
+   `} from 'x'`. Only honored after a line opened a brace list with import/export. */
+var JS_BRACE_OPEN_RE = /^\s*(?:import|export)\s+(?:type\s+)?(?:[\w$]+\s*,\s*)?\{[^}]*$/;
+var JS_BRACE_CLOSE_RE = /^\s*\}\s*from\s+['"]([^'"]+)['"]/;
+var BRACE_LOOKBACK = 400;
+
+/* code-health scans, same single pass */
+var TODO_RE = /\b(TODO|FIXME|HACK|XXX)\b/;
+var ENV_RE = /\bprocess\.env\.([A-Z_][A-Z0-9_]*)|\bprocess\.env\[['"]([A-Z_][A-Z0-9_]*)['"]\]|\bimport\.meta\.env\.([A-Z_][A-Z0-9_]*)|\bos\.environ(?:\.get)?\s*[([]\s*['"]([A-Z_][A-Z0-9_]*)['"]|\bos\.getenv\(\s*['"]([A-Z_][A-Z0-9_]*)['"]|\bos\.Getenv\(\s*"([A-Z_][A-Z0-9_]*)"|\benv::var\(\s*"([A-Z_][A-Z0-9_]*)"|\bENV\[['"]([A-Z_][A-Z0-9_]*)['"]\]/;
+var TODO_CAP = 500, ENV_NAME_CAP = 200, ENV_REF_CAP = 50, EXPORT_FILE_CAP = 100;
+/* language id by extension (+ shebang for extensionless scripts) — powers the
+   index-size stat and lets the LOCAL engine phrase results by language */
+/* null-prototype: extensions are project-supplied keys — a file named `x.constructor`
+   must miss, not return Object.prototype.constructor */
+var LANG_BY_EXT = Object.assign(Object.create(null), { js: 'js', jsx: 'js', mjs: 'js', cjs: 'js', ts: 'ts', tsx: 'ts', py: 'python', go: 'go', rs: 'rust',
+  java: 'java', rb: 'ruby', php: 'php', c: 'c', h: 'c', cc: 'cpp', cpp: 'cpp', hpp: 'cpp', cs: 'c#', swift: 'swift',
+  kt: 'kotlin', scala: 'scala', ex: 'elixir', exs: 'elixir', lua: 'lua', sh: 'shell', bash: 'shell', zsh: 'shell',
+  svelte: 'svelte', vue: 'vue', html: 'html', css: 'css', scss: 'css', md: 'markdown', json: 'json', yml: 'yaml', yaml: 'yaml', toml: 'toml' });
+function detectLang(path, content) {
+  var ex = fileExt(path);
+  if (LANG_BY_EXT[ex]) return LANG_BY_EXT[ex];
+  if (!ex && content) {
+    var first = content.slice(0, 80);
+    if (/^#!.*\b(python[0-9.]*)\b/.test(first)) return 'python';
+    if (/^#!.*\b(bash|sh|zsh)\b/.test(first)) return 'shell';
+    if (/^#!.*\bnode\b/.test(first)) return 'js';
+    if (/^#!.*\b(ruby)\b/.test(first)) return 'ruby';
+  }
+  return ex || 'other';
+}
+
+function fileExt(path) {
+  var nm = path.slice(path.lastIndexOf('/') + 1);
+  return nm.indexOf('.') === -1 ? '' : nm.slice(nm.lastIndexOf('.') + 1).toLowerCase();
+}
+function dirOf(path) { return path.indexOf('/') === -1 ? '' : path.slice(0, path.lastIndexOf('/')); }
+
+/* ---- import resolvers: tsconfig paths, Go module prefix, workspace packages.
+   Rebuilt each index pass from the loaded manifests. ---- */
+var F = new Map(); /* the file table of the pass in flight: path -> {content, lang?} */
+var LONG_LINE = 400;
+var idxAlias = [], idxGoModule = '', idxWorkspace = [];
+var idxPkgMeta = {};  /* package.json dir -> { exports, imports, main } */
+var idxCrates = [];   /* Cargo.toml [package] names (hyphens→underscores) -> crate dir */
+var idxPsr4 = [];     /* composer.json psr-4 entries { prefix: 'App\\', dir }, longest first */
+function joinPath(a, b) {
+  var parts = (a ? a.split('/') : []).concat(b ? b.split('/') : []), stack = [];
+  parts.forEach(function (s) { if (s === '' || s === '.') return; if (s === '..') stack.pop(); else stack.push(s); });
+  return stack.join('/');
+}
+/* conditional-exports value → concrete path: import > default > require > node >
+   browser, recursively; the 'types' condition is never taken. */
+function pickCond(v) {
+  if (typeof v === 'string') return v;
+  if (v && typeof v === 'object') {
+    var order = ['import', 'default', 'require', 'node', 'browser'];
+    for (var i = 0; i < order.length; i++) if (v[order[i]] !== undefined) return pickCond(v[order[i]]);
+  }
+  return null;
+}
+/* package.json "exports" (string | conditional object | dotted-key map) → flat
+   { '.': path, './sub': path, './feat/*': path } map, or null */
+function normExports(ex) {
+  if (!ex) return null;
+  if (typeof ex === 'string') return { '.': ex };
+  var keys = Object.keys(ex), map = {}, dotted = keys.some(function (k) { return k.charAt(0) === '.'; });
+  if (!dotted) { var one = pickCond(ex); return one ? { '.': one } : null; }
+  keys.forEach(function (k) { if (k.charAt(0) === '.') { var t = pickCond(ex[k]); if (t) map[k] = t; } });
+  return map;
+}
+/* look a subpath up in a flat exports map: exact key first, then single-* patterns */
+function lookupExports(map, sub) {
+  var key = sub ? './' + sub : '.';
+  if (map[key]) return map[key];
+  var ks = Object.keys(map);
+  for (var i = 0; i < ks.length; i++) {
+    var star = ks[i].indexOf('*');
+    if (star === -1) continue;
+    var pre = ks[i].slice(2, star), suf = ks[i].slice(star + 1);
+    if (sub.indexOf(pre) === 0 && sub.length >= pre.length + suf.length
+        && (suf === '' || sub.slice(sub.length - suf.length) === suf))
+      return map[ks[i]].replace('*', sub.slice(pre.length, sub.length - suf.length));
+  }
+  return null;
+}
+/* the crate a file belongs to: longest Cargo.toml dir prefix */
+function crateFor(f) {
+  var best = null, bestLen = -1;
+  for (var i = 0; i < idxCrates.length; i++) {
+    var dd = idxCrates[i].dir === '' ? '' : idxCrates[i].dir + '/';
+    if ((dd === '' || f.indexOf(dd) === 0) && dd.length > bestLen) { best = idxCrates[i]; bestLen = dd.length; }
+  }
+  return best;
+}
+/* the directory a Rust file's own module owns: mod.rs/lib.rs/main.rs own their dir;
+   foo.rs owns foo/ by convention */
+function selfModDir(f) {
+  var b = f.slice(f.lastIndexOf('/') + 1);
+  return (b === 'mod.rs' || b === 'lib.rs' || b === 'main.rs') ? dirOf(f) : f.slice(0, -3);
+}
+function buildResolvers(paths) {
+  idxAlias = []; idxGoModule = ''; idxWorkspace = []; idxPkgMeta = {}; idxCrates = []; idxPsr4 = [];
+  paths.forEach(function (p) {
+    var nm = p.slice(p.lastIndexOf('/') + 1).toLowerCase();
+    if (nm === 'composer.json') {
+      try {
+        var cj = JSON.parse(F.get(p).content), cdir = dirOf(p);
+        [(cj.autoload || {})['psr-4'], (cj['autoload-dev'] || {})['psr-4']].forEach(function (map) {
+          if (map) Object.keys(map).forEach(function (pref) {
+            var tgt = Array.isArray(map[pref]) ? map[pref][0] : map[pref];
+            if (typeof tgt === 'string') idxPsr4.push({ prefix: pref, dir: joinPath(cdir, tgt) });
+          });
+        });
+      } catch (e) {}
+    } else if (nm === 'package.json') {
+      try {
+        var pj = JSON.parse(F.get(p).content), pdir = dirOf(p) || '.';
+        idxPkgMeta[pdir] = { exports: normExports(pj.exports), imports: pj.imports || null, main: typeof pj.main === 'string' ? pj.main : '' };
+      } catch (e) {}
+    } else if (nm === 'cargo.toml') {
+      /* section-split so a `name =` under [dependencies] can't masquerade as the package */
+      var sects = F.get(p).content.split(/^\s*\[/m);
+      for (var cs = 0; cs < sects.length; cs++) {
+        if (!/^package\]/.test(sects[cs])) continue;
+        var cn = sects[cs].match(/^\s*name\s*=\s*["']([^"']+)["']/m);
+        if (cn) idxCrates.push({ name: cn[1].replace(/-/g, '_'), dir: dirOf(p) });
+      }
+    } else if (nm === 'tsconfig.json' || nm === 'jsconfig.json') {
+      try {
+        var raw = F.get(p).content.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+        var cfg = JSON.parse(raw), co = cfg.compilerOptions || {};
+        var baseUrl = joinPath(dirOf(p), co.baseUrl || '.');
+        if (co.paths) Object.keys(co.paths).forEach(function (k) {
+          var targets = (co.paths[k] || []).map(function (t) { return joinPath(baseUrl, t.replace(/\/?\*$/, '')); });
+          var reStr = '^' + k.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/, '(.*)') + '$';
+          idxAlias.push({ re: new RegExp(reStr), targets: targets, star: k.indexOf('*') !== -1 });
+        });
+      } catch (e) {}
+    } else if (nm === 'go.mod') {
+      var mm = F.get(p).content.match(/^\s*module\s+(\S+)/m);
+      if (mm) idxGoModule = mm[1].replace(/\/+$/, '');
+    }
+  });
+  idxPsr4.sort(function (a, b) { return b.prefix.length - a.prefix.length; }); /* longest prefix wins */
+  detectPackages(paths, F).forEach(function (pk) { if (pk.name) idxWorkspace.push({ name: pk.name, dir: pk.dir === '.' ? '' : pk.dir }); });
+}
+/* try a resolved base against known extensions and index-file conventions */
+function resolveCand(cand) {
+  if (cand === null || cand === undefined) return null;
+  for (var i = 0; i < RESOLVE_EXTS.length; i++) if (F.has(cand + RESOLVE_EXTS[i])) return cand + RESOLVE_EXTS[i];
+  var idxNames = ['/index', '/mod', '/__init__', '/lib'];
+  for (var n = 0; n < idxNames.length; n++)
+    for (var j = 1; j < RESOLVE_EXTS.length; j++) if (F.has(cand + idxNames[n] + RESOLVE_EXTS[j])) return cand + idxNames[n] + RESOLVE_EXTS[j];
+  return null;
+}
+/* resolve a module specifier to a real loaded path — relative paths, Python
+   dotted-relative, tsconfig aliases, Go module prefix, workspace packages.
+   Returns null for truly external modules. */
+function resolveImport(fromFile, mod) {
+  if (!mod) return null;
+  var ext = fileExt(fromFile);
+  /* package.json "imports" (#alias) — resolved against the nearest ancestor
+     package.json that declares an imports map; never falls through */
+  if (mod.charAt(0) === '#') {
+    var bestDir = null, bestLen = -1;
+    Object.keys(idxPkgMeta).forEach(function (d) {
+      if (!idxPkgMeta[d].imports) return;
+      var dd = d === '.' ? '' : d + '/';
+      if ((dd === '' || fromFile.indexOf(dd) === 0) && dd.length > bestLen) { bestDir = d; bestLen = dd.length; }
+    });
+    if (bestDir !== null) {
+      var iv = pickCond(idxPkgMeta[bestDir].imports[mod]);
+      if (iv) return resolveCand(joinPath(bestDir === '.' ? '' : bestDir, iv));
+    }
+    return null;
+  }
+  /* Python dotted imports: from .mod / from ..pkg.mod / import pkg.mod */
+  if (ext === 'py' && mod.indexOf('/') === -1 && /^[.\w]/.test(mod)) {
+    if (mod.charAt(0) === '.') {
+      var up = 0; while (mod.charAt(up) === '.') up++;
+      var baseDir = dirOf(fromFile);
+      for (var u = 1; u < up; u++) baseDir = dirOf(baseDir);
+      return resolveCand(joinPath(baseDir, mod.slice(up).replace(/\./g, '/')));
+    }
+    var pr = resolveCand(mod.replace(/\./g, '/')); if (pr) return pr;
+  }
+  /* Java/Kotlin dotted imports: com.foo.Bar under a source root aligned off the
+     importer's own path, then repo root and Maven/Gradle conventions;
+     `import static a.b.C.m` retries with the member segment dropped. */
+  if ((ext === 'java' || ext === 'kt') && mod.indexOf('.') !== -1 && mod.indexOf('/') === -1) {
+    var jsegs = mod.split('.');
+    var jroots = [], jdir = dirOf(fromFile) + '/';
+    var jcut = jdir.lastIndexOf('/' + jsegs[0] + '/');
+    if (jcut !== -1) jroots.push(jdir.slice(0, jcut + 1));
+    jroots.push('', 'src/main/java/', 'src/main/kotlin/', 'src/test/java/', 'src/test/kotlin/', 'src/');
+    for (var jr = 0; jr < jroots.length; jr++) {
+      var jc = resolveCand(jroots[jr] + jsegs.join('/'));
+      if (!jc && jsegs.length > 1) jc = resolveCand(jroots[jr] + jsegs.slice(0, -1).join('/'));
+      if (jc && jc !== fromFile) return jc;
+    }
+    return null;
+  }
+  /* Swift: module names map to SwiftPM's Sources/<Module>/ convention when it
+     exists; otherwise honest external (Foundation, UIKit…). Best-effort by design. */
+  if (ext === 'swift') {
+    var smod = mod.split('.')[0];
+    var srcAt = fromFile.indexOf('/Sources/');
+    if (srcAt !== -1) {
+      var sroot = fromFile.slice(0, srcAt + 9); /* keep the trailing slash */
+      var sw1 = resolveCand(sroot + smod + '/' + smod) || resolveCand(sroot + smod);
+      if (sw1 && sw1 !== fromFile) return sw1;
+    }
+    var sw2 = resolveCand(joinPath('Sources', smod + '/' + smod)) || resolveCand(joinPath('Sources', smod)) || resolveCand(joinPath(dirOf(fromFile), smod));
+    if (sw2 && sw2 !== fromFile) return sw2;
+    return null;
+  }
+  /* PHP: namespaced `use` via composer psr-4 (longest prefix), then a backslash→
+     slash path guess under common roots; path-ish require/include resolves beside
+     the importer (a leading '/' usually means a stripped __DIR__ concatenation). */
+  if (ext === 'php') {
+    if (mod.indexOf('\\') !== -1) {
+      for (var pi = 0; pi < idxPsr4.length; pi++) {
+        if (mod.indexOf(idxPsr4[pi].prefix) !== 0) continue;
+        var prest = mod.slice(idxPsr4[pi].prefix.length).replace(/\\/g, '/');
+        var pc = resolveCand(joinPath(idxPsr4[pi].dir, prest));
+        if (pc && pc !== fromFile) return pc;
+      }
+      var pflat = mod.replace(/\\/g, '/'), proots = ['', 'src/', 'app/', 'lib/'];
+      for (var pr = 0; pr < proots.length; pr++) {
+        var pg = resolveCand(proots[pr] + pflat);
+        if (pg && pg !== fromFile) return pg;
+      }
+      return null;
+    }
+    var ph1 = resolveCand(joinPath(dirOf(fromFile), mod.replace(/^\//, '')));
+    if (ph1 && ph1 !== fromFile) return ph1;
+    var ph2 = resolveCand(mod.replace(/^\//, ''));
+    if (ph2 && ph2 !== fromFile) return ph2;
+    return null;
+  }
+  /* Ruby: require_relative resolves beside the importer; bare require tries the
+     repo root and a root-level lib/ (deeper lib dirs are not searched — disclosed). */
+  if (ext === 'rb' && mod.charAt(0) !== '.' && mod.charAt(0) !== '/') {
+    var rb1 = resolveCand(joinPath(dirOf(fromFile), mod));
+    if (rb1 && rb1 !== fromFile) return rb1;
+    var rb2 = resolveCand(mod) || resolveCand(joinPath('lib', mod));
+    if (rb2 && rb2 !== fromFile) return rb2;
+    return null;
+  }
+  if (mod.charAt(0) === '.' || mod.charAt(0) === '/') {
+    var base = mod.charAt(0) === '/' ? '' : dirOf(fromFile);
+    return resolveCand(joinPath(base, mod.charAt(0) === '/' ? mod.slice(1) : mod));
+  }
+  /* Rust: mod foo; resolves beside the file */
+  if (ext === 'rs' && /^[A-Za-z_]\w*$/.test(mod)) { var rc = resolveCand(joinPath(dirOf(fromFile), mod)); if (rc) return rc; }
+  /* Rust ::-paths: crate:: / self:: / super:: / cross-crate via Cargo.toml names.
+     Longest module-path prefix wins (use paths name items, not files); every
+     return guards !== fromFile so `use crate::{…}` can't self-edge. */
+  if (ext === 'rs' && mod.indexOf('::') !== -1) {
+    var segs = mod.replace(/:+$/, '').split('::').filter(Boolean);
+    var head = segs.shift(), rbase = null;
+    if (head === 'crate') { var cr = crateFor(fromFile); rbase = cr ? joinPath(cr.dir, 'src') : 'src'; }
+    else if (head === 'self') { rbase = selfModDir(fromFile); }
+    else if (head === 'super') {
+      rbase = dirOf(fromFile);
+      while (segs.length && segs[0] === 'super') { segs.shift(); rbase = dirOf(rbase); }
+    } else {
+      for (var ci = 0; ci < idxCrates.length; ci++) if (idxCrates[ci].name === head) { rbase = joinPath(idxCrates[ci].dir, 'src'); break; }
+      if (rbase === null) return null; /* std::, serde:: … external */
+    }
+    for (var rk = segs.length; rk >= 1; rk--) {
+      var rcand = resolveCand(joinPath(rbase, segs.slice(0, rk).join('/')));
+      if (rcand && rcand !== fromFile) return rcand;
+    }
+    if (head !== 'crate') { var rlz = resolveCand(rbase); if (rlz && rlz !== fromFile) return rlz; }
+    return null;
+  }
+  /* tsconfig/jsconfig path aliases (@/x, ~/x, etc.) */
+  for (var a = 0; a < idxAlias.length; a++) {
+    var m = idxAlias[a].re.exec(mod);
+    if (!m) continue;
+    for (var t = 0; t < idxAlias[a].targets.length; t++) {
+      var full = idxAlias[a].star && m[1] ? joinPath(idxAlias[a].targets[t], m[1]) : idxAlias[a].targets[t];
+      var rr = resolveCand(full); if (rr) return rr;
+    }
+  }
+  /* Go module-prefix: <module>/pkg/x -> pkg/x inside the repo */
+  if (idxGoModule && mod.indexOf(idxGoModule + '/') === 0) { var gr = resolveCand(mod.slice(idxGoModule.length + 1)); if (gr) return gr; }
+  /* workspace package: bare 'pkg' or '@scope/pkg[/sub]' -> its dir, honoring the
+     package's exports map first, then its main field, then dir/src conventions */
+  for (var w = 0; w < idxWorkspace.length; w++) {
+    var wp = idxWorkspace[w];
+    if (mod === wp.name || mod.indexOf(wp.name + '/') === 0) {
+      var sub = mod === wp.name ? '' : mod.slice(wp.name.length + 1);
+      var meta = idxPkgMeta[wp.dir === '' ? '.' : wp.dir];
+      if (meta && meta.exports) {
+        var xt = lookupExports(meta.exports, sub);
+        if (xt) { var xr = resolveCand(joinPath(wp.dir, xt)); if (xr) return xr; }
+      }
+      if (sub === '' && meta && meta.main) { var mr = resolveCand(joinPath(wp.dir, meta.main)); if (mr) return mr; }
+      var wr = resolveCand(joinPath(wp.dir, sub)) || resolveCand(joinPath(wp.dir, joinPath('src', sub)));
+      if (wr) return wr;
+    }
+  }
+  return null;
+}
+
+function buildIndexCore(files, opts) {
+  opts = opts || {};
+  F = files;
+  var symbols = new Map();      /* name -> [{file, line, kind}] */
+  var importsByFile = new Map(); /* file -> [{raw, resolved, line}] */
+  var importedBy = new Map();    /* resolvedFile -> [{file, line}] */
+  var exportsByFile = new Map(); /* file -> [{name, line, kind}] */
+  var todos = [];                /* [{file, line, tag, text}] */
+  var envVars = new Map();       /* NAME -> [{file, line}] */
+  /* null-prototype maps: keys are project-supplied (paths, extensions, namespaces) */
+  var symCountByFile = Object.create(null); /* file -> definition count */
+  var entries = [], tests = [], configs = [], docs = [], byExt = Object.create(null), langs = Object.create(null);
+  var csNamespaces = Object.create(null), csNsCount = 0; /* C# namespace -> first declaring file */
+  var generated = [], totalLines = 0; /* generated/minified files left unmined · lines seen */
+  var longLinesByFile = Object.create(null), longLineCount = 0; /* >400-char lines the scanner skipped */
+  var paths = Array.from(F.keys()).sort(), symbolCount = 0, importCount = 0;
+  buildResolvers(paths);
+  var skipLong = opts.longLine || LONG_LINE;
+
+  function recordImport(file, raw, line) {
+    var resolved = resolveImport(file, raw);
+    (importsByFile.get(file) || (importsByFile.set(file, []), importsByFile.get(file))).push({ raw: raw, resolved: resolved, line: line });
+    if (resolved) (importedBy.get(resolved) || (importedBy.set(resolved, []), importedBy.get(resolved))).push({ file: file, line: line });
+    importCount++;
+  }
+  /* col-0 destructured bindings are real top-level names (unit:false: never a duplicate-definition signal) */
+  function recordDestructured(file, names, line, exported) {
+    names.forEach(function (nm) {
+      if (nm.length < 2) return;
+      var a = symbols.get(nm) || (symbols.set(nm, []), symbols.get(nm));
+      if (a.length < 200) { a.push({ file: file, line: line, kind: 'const', top: true, unit: false }); symbolCount++; symCountByFile[file] = (symCountByFile[file] || 0) + 1; }
+      if (exported) recordExport(file, nm, line, 'const');
+    });
+  }
+  function recordExport(file, name, line, kind) {
+    var arr = exportsByFile.get(file) || (exportsByFile.set(file, []), exportsByFile.get(file));
+    if (arr.length < EXPORT_FILE_CAP) arr.push({ name: name, line: line, kind: kind });
+  }
+
+  var nextSnap = opts.firstSnapshot || 200;
+  for (var pi = 0; pi < paths.length; pi++) {
+    var p = paths[pi];
+    if (pi % 100 === 0) {
+      if (opts.shouldCancel && opts.shouldCancel()) return null;
+      if (opts.onProgress) opts.onProgress(pi, paths.length);
+      /* doubling checkpoints: a usable partial index early, bounded clone cost late */
+      if (opts.onSnapshot && pi >= nextSnap) { opts.onSnapshot(assemble(pi, true)); nextSnap = pi * 2; }
+    }
+    var f = F.get(p);
+    var name = p.slice(p.lastIndexOf('/') + 1), ext = fileExt(p);
+    byExt[ext || '·'] = (byExt[ext || '·'] || 0) + 1;
+    var lang = f.lang || (f.lang = detectLang(p, f.content));
+    langs[lang] = (langs[lang] || 0) + 1;
+    if (TEST_PATH.test(p)) tests.push(p);
+    if (CONFIG_NAMES.test(name)) configs.push(p);
+    if (README_NAMES.test(name) || DOCS_PATH.test(p) || /\.(md|mdx|rst)$/i.test(name)) docs.push(p);
+    if (ENTRY_NAMES.test(name) && !TEST_PATH.test(p)) entries.push(p);
+
+    var genWhy = generatedReason(p, f.content, skipLong);
+    if (genWhy) { generated.push({ file: p, why: genWhy }); totalLines += f.content.split('\n').length; continue; }
+    var isGo = ext === 'go', inGoImport = false, braceOpenAt = -1;
+    var destructBuf = null;
+    var exportBuf = null, pyAllBuf = null, rsUseBuf = null; /* multi-line export lists in flight */
+    var carry = JS_CARRY_LANGS[lang] ? '' : null; /* null: no cross-line state for this language */
+    var lines = f.content.split('\n');
+    totalLines += lines.length;
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i];
+      if (ln.charCodeAt(ln.length - 1) === 13) ln = ln.slice(0, -1); /* CRLF files: `.` and `$` anchors must not see the  */
+      if (ln.length > skipLong) { /* skip minified/one-liners — but count, so answers can disclose */
+        longLineCount++; longLinesByFile[p] = (longLinesByFile[p] || 0) + 1;
+        continue; /* quote state is not advanced across skipped lines (minified code rarely spans template literals) */
+      }
+
+      /* Go import blocks: import ( "a"\n "b" ) — stateful, plus single-line form */
+      if (isGo) {
+        if (inGoImport) {
+          if (/^\s*\)/.test(ln)) inGoImport = false;
+          else { var gm = ln.match(/"([^"]+)"/); if (gm) recordImport(p, gm[1], i + 1); }
+          continue;
+        }
+        if (/^\s*import\s*\(/.test(ln)) { inGoImport = true; continue; }
+        var gs = ln.match(/^\s*import\s+"([^"]+)"/); if (gs) { recordImport(p, gs[1], i + 1); continue; }
+      }
+
+      var md = DEF_DECL_RE.exec(ln), sym = null, kind = null;
+      if (md) {
+        kind = md[1]; sym = md[2];
+        /* Ruby class methods: `def self.helper` captures `self` — take the real name */
+        if (ext === 'rb' && sym === 'self') { var mrs = ln.match(/\bdef\s+self\.([A-Za-z_]\w*)/); sym = mrs ? mrs[1] : null; }
+      }
+      else if (isGo) { var mgo = DEF_GO_METHOD_RE.exec(ln); if (mgo) { kind = 'method'; sym = mgo[1]; } }
+      else if (ext === 'java' || ext === 'cs') {
+        var mcj = DEF_CJ_METHOD_RE.exec(ln);
+        if (mcj) { kind = 'method'; sym = mcj[1]; }
+        else if (ext === 'cs') { var mcp = DEF_CS_PROP_RE.exec(ln); if (mcp) { kind = 'property'; sym = mcp[1]; } }
+      }
+      else if (ext === 'kt') { var mkt = DEF_KT_RE.exec(ln); if (mkt) { kind = mkt[1]; sym = mkt[2]; } }
+      else if (ext === 'swift') { var msw = DEF_SWIFT_RE.exec(ln); if (msw) { kind = msw[1]; sym = msw[2]; } }
+      if (!sym) {
+        if (ext === 'py') { var mp = DEF_PY_ASSIGN_RE.exec(ln); if (mp) { kind = 'const'; sym = mp[1]; } }
+        else { var ma = DEF_ASSIGN_RE.exec(ln); if (ma) { kind = assignKind(ln); sym = ma[1]; } }
+      }
+      /* TypeScript `const enum X` reads as a const named "enum" to the generic rule */
+      if (md && md[1] === 'const' && sym === 'enum') { var mce = /\bconst\s+enum\s+([A-Za-z_$][\w$]*)/.exec(ln); if (mce) { kind = 'enum'; sym = mce[1]; } }
+      /* `const x = require('y')` is an import binding, not a definition */
+      if (sym && JS_CARRY_LANGS[lang] && (kind === 'const' || kind === 'let' || kind === 'var') && REQUIRE_INIT_RE.test(ln)) sym = null;
+      /* top-level destructuring (JS-family, column 0 only) */
+      if (JS_CARRY_LANGS[lang] && carry === '' && !sym) {
+        if (destructBuf) {
+          destructBuf.text += ' ' + ln.replace(/\/\/.*$/, '');
+          var dc = DESTRUCT_CLOSE_RE.exec(destructBuf.text);
+          if (dc) { if (!REQUIRE_INIT_RE.test('= ' + dc[2])) recordDestructured(p, destructNames(dc[1]), destructBuf.line, destructBuf.exp); destructBuf = null; }
+          else if (/\}/.test(ln) || ++destructBuf.n > 60) destructBuf = null;
+        } else if (/^(?:export\s+)?(?:const|let|var)\s*\{/.test(ln)) {
+          var d1 = DESTRUCT_ONE_RE.exec(ln);
+          if (d1) { if (!REQUIRE_INIT_RE.test('= ' + d1[2])) recordDestructured(p, destructNames(d1[1]), i + 1, /^export\b/.test(ln)); }
+          else { var d0 = DESTRUCT_OPEN_RE.exec(ln); if (d0) destructBuf = { line: i + 1, text: d0[1].replace(/\/\/.*$/, ''), n: 0, exp: /^export\b/.test(ln) }; }
+        }
+      }
+      /* a line that starts inside a template literal or block comment is text: no definition */
+      if (carry) sym = null;
+      if (sym && sym.length > 1) {
+        var arr = symbols.get(sym) || (symbols.set(sym, []), symbols.get(sym));
+        /* top: declared at column 0 (not inside a function or class body).
+           unit: a function/class/type-like name, not a plain value; variables
+           count only when they hold a function or class. Both feed `dupes`. */
+        var isVarKind = kind === 'const' || kind === 'let' || kind === 'var' || kind === 'val';
+        var unit = UNIT_KINDS[kind] === 1 || (isVarKind && DEF_ASSIGN_RE.test(ln));
+        if (arr.length < 200) { arr.push({ file: p, line: i + 1, kind: kind, top: !/^\s/.test(ln), unit: unit }); symbolCount++; symCountByFile[p] = (symCountByFile[p] || 0) + 1; }
+        /* declaration exports, off the definition just matched: JS/TS `export …`,
+           Rust `pub …`, Go's uppercase-initial convention, Java/C# `public` */
+        if (/^\s*export\b/.test(ln)) recordExport(p, sym, i + 1, kind);
+        else if (ext === 'rs' && /^\s*pub\b/.test(ln)) recordExport(p, sym, i + 1, kind);
+        else if (isGo && /^[A-Z]/.test(sym)) recordExport(p, sym, i + 1, kind);
+        else if ((ext === 'java' || ext === 'cs') && /^\s*public\b/.test(ln)) recordExport(p, sym, i + 1, kind);
+        else if (ext === 'kt' && !/^\s*(?:private|protected|internal)\b/.test(ln)) recordExport(p, sym, i + 1, kind);
+      }
+      /* Ruby attr declarations: each :name is a public accessor */
+      if (ext === 'rb') {
+        var mra = DEF_RB_ATTR_RE.exec(ln);
+        if (mra) mra[1].split(',').forEach(function (piece) {
+          var an = piece.trim().replace(/^:/, '');
+          if (an.length > 1) {
+            var aArr = symbols.get(an) || (symbols.set(an, []), symbols.get(an));
+            if (aArr.length < 200) { aArr.push({ file: p, line: i + 1, kind: 'attr' }); symbolCount++; symCountByFile[p] = (symCountByFile[p] || 0) + 1; }
+          }
+        });
+      }
+      /* C# namespace declarations feed using-directive resolution (first file wins) */
+      if (ext === 'cs' && csNsCount < 500) {
+        var mns = CS_NAMESPACE_RE.exec(ln);
+        if (mns && !csNamespaces[mns[1]]) { csNamespaces[mns[1]] = p; csNsCount++; }
+      }
+
+      /* multi-line export lists: JS/TS `export {` / `module.exports = {`, Python __all__, Rust `pub use` */
+      var inMulti = false;
+      if (exportBuf) {
+        inMulti = true;
+        var xp = ln.replace(/\/\/.*$/, ''), xc = xp.indexOf('}');
+        exportBuf.text += ' ' + (xc === -1 ? xp : xp.slice(0, xc));
+        if (xc !== -1 || ++exportBuf.n > 100) { braceNames(exportBuf.text).forEach(function (nm) { recordExport(p, nm, exportBuf.line, exportBuf.kind); }); exportBuf = null; }
+      } else if (pyAllBuf) {
+        inMulti = true;
+        pyAllBuf.text += ' ' + ln.replace(/#.*$/, '');
+        if (/[\])]/.test(ln) || ++pyAllBuf.n > 100) {
+          pyAllBuf.text.replace(/['"]([A-Za-z_]\w*)['"]/g, function (_, nm) { recordExport(p, nm, pyAllBuf.line, 'all'); return ''; });
+          pyAllBuf = null;
+        }
+      } else if (rsUseBuf) {
+        inMulti = true;
+        rsUseBuf.text += ' ' + ln;
+        if (ln.indexOf(';') !== -1 || ++rsUseBuf.n > 100) { rustReexports(rsUseBuf.text).forEach(function (nm) { recordExport(p, nm, rsUseBuf.line, 'reexport'); }); rsUseBuf = null; }
+      } else if (JS_CARRY_LANGS[lang] && carry === '' && EXPORT_OPEN_RE.test(ln)) {
+        var xo = EXPORT_OPEN_RE.exec(ln);
+        exportBuf = { line: i + 1, text: xo[1].replace(/\/\/.*$/, ''), n: 0, kind: /^\s*module/.test(ln) ? 'commonjs' : 'named' };
+        inMulti = true;
+      } else if (ext === 'py') {
+        var pa = PY_ALL_RE.exec(ln);
+        if (pa) {
+          if (/[\])]/.test(pa[1])) pa[1].replace(/['"]([A-Za-z_]\w*)['"]/g, function (_, nm) { recordExport(p, nm, i + 1, 'all'); return ''; });
+          else pyAllBuf = { line: i + 1, text: pa[1].replace(/#.*$/, ''), n: 0 };
+        }
+      } else if (ext === 'rs') {
+        var ru = RS_PUB_USE_RE.exec(ln);
+        if (ru) {
+          if (ru[1].indexOf(';') !== -1) rustReexports(ru[1]).forEach(function (nm) { recordExport(p, nm, i + 1, 'reexport'); });
+          else rsUseBuf = { line: i + 1, text: ru[1], n: 0 };
+        }
+      }
+      /* non-declaration export forms: export { a, b as c }, module.exports = {…}, exports.x = */
+      var eb = inMulti ? null : EXPORT_BRACES_RE.exec(ln);
+      if (inMulti) { /* consumed by a multi-line list above */ }
+      else if (eb) {
+        (eb[1] || eb[2]).split(',').forEach(function (piece) {
+          var nm = piece.trim().split(/\s+as\s+/).pop().split(':')[0].trim();
+          if (/^[A-Za-z_$][\w$]*$/.test(nm)) recordExport(p, nm, i + 1, 'named');
+        });
+      } else {
+        var ea = EXPORT_ASSIGN_RE.exec(ln);
+        if (/^\s*export\s+\*\s+(?:as\s+([A-Za-z_$][\w$]*)\s+)?from\s/.test(ln)) recordExport(p, (/^\s*export\s+\*\s+as\s+([A-Za-z_$][\w$]*)/.exec(ln) || [0, '*'])[1], i + 1, 'reexport-all');
+        else if (ea) recordExport(p, ea[1], i + 1, 'commonjs');
+        else if (!sym && /^\s*export\s+default\b/.test(ln)) recordExport(p, 'default', i + 1, 'default');
+      }
+
+      /* code-health: TODO-style tags and environment-variable reads */
+      if (todos.length < TODO_CAP) {
+        var tm = TODO_RE.exec(ln);
+        if (tm) todos.push({ file: p, line: i + 1, tag: tm[1], text: ln.trim().slice(0, 120) });
+      }
+      var em = ENV_RE.exec(ln);
+      if (em) {
+        var envName = em[1] || em[2] || em[3] || em[4] || em[5] || em[6] || em[7] || em[8];
+        if (envName && (envVars.has(envName) || envVars.size < ENV_NAME_CAP)) {
+          var evs = envVars.get(envName) || (envVars.set(envName, []), envVars.get(envName));
+          if (evs.length < ENV_REF_CAP) evs.push({ file: p, line: i + 1 });
+        }
+      }
+
+      var lineState = carry || '';
+      for (var r = 0; r < IMPORT_RES.length; r++) {
+        if (IMPORT_RES[r].lang && !IMPORT_RES[r].lang[lang]) continue;
+        if (!IMPORT_RES[r].lang && NO_JS_IMPORT_LANGS[lang]) continue; /* docs/config: code samples, not imports */
+        var im = IMPORT_RES[r].re.exec(ln);
+        /* `runtime.import('/x')` / `mod.require('y')` are method calls on something else, not module loads */
+        if (im && !IMPORT_RES[r].lang && im.index > 0 && ln.charAt(im.index - 1) === '.') continue;
+        if (im) {
+          /* JS-shaped rules match anywhere on the line: skip text inside a string or comment */
+          if (!IMPORT_RES[r].lang && quoteStateAt(ln, im.index, lineState) !== '') break;
+          recordImport(p, im[1], i + 1); break;
+        }
+      }
+      /* multi-line brace lists (JS-family): remember where one opened, claim its `} from` */
+      if (JS_CARRY_LANGS[lang] && carry === '') {
+        if (JS_BRACE_OPEN_RE.test(ln)) braceOpenAt = i;
+        else if (braceOpenAt !== -1) {
+          var bc = JS_BRACE_CLOSE_RE.exec(ln);
+          if (bc && i - braceOpenAt <= BRACE_LOOKBACK) { recordImport(p, bc[1], braceOpenAt + 1); braceOpenAt = -1; }
+          else if (/\}/.test(ln) || i - braceOpenAt > BRACE_LOOKBACK) braceOpenAt = -1;
+        }
+      }
+      if (carry !== null) carry = carryState(ln, carry);
+    }
+  }
+
+  function assemble(scannedN, partialFlag) {
+    /* C# fixup: `using Acme.Services;` can't resolve until every namespace is seen —
+       patch still-null .cs imports to the namespace's representative (first) file.
+       `using Static.Ns.Type` retries with the type segment dropped. */
+    importsByFile.forEach(function (list, file) {
+      if (fileExt(file) !== 'cs') return;
+      list.forEach(function (e) {
+        if (e.resolved !== null) return;
+        var hit = csNamespaces[e.raw] || csNamespaces[e.raw.replace(/\.[A-Za-z_]\w*$/, '')];
+        if (hit && hit !== file) {
+          e.resolved = hit;
+          (importedBy.get(hit) || (importedBy.set(hit, []), importedBy.get(hit))).push({ file: file, line: e.line });
+        }
+      });
+    });
+
+    return {
+      fileCount: paths.length, scanned: scannedN, symbols: symbols, symbolCount: symbolCount, importCount: importCount,
+      importsByFile: importsByFile, importedBy: importedBy,
+      exportsByFile: exportsByFile, todos: todos, envVars: envVars, symCountByFile: symCountByFile,
+      entries: entries, tests: tests, configs: configs, docs: docs,
+      byExt: byExt, langs: langs, packages: detectPackages(paths, F),
+      longLinesByFile: longLinesByFile, longLineCount: longLineCount, partial: partialFlag,
+      generated: generated, lineCount: totalLines
+    };
+  }
+  var result = assemble(paths.length, false);
+  if (opts.onProgress) opts.onProgress(paths.length, paths.length);
+  return result;
+}
+
+export { buildIndexCore, detectLang, dirOf, fileExt };

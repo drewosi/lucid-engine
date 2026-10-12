@@ -11,6 +11,7 @@ import { openBundleFile, syncSharedUI } from './share.js';
 import { dropRepoFiles, hasRepo, isMulti, registerRepo, remapRoot, repoList, repoName, resetWorkspace, scopeFilter, scopeRepo, uniqueLabel, withScope } from './repos.js';
 import { afterWorkspaceIngest, pendingLabelFor, renderWorkspace } from './workspace.js';
 import { track } from './analytics.js';
+import { startBackgroundIndex } from './index-run.js';
 /* ============ CONTEXT ENGINE ============ */
 var SKIP_LIST_MAX = 500;
 function recordSkip(path, reason, size, ref) {
@@ -238,8 +239,11 @@ function afterIngest() {
      load-bearing: recordSessionDrift must run after renderOverview's rebuild. */
   setStatus('INDEXING: ' + st.files.size + ' files…');
   var finish = function () {
+    /* big projects index in a worker: the overview paints from the partial index
+       and re-renders when the full one lands (meridian:index-ready) */
+    var bg = startBackgroundIndex();
     renderOverview();
-    setStatus('IDLE: ' + st.files.size + ' files in memory');
+    if (!bg) setStatus('IDLE: ' + st.files.size + ' files in memory');
     /* graceful scaling: warn as the in-memory file cap approaches or is hit */
     var wsCap = isMulti() ? ' The cap covers every repo in the workspace together; unload a repo to make room.' : '';
     if (st.skipped.memcap) toast('Memory cap reached (~' + Math.round(MAX_TOTAL / (1024 * 1024)) + 'MB of text): ' + st.skipped.memcap + ' file' + (st.skipped.memcap === 1 ? '' : 's') + ' not loaded. Narrow the folder or add ignore patterns.' + wsCap);
@@ -248,7 +252,7 @@ function afterIngest() {
     maybeAutoSmart();
     /* last: renderOverview above has already rebuilt the index. A shared
        project is someone else's snapshot — nothing about it is persisted. */
-    if (!st.shared) recordSessionDrift();
+    if (!st.shared && !bg) recordSessionDrift();
   };
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { setTimeout(finish, 0); });
   else setTimeout(finish, 0);
@@ -323,6 +327,21 @@ function pickFolder(opts) {
     });
   } else { nextPick = opts; $('dirpick').click(); }
 }
+/* the webkitdirectory picker hands us a flat FileList with no directory objects to skip,
+   so ignored dirs are tallied once per distinct ignored directory here, matching the
+   directory-level skip of the drop (collectEntry) and File System Access (collectHandle)
+   walks. Exported so a self-test can prove all three agree. */
+function collectFromFileList(list, label) {
+  var seenIgnored = Object.create(null), items = [];
+  list.forEach(function (f) {
+    var path = f.webkitRelativePath || f.name;
+    var pref = ignoredDirPrefix(path);
+    if (pref) { if (!seenIgnored[pref]) { seenIgnored[pref] = 1; st.skipped.dirs++; } return; }
+    if (label) path = remapRoot(path, label);
+    items.push({ path: path, getFile: function () { return Promise.resolve(f); } });
+  });
+  return items;
+}
 function pickHandler(input) {
   var list = Array.prototype.slice.call(input.files || []);
   var opts = nextPick || {};
@@ -333,17 +352,7 @@ function pickHandler(input) {
      ignored dirs would otherwise be counted once per file (drop/FSA count them
      once per directory). Pre-filter here and tally each distinct ignored dir
      once, so the skip count means the same thing regardless of load path. */
-  function collect(label) {
-    var seenIgnored = Object.create(null), items = [];
-    list.forEach(function (f) {
-      var path = f.webkitRelativePath || f.name;
-      var pref = ignoredDirPrefix(path);
-      if (pref) { if (!seenIgnored[pref]) { seenIgnored[pref] = 1; st.skipped.dirs++; } return; }
-      if (label) path = remapRoot(path, label);
-      items.push({ path: path, getFile: function () { return Promise.resolve(f); } });
-    });
-    return items;
-  }
+  function collect(label) { return collectFromFileList(list, label); }
   var rel = list.length ? (list[0].webkitRelativePath || '') : '';
   if (rel.indexOf('/') === -1) {
     /* loose files are additive and belong to no repo */
@@ -851,9 +860,13 @@ function __setCapsForTest(o) {
 /* the ingest caps, for the workspace meter (they cover every repo together) */
 function capInfo() { return { maxFiles: MAX_FILES, maxTotal: MAX_TOTAL, maxFile: MAX_FILE }; }
 
-export { DEFAULT_MAX_FILES, IGNORE_DIRS, __setCapsForTest, afterIngest, capInfo, loadMaxFiles, parseMaxFiles, claimLabel, clearContext, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, loadHandle, maybeAutoSmart, openPreview, openSkipReview, pickFolder, prevveil, recordSkip, refreshSkipUI, renderBudget, renderTree, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
+export { collectEntry, collectFromFileList, DEFAULT_MAX_FILES, IGNORE_DIRS, __setCapsForTest, afterIngest, capInfo, loadMaxFiles, parseMaxFiles, claimLabel, clearContext, closePreview, closeSkipReview, getIgnoreText, ignoredDirPrefix, ingestFile, loadHandle, maybeAutoSmart, openPreview, openSkipReview, pickFolder, prevveil, recordSkip, refreshSkipUI, renderBudget, renderTree, runIngestPool, selectedTokens, setCtxMode, setIgnoreText, skipveil, suggestIgnore, syncBudgetState };
 
 export function initIngest() {
+  document.addEventListener('meridian:index-ready', function () {
+    renderOverview();
+    if (!st.shared) recordSessionDrift();
+  });
   st.files = new Map();       /* path -> {content, lines, tokens, mtime, base, checked} */
   st.skipped = { dirs: 0, binary: 0, big: 0, over: 0, user: 0, readerr: 0, memcap: 0 };
   st.totalBytes = 0;

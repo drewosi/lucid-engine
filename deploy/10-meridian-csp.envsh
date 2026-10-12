@@ -1,0 +1,39 @@
+#!/bin/sh
+# Sourced by the nginx image entrypoint before templates are rendered.
+# Builds the connect-src list from the environment, validates it, exports
+# CONNECT_SRC for nginx.conf.template, and rewrites the <meta> CSP in app.html to
+# match (a meta CSP and a header CSP are both enforced, so they must agree).
+#
+#   MERIDIAN_AIRGAP=1   drop api.anthropic.com / api.openai.com; only localhost
+#                       model servers plus the origins below remain
+#   LLM_ORIGIN=https://llm.corp.example    your internal OpenAI-compatible gateway
+#   AUDIT_ORIGIN=https://audit.corp.example   collector for the opt-in usage log
+#                       (see deploy/audit-sink.mjs); set it in Settings -> usage analytics
+#
+# HTML_DIR overrides the web root (used by deploy/test-csp.sh).
+HTML_DIR="${HTML_DIR:-/usr/share/nginx/html}"
+
+meridian_check_origin() {
+  # https origin only: scheme + host[:port], no path, query, userinfo or wildcard
+  printf '%s' "$1" | grep -Eq '^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
+}
+
+CONNECT="http://localhost:* http://127.0.0.1:*"
+if [ "${MERIDIAN_AIRGAP:-0}" != "1" ]; then
+  CONNECT="https://api.anthropic.com https://api.openai.com $CONNECT"
+fi
+for pair in "LLM_ORIGIN:${LLM_ORIGIN:-}" "AUDIT_ORIGIN:${AUDIT_ORIGIN:-}"; do
+  name="${pair%%:*}"; val="${pair#*:}"
+  [ -z "$val" ] && continue
+  if meridian_check_origin "$val"; then
+    CONNECT="$CONNECT $val"
+  else
+    echo "meridian: $name must be a bare https origin like https://host[:port] (got: $val)" >&2
+    exit 1
+  fi
+done
+
+export CONNECT_SRC="$CONNECT"
+# rewrite only the connect-src directive inside the meta CSP of app.html
+sed -i "s#connect-src [^;\"]*;#connect-src $CONNECT;#" "$HTML_DIR/app.html"
+echo "meridian: connect-src = $CONNECT"

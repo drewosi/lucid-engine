@@ -6,7 +6,9 @@ import { estTokens, getBudget } from './smart-context.js';
 import { selectedTokens } from './ingest.js';
 import { askLocal, classifyIntent } from './local.js';
 import { analyticsOn, track } from './analytics.js';
-import { addAiMsg, addUserMsg, atBottom, attachCopy, extractTrace, renderFound, renderRich, renderTrace, scrollEnd } from './trace.js';
+import { addAiMsg, addUserMsg, atBottom, attachCopy, extractTrace, renderFound, renderIntegrity, renderRich, renderTrace, scrollEnd } from './trace.js';
+import { verifyEvidence } from './verify.js';
+import { resolveCitePath } from './repos.js';
 import { FENCE, INSTRUCTIONS, STRICT_SUFFIX, buildContextBlocks } from './prompt.js';
 /* ============ COST ============ */
 function renderCost() {
@@ -299,6 +301,15 @@ function ask(q, key, opts) {
         degraded: parsed.degraded,
         retry: canRetry ? function () { ask(q, key, { strict: true, reask: true }); } : null
       });
+      /* post-check every model answer: cited files exist, ranges are real, quotes match.
+         Runs on the prose too, so it still works when the model skipped the JSON trace. */
+      var integrity = null;
+      try {
+        if (parsed.answer && parsed.answer !== '(empty)') {
+          integrity = verifyEvidence({ trace: parsed.trace, answer: parsed.answer, files: st.files, resolve: resolveCitePath });
+          renderIntegrity(msgEl, integrity, parsed.trace ? function () { ask(q, key, { strict: true, reask: true }); } : null);
+        }
+      } catch (ie) { integrity = null; }
       if (stopReason === 'max_tokens') {
         var n = document.createElement('div');
         n.className = 'errline'; n.textContent = '// output truncated at max_tokens';
@@ -314,7 +325,7 @@ function ask(q, key, opts) {
       }
       st.history.push({ role: 'user', content: q });
       st.history.push({ role: 'assistant', content: parsed.answer || '(empty)' });
-      st.transcript.push({ q: q, answer: parsed.answer || '(empty)', trace: parsed.trace, model: MODELS[st.model].label, provider: PROVIDERS[st.curProvider].label, ts: Date.now() });
+      st.transcript.push({ q: q, answer: parsed.answer || '(empty)', trace: parsed.trace, model: MODELS[st.model].label, provider: PROVIDERS[st.curProvider].label, ts: Date.now(), integrity: integrity });
       attachCopy(msgEl, st.transcript.length - 1);
       logQuestion('ok');
       setStatus('IDLE: response complete');

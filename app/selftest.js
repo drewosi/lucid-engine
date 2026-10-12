@@ -20,6 +20,11 @@ import { evidenceChip } from './trace.js';
 import { closeViewer } from './viewer.js';
 import { afterWorkspaceIngest, pendingLabelFor } from './workspace.js';
 import { projectSig } from './drift.js';
+import { indexCases } from './selftest-index.js';
+import { sealCases } from './selftest-seal.js';
+import { verifyCases } from './selftest-verify.js';
+import { diagCases } from './selftest-diag.js';
+import { parityCases } from './selftest-parity.js';
 import { AN_FORMAT, AN_Q_MAX, CSV_COLS, EVENT_FIELDS, __setAnalyticsForTest, analyticsCSV, analyticsJSON, analyticsOn, clearAnalytics, endpointUrl,
   flushAnalyticsSend, idbStore, percentile, readEvents, sanitizeEvent, storeText, summarize, track, validEndpoint } from './analytics.js';
 /* ============ SELF-TESTS (DEV · EXPERIMENTAL) ============
@@ -1209,6 +1214,8 @@ function runSelfTests() {
     workspaceCases(ok);
     demoLinkCases(ok);
     demoCatchCases(ok);
+    verifyCases(ok);
+    diagCases(ok);
   } catch (e) {
     ok('harness executed without throwing', false, String(e && e.message || e));
     restore();
@@ -1223,6 +1230,12 @@ function runSelfTests() {
     return shareCases(ok).catch(function (e) { ok('share harness executed without throwing', false, String(e && e.message || e)); });
   }).then(function () {
     return analyticsCases(ok).catch(function (e) { ok('analytics harness executed without throwing', false, String(e && e.message || e)); });
+  }).then(function () {
+    return indexCases(ok).catch(function (e) { ok('index worker harness executed without throwing', false, String(e && e.message || e)); });
+  }).then(function () {
+    return sealCases(ok).catch(function (e) { ok('protected share harness executed without throwing', false, String(e && e.message || e)); });
+  }).then(function () {
+    return parityCases(ok).catch(function (e) { ok('load-path parity harness executed without throwing', false, String(e && e.message || e)); });
   }).then(function () {
     restore();
     return results;

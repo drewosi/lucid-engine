@@ -4,8 +4,12 @@
    reason), SMART-mode grounding is sent even with nothing checked, SSE handles
    CRLF + unterminated tails, search is bounded and honest about it, project-
    supplied keys can't collide with Object.prototype, and Tailwind's CDN is gone
-   — script-src is 'self', zero third-party requests. (F6, the legal
-   placeholders, is deliberately left open.)
+   — script-src is 'self', zero third-party requests.
+   Legal text (v0.7): the earlier [ENTITY]/[JURISDICTION] placeholders are gone.
+   terms.html and privacy.html name the operator as an individual (Drew Osipenko)
+   and set governing law to "where the operator resides", and the code is MIT
+   (LICENSE). Still open and for counsel, not code: a registered entity name and
+   a named jurisdiction. Nothing in the app or the hosted pages is a placeholder.
 
    Entry point. Modules own their functions and wiring; this file fixes the one
    thing that must stay global: the order things initialize in. The init*() calls
@@ -26,6 +30,8 @@ import { runSelfTests, runAndShowSelfTests } from './selftest.js';
 import { initShare, closeShare, openShareFromHash, shareveil } from './share.js';
 import { initWorkspace } from './workspace.js';
 import { initAnalytics, closeAnalytics, anveil } from './analytics.js';
+import { initDiagnostics } from './diagnostics.js';
+import { APP_VERSION } from './version.js';
 
 /* frame-buster — a <meta> CSP cannot carry frame-ancestors, so refuse to run
    framed: hide the document and bounce the top window to this URL (setting a
@@ -36,6 +42,7 @@ if (window.top !== window.self) {
   throw new Error('meridian: refusing to run inside a frame');
 }
 
+initDiagnostics(); /* last-error capture for the redacted diagnostics report */
 initShell();    /* provider + model from localStorage, theme, first-run veil, settings drawer, rail */
 initIngest();   /* pickers/dropzone/tree wiring, ground + strict-trace + budget/spend state, ignore patterns */
 initDemo();     /* first-run demo buttons */
@@ -95,4 +102,4 @@ openDemoFromUrl();      /* app.html?demo: the landing page's demo link; ignored 
 openShareFromHash();    /* app.html#share=… — decoded in this tab, then the fragment is cleared */
 window.__meridianSelfTest = runSelfTests; /* L3: run from the console (async — returns a Promise of results) */
 if (/[?&]selftest\b/.test(location.search)) setTimeout(runAndShowSelfTests, 300);
-console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', 'Engine v0.6 · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');
+console.log('%cMERIDIAN WORKBENCH', 'color:#FF5C0A;font-weight:bold', 'Engine v' + APP_VERSION + ' · free beta. zero egress to us; requests go browser → api.anthropic.com under your key. Run __meridianSelfTest() or add ?selftest.');

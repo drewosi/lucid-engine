@@ -460,6 +460,40 @@ function renderTrace(msgEl, trace, opts) {
   }
 }
 
+/* Evidence-integrity strip under a model answer (see verify.js). VERIFIED / UNVERIFIED
+   with the exact failing citations / UNCITED. `retry`, when given, is the one-click
+   re-ground: re-run the deterministic investigation and ask again, stricter. */
+function renderIntegrity(msgEl, rep, retry) {
+  var bd = msgEl.querySelector('.bd');
+  if (!bd || !rep) return;
+  var box = document.createElement('div');
+  box.className = 'integrity mono ' + rep.status;
+  var head = document.createElement('div');
+  head.className = 'integrity-hd';
+  head.textContent = rep.status === 'verified'
+    ? '✓ EVIDENCE VERIFIED · ' + rep.checked + ' citation' + (rep.checked === 1 ? '' : 's') + ': files exist, line ranges are real, quotes match'
+    : rep.status === 'unverified'
+      ? '✗ UNVERIFIED · ' + rep.failures.length + ' of ' + rep.checked + ' citation' + (rep.checked === 1 ? '' : 's') + ' failed the check. Do not rely on this answer’s sources until fixed.'
+      : '○ UNCITED · no file citations to check. Treat this answer as unsupported by the loaded code.';
+  box.appendChild(head);
+  if (rep.failures.length) {
+    var ul = document.createElement('ul');
+    rep.failures.slice(0, 12).forEach(function (f) {
+      var li = document.createElement('li');
+      li.textContent = f.file + ':' + f.start + (f.end !== f.start ? '–' + f.end : '') + ' · ' + f.detail + (f.source === 'prose' ? ' (cited in the answer text)' : '');
+      ul.appendChild(li);
+    });
+    if (rep.failures.length > 12) { var more = document.createElement('li'); more.textContent = '…and ' + (rep.failures.length - 12) + ' more'; ul.appendChild(more); }
+    box.appendChild(ul);
+  }
+  bd.appendChild(box);
+  if (rep.status === 'unverified') {
+    var chip = msgEl.querySelector('.term-hd .chip');
+    if (chip) { chip.className = 'chip err'; chip.textContent = 'UNVERIFIED'; chip.title = 'One or more citations failed the post-check'; }
+    if (typeof retry === 'function') appendRegroundBtn(bd, retry);
+  }
+}
+
 function evExcerpt(ev) {
   if (!ev || typeof ev.file !== 'string' || !st.files.has(ev.file)) return null;
   var lines = st.files.get(ev.file).content.split('\n');
@@ -514,6 +548,12 @@ function exchangeMarkdown(x, i) {
     L.push('_trace unavailable for this exchange_');
     L.push('');
   }
+  if (x.integrity) {
+    var ig = x.integrity;
+    L.push('**Evidence check:** ' + (ig.status === 'verified' ? 'VERIFIED (' + ig.checked + ' citations)' : ig.status === 'unverified' ? 'UNVERIFIED (' + ig.failures.length + ' of ' + ig.checked + ' failed)' : 'UNCITED (nothing to check)'));
+    ig.failures.forEach(function (f) { L.push('- `' + f.file + ':' + f.start + (f.end !== f.start ? '-' + f.end : '') + '`: ' + f.detail); });
+    L.push('');
+  }
   return L.join('\n');
 }
-export { addAiMsg, addUserMsg, atBottom, attachCopy, convoIn, evExcerpt, evidenceChip, exchangeMarkdown, extractTrace, renderFound, renderPinTray, renderRich, renderTrace, scrollEnd };
+export { renderIntegrity, addAiMsg, addUserMsg, atBottom, attachCopy, convoIn, evExcerpt, evidenceChip, exchangeMarkdown, extractTrace, renderFound, renderPinTray, renderRich, renderTrace, scrollEnd };

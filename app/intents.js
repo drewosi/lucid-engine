@@ -1,4 +1,5 @@
 import { sortedPaths, st } from './state.js';
+import { tierNote } from './lang-tiers.js';
 import { queryTerms } from './smart-context.js';
 import { dirOf, fileExt, getIndex } from './indexer.js';
 import { localSearchData, searchLimitNote } from './actions.js';
@@ -119,12 +120,26 @@ function pickPathish(q) {
 
 var LOCAL_VERDICT = function () { return { local: true, text: 'KNOWN LOCALLY' }; };
 
+/* the index is still being built (or its build was cancelled): say so on every answer */
+function partialNote(idx) {
+  return '\n\n**Partial index:** ' + idx.scanned + ' of ' + idx.fileCount + ' files indexed so far. Counts, orphans and import edges can change when indexing finishes; ask again then for a complete answer.';
+}
+
 /* honest-labeling note for graph answers: the indexer skips >400-char lines, so
    import edges on them are invisible — orphans/broken must say so, not imply certainty */
 function longLineNote(idx) {
-  if (!idx.longLineCount) return '';
-  return '\n\nNote: ' + plural(idx.longLineCount, 'line') + ' over 400 chars in ' + plural(Object.keys(idx.longLinesByFile).length, 'file')
-    + ' were not indexed (minified/one-line content): imports on those lines are invisible, so such files can appear orphaned or their targets unresolved.';
+  var out = tierNote(idx.langs);
+  if (idx.longLineCount) {
+    out += '\n\nNote: ' + plural(idx.longLineCount, 'line') + ' over 400 chars in ' + plural(Object.keys(idx.longLinesByFile).length, 'file')
+      + ' were not indexed (minified/one-line content): imports on those lines are invisible, so such files can appear orphaned or their targets unresolved.';
+    var pct = idx.lineCount ? idx.longLineCount * 100 / idx.lineCount : 0;
+    if (pct > 10) out += '\n\n**Warning:** ' + Math.round(pct) + '% of all lines were skipped as over-long. This index is unreliable for this project; treat counts and graph answers as lower bounds.';
+  }
+  if (idx.generated && idx.generated.length) {
+    out += '\n\nNote: ' + plural(idx.generated.length, 'generated/minified/vendored file') + ' (e.g. `' + idx.generated.slice(0, 3).map(function (g) { return g.file; }).join('`, `')
+      + '`) were not mined for symbols or imports.';
+  }
+  return out;
 }
 
 /* shared evidence-gathering used by plain + reason: term search → ranked files.
@@ -1081,7 +1096,9 @@ function classifyIntent(q) {
 function runInvestigation(q, intent) {
   var idx = getIndex();
   var entry = BY_KIND[intent.kind] || BY_KIND.plain;
-  return entry.run(intent.arg, q, idx, intent);
+  var out = entry.run(intent.arg, q, idx, intent);
+  if (idx.partial && out && typeof out.answer === 'string') out.answer += partialNote(idx);
+  return out;
 }
 
 /* grounding label map for prompt.js — kind → evidence-kind, from the registry */
@@ -1091,4 +1108,4 @@ function groundKinds() {
   return out;
 }
 
-export { CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, LOCAL_MENU, LOCAL_STARTERS, classifyIntent, computeSignals, evAt, groundKinds, listOrphans, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };
+export { partialNote, CAP_LOCAL, CAP_MODEL, INTENTS, LOCAL_HELP, LOCAL_MENU, LOCAL_STARTERS, classifyIntent, computeSignals, evAt, groundKinds, listOrphans, localEvidence, pickPathish, pickSymbol, resolveToFile, runInvestigation, symLookup };

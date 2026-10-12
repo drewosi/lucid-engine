@@ -1,0 +1,10 @@
+# Repositories used by scripts/eval-index.mjs (shallow clones; commits are recorded in index-eval.json)
+https://github.com/expressjs/express
+https://github.com/axios/axios
+https://github.com/colinhacks/zod
+https://github.com/sindresorhus/got
+https://github.com/fastify/fastify
+https://github.com/vitejs/vite
+https://github.com/pallets/flask
+https://github.com/psf/requests
+https://github.com/pallets/click

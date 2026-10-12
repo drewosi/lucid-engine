@@ -1,0 +1,718 @@
+{
+ "date": "2026-10-12",
+ "aggregate": {
+  "js": {
+   "files": 2893,
+   "imports": {
+    "tp": 8019,
+    "pred": 8022,
+    "truth": 8024,
+    "precision": 0.9996260284218399,
+    "recall": 0.9993768693918246
+   },
+   "symbols": {
+    "tp": 9197,
+    "pred": 9197,
+    "truth": 9252,
+    "precision": 1,
+    "recall": 0.9940553393860787
+   }
+  },
+  "py": {
+   "files": 211,
+   "imports": {
+    "tp": 1282,
+    "pred": 1295,
+    "truth": 1282,
+    "precision": 0.9899613899613899,
+    "recall": 1
+   },
+   "symbols": {
+    "tp": 2096,
+    "pred": 2101,
+    "truth": 2102,
+    "precision": 0.9976201808662541,
+    "recall": 0.9971455756422455
+   }
+  }
+ },
+ "repos": [
+  {
+   "repo": "axios",
+   "commit": "f694ecd",
+   "files": 449,
+   "indexMs": 93,
+   "generatedSkipped": 6,
+   "js": {
+    "files": 263,
+    "imports": {
+     "tp": 801,
+     "pred": 801,
+     "truth": 801,
+     "precision": 1,
+     "recall": 1
+    },
+    "symbols": {
+     "tp": 884,
+     "pred": 884,
+     "truth": 895,
+     "precision": 1,
+     "recall": 0.9877094972067039
+    },
+    "sample": [
+     [
+      "sym-fn",
+      "lib/core/AxiosHeaders.js",
+      "PROTO_HEADER_SLOT"
+     ],
+     [
+      "sym-fn",
+      "lib/core/AxiosHeaders.js",
+      "headerSlot"
+     ],
+     [
+      "sym-fn",
+      "lib/core/AxiosHeaders.js",
+      "matchHeaderValue"
+     ],
+     [
+      "sym-fn",
+      "lib/core/AxiosHeaders.js",
+      "formatHeader"
+     ],
+     [
+      "sym-fn",
+      "lib/core/AxiosHeaders.js",
+      "buildAccessors"
+     ],
+     [
+      "sym-fn",
+      "lib/core/AxiosHeaders.js",
+      "AxiosHeaders"
+     ],
+     [
+      "sym-fn",
+      "lib/utils.js",
+      "isReadableStream"
+     ],
+     [
+      "sym-fn",
+      "lib/utils.js",
+      "isRequest"
+     ],
+     [
+      "sym-fn",
+      "lib/utils.js",
+      "isResponse"
+     ],
+     [
+      "sym-fn",
+      "lib/utils.js",
+      "isHeaders"
+     ],
+     [
+      "sym-fn",
+      "tests/unit/axiosHeaders.test.js",
+      "nodeMajorVersion"
+     ]
+    ]
+   },
+   "py": null
+  },
+  {
+   "repo": "click",
+   "commit": "2247b35",
+   "files": 154,
+   "indexMs": 44,
+   "generatedSkipped": 0,
+   "js": null,
+   "py": {
+    "files": 91,
+    "imports": {
+     "tp": 494,
+     "pred": 496,
+     "truth": 494,
+     "precision": 0.9959677419354839,
+     "recall": 1
+    },
+    "symbols": {
+     "tp": 1072,
+     "pred": 1077,
+     "truth": 1075,
+     "precision": 0.9953574744661096,
+     "recall": 0.9972093023255814
+    },
+    "sample": [
+     [
+      "sym-fn",
+      "docs/conf.py",
+      "release"
+     ],
+     [
+      "sym-fn",
+      "docs/conf.py",
+      "version"
+     ],
+     [
+      "sym-fp",
+      "src/click/shell_completion.py",
+      "COMP_CWORD"
+     ],
+     [
+      "import-fp",
+      "tests/test_imports.py",
+      "builtins"
+     ],
+     [
+      "import-fp",
+      "tests/test_imports.py",
+      "click"
+     ],
+     [
+      "sym-fp",
+      "tests/test_imports.py",
+      "found_imports"
+     ],
+     [
+      "sym-fp",
+      "tests/test_imports.py",
+      "real_import"
+     ],
+     [
+      "sym-fp",
+      "tests/test_imports.py",
+      "tracking_import"
+     ],
+     [
+      "sym-fp",
+      "tests/test_imports.py",
+      "rv"
+     ],
+     [
+      "sym-fn",
+      "tests/typing/typing_aliased_group.py",
+      "cli"
+     ]
+    ]
+   }
+  },
+  {
+   "repo": "express",
+   "commit": "a419aa7",
+   "files": 164,
+   "indexMs": 23,
+   "generatedSkipped": 0,
+   "js": {
+    "files": 141,
+    "imports": {
+     "tp": 393,
+     "pred": 393,
+     "truth": 393,
+     "precision": 1,
+     "recall": 1
+    },
+    "symbols": {
+     "tp": 137,
+     "pred": 137,
+     "truth": 139,
+     "precision": 1,
+     "recall": 0.9856115107913669
+    },
+    "sample": [
+     [
+      "sym-fn",
+      "test/Route.js",
+      "Route"
+     ],
+     [
+      "sym-fn",
+      "test/Router.js",
+      "Router"
+     ]
+    ]
+   },
+   "py": null
+  },
+  {
+   "repo": "fastify",
+   "commit": "3ad5a42",
+   "files": 379,
+   "indexMs": 102,
+   "generatedSkipped": 2,
+   "js": {
+    "files": 295,
+    "imports": {
+     "tp": 1165,
+     "pred": 1165,
+     "truth": 1167,
+     "precision": 1,
+     "recall": 0.998286203941731
+    },
+    "symbols": {
+     "tp": 697,
+     "pred": 697,
+     "truth": 701,
+     "precision": 1,
+     "recall": 0.9942938659058488
+    },
+    "sample": [
+     [
+      "import-fn",
+      "fastify.d.ts",
+      "./types/hooks"
+     ],
+     [
+      "sym-fn",
+      "lib/content-type.js",
+      "quotedPairReg"
+     ],
+     [
+      "sym-fn",
+      "lib/content-type.js",
+      "typeNameReg"
+     ],
+     [
+      "sym-fn",
+      "test/has-route.test.js",
+      "fastify"
+     ],
+     [
+      "sym-fn",
+      "test/serialize-response.test.js",
+      "handler"
+     ],
+     [
+      "import-fn",
+      "types/instance.d.ts",
+      "./hooks"
+     ]
+    ]
+   },
+   "py": null
+  },
+  {
+   "repo": "flask",
+   "commit": "d086db8",
+   "files": 113,
+   "indexMs": 16,
+   "generatedSkipped": 1,
+   "js": null,
+   "py": {
+    "files": 83,
+    "imports": {
+     "tp": 491,
+     "pred": 502,
+     "truth": 491,
+     "precision": 0.9780876494023905,
+     "recall": 1
+    },
+    "symbols": {
+     "tp": 709,
+     "pred": 709,
+     "truth": 711,
+     "precision": 1,
+     "recall": 0.9971870604781997
+    },
+    "sample": [
+     [
+      "sym-fn",
+      "docs/conf.py",
+      "release"
+     ],
+     [
+      "sym-fn",
+      "docs/conf.py",
+      "version"
+     ],
+     [
+      "import-fp",
+      "src/flask/app.py",
+      "flask"
+     ],
+     [
+      "import-fp",
+      "src/flask/app.py",
+      "name"
+     ],
+     [
+      "import-fp",
+      "src/flask/app.py",
+      "flask.testing"
+     ],
+     [
+      "import-fp",
+      "src/flask/config.py",
+      "yourapplication"
+     ],
+     [
+      "import-fp",
+      "src/flask/config.py",
+      "tomllib"
+     ],
+     [
+      "import-fp",
+      "src/flask/ctx.py",
+      "gevent"
+     ],
+     [
+      "import-fp",
+      "src/flask/ctx.py",
+      "flask"
+     ],
+     [
+      "import-fp",
+      "src/flask/helpers.py",
+      "flask"
+     ],
+     [
+      "import-fp",
+      "src/flask/json/tag.py",
+      "flask.json.tag"
+     ],
+     [
+      "import-fp",
+      "src/flask/sansio/app.py",
+      "flask"
+     ],
+     [
+      "import-fp",
+      "src/flask/sansio/app.py",
+      "name"
+     ]
+    ]
+   }
+  },
+  {
+   "repo": "got",
+   "commit": "e1d87d2",
+   "files": 121,
+   "indexMs": 71,
+   "generatedSkipped": 0,
+   "js": {
+    "files": 90,
+    "imports": {
+     "tp": 594,
+     "pred": 594,
+     "truth": 594,
+     "precision": 1,
+     "recall": 1
+    },
+    "symbols": {
+     "tp": 592,
+     "pred": 592,
+     "truth": 592,
+     "precision": 1,
+     "recall": 1
+    },
+    "sample": []
+   },
+   "py": null
+  },
+  {
+   "repo": "requests",
+   "commit": "611c616",
+   "files": 65,
+   "indexMs": 12,
+   "generatedSkipped": 0,
+   "js": null,
+   "py": {
+    "files": 37,
+    "imports": {
+     "tp": 297,
+     "pred": 297,
+     "truth": 297,
+     "precision": 1,
+     "recall": 1
+    },
+    "symbols": {
+     "tp": 315,
+     "pred": 315,
+     "truth": 316,
+     "precision": 1,
+     "recall": 0.9968354430379747
+    },
+    "sample": [
+     [
+      "sym-fn",
+      "tests/test_utils.py",
+      "PASSWORD"
+     ]
+    ]
+   }
+  },
+  {
+   "repo": "vite",
+   "commit": "dce9fe6",
+   "files": 2090,
+   "indexMs": 161,
+   "generatedSkipped": 1,
+   "js": {
+    "files": 1584,
+    "imports": {
+     "tp": 3660,
+     "pred": 3663,
+     "truth": 3663,
+     "precision": 0.9991809991809992,
+     "recall": 0.9991809991809992
+    },
+    "symbols": {
+     "tp": 3218,
+     "pred": 3218,
+     "truth": 3241,
+     "precision": 1,
+     "recall": 0.9929034248688676
+    },
+    "sample": [
+     [
+      "sym-fn",
+      "packages/create-vite/template-lit-ts/src/my-element.ts",
+      "global"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/rolldown.dts.config.ts",
+      "licenseCommentsRE"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/rolldown.dts.config.ts",
+      "consecutiveNewlinesRE"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/rolldown.dts.config.ts",
+      "identifierWithTrailingDollarRE"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/client/overlay.ts",
+      "HTMLElement"
+     ],
+     [
+      "import-fp",
+      "packages/vite/src/node/plugins/importAnalysis.ts",
+      "${clientPublicPath}"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/node/plugins/importAnalysis.ts",
+      "mergeAcceptedUrls"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/node/plugins/importAnalysis.ts",
+      "createParseErrorInfo"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/node/ssr/runtime/__tests__/fixtures/cjs-external-existing.js",
+      "result"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/node/ssr/runtime/__tests__/fixtures/esm-external-existing.js",
+      "result"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/node/ssr/runtime/__tests__/fixtures/hmr-reexport-race/entry-a.js",
+      "result"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/node/ssr/runtime/__tests__/fixtures/hmr-reexport-race/entry-b.js",
+      "result"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/node/ssr/runtime/__tests__/fixtures/no-this/importer.js",
+      "result"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/node/ssr/runtime/__tests__/fixtures/oxc-runtime-helper.ts",
+      "result"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/node/utils.ts",
+      "singlelineCommentsRE"
+     ],
+     [
+      "import-fp",
+      "packages/vite/src/node/__tests__/build.spec.ts",
+      "/asset.txt?url&marker=other"
+     ],
+     [
+      "import-fp",
+      "packages/vite/src/node/__tests__/build.spec.ts",
+      "style.css"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/src/types/connect.d.ts",
+      "Connect"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/types/importGlob.d.ts",
+      "global"
+     ],
+     [
+      "sym-fn",
+      "packages/vite/types/internal/cssPreprocessorOptions.d.ts",
+      "global"
+     ],
+     [
+      "sym-fn",
+      "playground/base-conflict/vite.config.ts",
+      "firstSegment"
+     ],
+     [
+      "import-fn",
+      "playground/hmr/accept-exports/dynamic-imports/dynamic-imports.ts",
+      "./deps-some-accepted"
+     ],
+     [
+      "import-fn",
+      "playground/hmr-ssr/accept-exports/dynamic-imports/dynamic-imports.ts",
+      "./deps-some-accepted"
+     ],
+     [
+      "sym-fn",
+      "playground/hmr-ssr/event.d.ts",
+      "global"
+     ],
+     [
+      "import-fn",
+      "playground/preload/src/main.js",
+      "./hello.js"
+     ],
+     [
+      "sym-fn",
+      "playground/resolve/utf8-bom-package/index.mjs",
+      "msg"
+     ],
+     [
+      "sym-fn",
+      "scripts/extract-changelog.ts",
+      "path"
+     ],
+     [
+      "sym-fn",
+      "scripts/extract-changelog.ts",
+      "version"
+     ],
+     [
+      "sym-fn",
+      "scripts/mergeChangelog.ts",
+      "result"
+     ]
+    ]
+   },
+   "py": null
+  },
+  {
+   "repo": "zod",
+   "commit": "b500a2e",
+   "files": 593,
+   "indexMs": 124,
+   "generatedSkipped": 1,
+   "js": {
+    "files": 520,
+    "imports": {
+     "tp": 1406,
+     "pred": 1406,
+     "truth": 1406,
+     "precision": 1,
+     "recall": 1
+    },
+    "symbols": {
+     "tp": 3669,
+     "pred": 3669,
+     "truth": 3684,
+     "precision": 1,
+     "recall": 0.995928338762215
+    },
+    "sample": [
+     [
+      "sym-fn",
+      "packages/bench/error-construction-breakdown.ts",
+      "global"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v3/helpers/enumUtil.ts",
+      "enumUtil"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v3/helpers/errorUtil.ts",
+      "errorUtil"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v3/helpers/partialUtil.ts",
+      "partialUtil"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v3/helpers/util.ts",
+      "util"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v3/helpers/util.ts",
+      "objectUtil"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v4/classic/tests/error-utils.test.ts",
+      "schema"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v4/classic/tests/error.test.ts",
+      "schema"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v4/classic/tests/nan.test.ts",
+      "schema"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v4/core/schemas.ts",
+      "handleDefaultResult"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v4/core/schemas.ts",
+      "$ZodPrefaultDef"
+     ],
+     [
+      "sym-fn",
+      "packages/zod/src/v4/core/util.ts",
+      "derived"
+     ],
+     [
+      "sym-fn",
+      "scripts/check-comments.ts",
+      "looksLikeEnglish"
+     ],
+     [
+      "sym-fn",
+      "scripts/check-comments.ts",
+      "isProse"
+     ],
+     [
+      "sym-fn",
+      "scripts/check-comments.ts",
+      "Block"
+     ]
+    ]
+   },
+   "py": null
+  }
+ ]
+}

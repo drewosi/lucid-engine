@@ -2,7 +2,9 @@ import { st, sortedPaths } from './state.js';
 import { estTokens, staticScore } from './smart-context.js';
 import { detectLang } from './indexer.js';
 import { afterIngest, capInfo, clearContext } from './ingest.js';
-import { $, copyText, rememberFocus, returnFocus, setStatus, toast, trap } from './helpers.js';
+import { $, copyText, lsGet, lsSet, rememberFocus, returnFocus, setStatus, toast, trap } from './helpers.js';
+import { LS } from './config.js';
+import { PASS_MIN, SEAL_ERRORS, checkMeta, generateToken, markUsed, seal, unseal, wasUsed } from './share-seal.js';
 import { convoIn } from './trace.js';
 import { setProvider } from './shell.js';
 import { download } from './export.js';
@@ -30,7 +32,7 @@ import { track } from './analytics.js';
 
 var SHARE_LINK_MAX_CHARS = 32000;      /* whole-URL ceiling: conservative so links survive chat apps and email */
 var SHARE_FORMAT = 'meridian-share', SHARE_VERSION = 1;
-var SHARE_HASH = '#share=', SHARE_DATA_PREFIX = 'v1.';
+var SHARE_HASH = '#share=', SHARE_DATA_PREFIX = 'v1.', SEALED_PREFIX = 'v2.', SEAL_OVERHEAD = 320; /* chars a sealed link adds: policy header + GCM tag, base64'd */
 var SHARE_MAX_FILE_CHARS = 512 * 1024; /* the same caps a folder load enforces; the file count is the FILE CAP setting, capInfo().maxFiles */
 var SHARE_MAX_TOTAL = 64 * 1024 * 1024;  /* decoded ceiling; also stops a decompression bomb mid-stream */
 var BUNDLE_MAX_BYTES = 96 * 1024 * 1024;
@@ -49,7 +51,10 @@ var SHARE_ERRORS = {
   toobig: function () { return 'This share is bigger than Meridian opens (512 KB per file, ' + capInfo().maxFiles.toLocaleString('en-US') + ' files, 64 MB in total). The file cap is adjustable in settings.'; },
   toolong: 'Too big for a link. Untick some files, or download a .meridian bundle instead.',
   unsupported: 'This browser cannot compress or decompress share links (it lacks CompressionStream). Try a current Chrome, Edge, Firefox or Safari.',
-  bundle: 'That file is not a Meridian share bundle (.meridian).'
+  bundle: 'That file is not a Meridian share bundle (.meridian).',
+  locked: 'This share is protected. Enter its passphrase to open it.',
+  used: 'This one-time share was already opened in this browser, so it will not open again here. Ask the sender for a new one.',
+  noprotect: 'Add a passphrase (or generate a token) to protect this share, or tick the permanent-link box to make an unprotected one.'
 };
 function shareError(code) {
   var m = SHARE_ERRORS[code] || SHARE_ERRORS.corrupt;
@@ -165,22 +170,66 @@ function encodeShareData(payload) {
   return deflate(new TextEncoder().encode(JSON.stringify(payload))).then(function (z) { return SHARE_DATA_PREFIX + b64urlEncode(z); });
 }
 /* 'v1.<base64url>' → validated payload; every failure is a shareError with a friendly message */
-function decodeShareData(data) {
+function decodeShareData(data, passphrase) {
+  var seal = null;
   return Promise.resolve().then(function () {
     if (!hasStreams()) throw shareError('unsupported');
     data = String(data || '').trim();
     try { data = decodeURIComponent(data); } catch (e) { throw shareError('corrupt'); }
     var m = /^v(\d+)\.(.*)$/.exec(data);
     if (!m) throw shareError('corrupt');
-    if (+m[1] !== SHARE_VERSION) throw shareError(+m[1] > SHARE_VERSION ? 'version' : 'corrupt');
+    if (+m[1] === 2) return unsealLink(m[2], passphrase).then(function (r) { seal = r.seal; return r.bytes; });
+    if (+m[1] !== SHARE_VERSION) throw shareError(+m[1] > 2 ? 'version' : 'corrupt');
     return inflate(b64urlDecode(m[2]), SHARE_MAX_TOTAL);
   }).then(function (bytes) {
     var obj;
     try { obj = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch (e) { throw shareError('corrupt'); }
-    return validatePayload(obj);
+    var p = validatePayload(obj);
+    if (seal) p.seal = seal;
+    return p;
   }).catch(function (e) {
     throw (e && e.friendly) ? e : shareError('corrupt'); /* stream errors (truncated / not deflate) surface as TypeErrors */
   });
+}
+/* ---- protected shares (v2): policy header + AES-GCM ciphertext, see share-seal.js ---- */
+function sealedMeta(headerB64) {
+  var meta;
+  try { meta = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(b64urlDecode(headerB64))); } catch (e) { throw shareError('corrupt'); }
+  try { checkMeta(meta); } catch (e) { throw shareError('corrupt'); }
+  return meta;
+}
+/* policy gates that need no passphrase: expired, already-opened one-time */
+function policyGate(meta) {
+  if (meta.exp > 0 && Date.now() > meta.exp) { var x = shareError('expired'); throw x; }
+  if (meta.once && wasUsed(function () { return lsGet(LS.sharesSeen); }, meta.id)) throw shareError('used');
+}
+function unsealLink(rest, passphrase) {
+  var dot = rest.indexOf('.');
+  if (dot < 1) throw shareError('corrupt');
+  var meta = sealedMeta(rest.slice(0, dot)), ct = b64urlDecode(rest.slice(dot + 1));
+  policyGate(meta);
+  if (!passphrase) { var lk = shareError('locked'); lk.meta = meta; throw lk; }
+  return unsealBytes(meta, ct, passphrase);
+}
+function unsealBytes(meta, ct, passphrase) {
+  return unseal(meta, ct, passphrase).then(function (z) {
+    return inflate(z, SHARE_MAX_TOTAL);
+  }).then(function (bytes) {
+    return { bytes: bytes, seal: { id: meta.id, exp: meta.exp, once: !!meta.once } };
+  }, function (e) { throw sealFail(e); });
+}
+function sealFail(e) {
+  if (e && e.friendly) { var x = new Error(e.friendly); x.code = e.code; x.friendly = e.friendly; return x; }
+  return shareError('corrupt');
+}
+/* payload -> sealed 'v2.<header>.<ciphertext>' */
+function encodeSealedData(payload, passphrase, opts) {
+  if (!hasStreams()) return Promise.reject(shareError('unsupported'));
+  return deflate(new TextEncoder().encode(JSON.stringify(payload))).then(function (z) {
+    return seal(z, passphrase, opts);
+  }).then(function (r) {
+    return SEALED_PREFIX + b64urlEncode(new TextEncoder().encode(JSON.stringify(r.meta))) + '.' + b64urlEncode(r.ct);
+  }, function (e) { throw sealFail(e); });
 }
 
 /* ---- links ---- */
@@ -192,21 +241,29 @@ function rawChars(paths) {
 }
 /* the encoded link size for a selection: { chars, fits, url (only when it fits), estimated }.
    Selections far past any plausible compression are estimated instead of encoded. */
-function measureLink(paths) {
+function measureLink(paths, opts) {
   if (!paths.length) return Promise.resolve({ chars: 0, fits: false, url: null, estimated: false, empty: true });
-  var raw = rawChars(paths);
-  if (raw > SHARE_LINK_MAX_CHARS * 64) return Promise.resolve({ chars: Math.round(raw * SHARE_EST_RATIO), fits: false, url: null, estimated: true });
+  var raw = rawChars(paths), extra = opts && opts.sealed ? SEAL_OVERHEAD : 0;
+  if (raw > SHARE_LINK_MAX_CHARS * 64) return Promise.resolve({ chars: Math.round(raw * SHARE_EST_RATIO) + extra, fits: false, url: null, estimated: true });
   return encodeShareData(buildSharePayload(paths)).then(function (d) {
     var url = shareBase() + SHARE_HASH + d;
-    var fits = url.length <= SHARE_LINK_MAX_CHARS;
-    return { chars: url.length, fits: fits, url: fits ? url : null, estimated: false };
+    var chars = url.length + extra, fits = chars <= SHARE_LINK_MAX_CHARS;
+    /* a sealed link is only real once encrypted: the measure is plain size + the header it will add */
+    return { chars: chars, fits: fits, url: fits && !extra ? url : null, estimated: false };
   });
 }
-/* the only path that hands out a link: refuses anything over the limit */
-function createShareLink(paths) {
-  return measureLink(paths).then(function (m) {
+/* the only path that hands out a link: refuses anything over the limit.
+   opts.pass (>= PASS_MIN chars) makes it a protected v2 link: { pass, expires, once } */
+function createShareLink(paths, opts) {
+  var sealed = !!(opts && opts.pass);
+  return measureLink(paths, { sealed: sealed }).then(function (m) {
     if (!m.fits) throw shareError(m.empty ? 'invalid' : 'toolong');
-    return m;
+    if (!sealed) return m;
+    return encodeSealedData(buildSharePayload(paths), opts.pass, opts).then(function (d) {
+      var url = shareBase() + SHARE_HASH + d;
+      if (url.length > SHARE_LINK_MAX_CHARS) throw shareError('toolong');
+      return { chars: url.length, fits: true, url: url, estimated: false, sealed: true };
+    });
   });
 }
 function isSecretish(p) { return SECRETISH.test(p); }
@@ -253,9 +310,35 @@ function parseBundleText(text) {
   if (!obj || obj.format !== SHARE_FORMAT) throw shareError('bundle');
   return validatePayload(obj);
 }
-function readBundleFile(file) {
+/* protected bundle: same envelope as a v2 link, as JSON. The note stays readable. */
+function sealedBundleText(payload, passphrase, opts) {
+  if (!hasStreams()) return Promise.reject(shareError('unsupported'));
+  return deflate(new TextEncoder().encode(JSON.stringify(payload))).then(function (z) { return seal(z, passphrase, opts); }).then(function (r) {
+    return JSON.stringify({ format: SHARE_FORMAT, v: 2, note: BUNDLE_NOTE + ' This one is passphrase-protected: you need the passphrase from the sender to open it.', name: payload.name, sealed: { meta: r.meta, ct: b64urlEncode(r.ct) } }, null, 1);
+  }, function (e) { throw sealFail(e); });
+}
+/* plain or protected bundle text -> Promise of a validated payload (protected ones need `pass`) */
+function parseBundleAny(text, pass) {
+  var obj;
+  try { obj = JSON.parse(text); } catch (e) { return Promise.reject(shareError('bundle')); }
+  if (!obj || obj.format !== SHARE_FORMAT) return Promise.reject(shareError('bundle'));
+  if (obj.v === 2 && obj.sealed && typeof obj.sealed === 'object') {
+    return Promise.resolve().then(function () {
+      var meta = obj.sealed.meta, ct;
+      try { checkMeta(meta); ct = b64urlDecode(String(obj.sealed.ct || '')); } catch (e) { throw shareError('corrupt'); }
+      policyGate(meta);
+      if (!pass) { var lk = shareError('locked'); lk.meta = meta; throw lk; }
+      return unsealBytes(meta, ct, pass).then(function (r) {
+        var inner; try { inner = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(r.bytes)); } catch (e) { throw shareError('corrupt'); }
+        var p = validatePayload(inner); p.seal = r.seal; return p;
+      });
+    });
+  }
+  try { return Promise.resolve(parseBundleText(text)); } catch (e) { return Promise.reject(e); }
+}
+function readBundleFile(file, pass) {
   if (!file || file.size > BUNDLE_MAX_BYTES) return Promise.reject(shareError(file ? 'toobig' : 'bundle'));
-  return file.text().then(parseBundleText, function () { throw shareError('bundle'); });
+  return file.text().then(function (t) { return parseBundleAny(t, pass); }, function () { throw shareError('bundle'); });
 }
 
 /* ---- opening: a read-only SHARED project in tab memory ---- */
@@ -269,7 +352,9 @@ function loadSharedPayload(payload, source) {
   st.lastDirHandle = null; st.pendingProject = null;
   payloadEntries(payload).forEach(function (kv) { st.totalBytes += kv[1].content.length; st.files.set(kv[0], kv[1]); });
   (payload.repos || []).forEach(function (r) { registerRepo(r, null); }); /* a shared workspace keeps its repos */
-  st.shared = { name: payload.name, count: payload.files.length, created: payload.created, source: source, repos: (payload.repos || []).length };
+  st.shared = { name: payload.name, count: payload.files.length, created: payload.created, source: source, repos: (payload.repos || []).length, seal: payload.seal || null };
+  /* one-time shares burn on the first open in this browser (cooperative: see share-seal.js) */
+  if (payload.seal && payload.seal.once) markUsed(function () { return lsGet(LS.sharesSeen); }, function (v) { lsSet(LS.sharesSeen, v); }, payload.seal.id, payload.seal.exp);
   var db = $('demobanner'); if (db) db.remove();
   afterIngest();
   syncSharedUI();
@@ -295,11 +380,50 @@ function openShareFromHash() {
   var data = h.slice(SHARE_HASH.length);
   try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
   setStatus('OPENING SHARED PROJECT…');
-  decodeShareData(data).then(function (p) { confirmOpen(p, 'link'); }).catch(showShareError);
+  withPassphrase(function (pass) { return decodeShareData(data, pass); }).then(function (p) { confirmOpen(p, 'link'); }).catch(showShareError);
 }
 function openBundleFile(file) {
   setStatus('OPENING SHARED BUNDLE…');
-  readBundleFile(file).then(function (p) { confirmOpen(p, 'bundle'); }).catch(showShareError);
+  withPassphrase(function (pass) { return readBundleFile(file, pass); }).then(function (p) { confirmOpen(p, 'bundle'); }).catch(showShareError);
+}
+
+/* ---- passphrase prompt for protected shares ---- */
+var passveil = $('passveil'), untrapPass = null;
+/* run tryOpen(); if the share is locked, ask for the passphrase and retry until it opens or the user cancels */
+function withPassphrase(tryOpen) {
+  return tryOpen().catch(function (e) {
+    if (!e || e.code !== 'locked') throw e;
+    return new Promise(function (resolve, reject) {
+      var inp = $('passin'), err = $('passerr'), go = $('passgo');
+      inp.value = ''; err.textContent = '';
+      $('passmeta').textContent = describeSeal(e.meta);
+      rememberFocus();
+      passveil.classList.add('on');
+      untrapPass = trap(passveil.querySelector('.modal'));
+      inp.focus();
+      var busy = false;
+      function close() { passveil.classList.remove('on'); if (untrapPass) { untrapPass(); untrapPass = null; } go.onclick = null; $('passcancel').onclick = null; $('passform').onsubmit = null; returnFocus(); }
+      function submit(ev) {
+        if (ev) ev.preventDefault();
+        if (busy) return;
+        if (inp.value.trim().length < PASS_MIN) { err.textContent = SEAL_ERRORS.weak; return; }
+        busy = true; go.disabled = true; err.textContent = 'checking…';
+        tryOpen(inp.value).then(function (p) { close(); busy = false; go.disabled = false; resolve(p); }, function (e2) {
+          busy = false; go.disabled = false;
+          if (e2 && e2.code === 'badpass') { err.textContent = e2.friendly; inp.select(); return; }
+          close(); reject(e2);
+        });
+      }
+      $('passform').onsubmit = submit;
+      $('passcancel').onclick = function () { close(); var c = new Error('cancelled'); c.code = 'cancelled'; c.friendly = 'Open cancelled. Nothing was loaded.'; reject(c); };
+    });
+  });
+}
+function describeSeal(meta) {
+  var bits = [];
+  bits.push(meta.exp > 0 ? 'expires ' + new Date(meta.exp).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'does not expire');
+  if (meta.once) bits.push('opens once in this browser');
+  return '// ' + bits.join(' · ');
 }
 
 /* rail chip + banner reflect st.shared; called on load and by clearContext() */
@@ -388,7 +512,7 @@ function remeasure() {
   $('sharelinkrow').hidden = true;
   $('sharecount').textContent = paths.length + ' OF ' + st.files.size;
   $('sharetxt').textContent = 'LINK · measuring…';
-  measureLink(paths).then(function (m) {
+  measureLink(paths, { sealed: !!readProtection() }).then(function (m) {
     if (gen !== shareGen) return;
     shareLast = { m: m, paths: paths };
     var bar = $('sharebar');
@@ -411,36 +535,58 @@ function needAck() {
   $('shareack').focus();
   return true;
 }
+/* protection options from the modal: null = none typed, false = typed but unusable (already toasted) */
+function readProtection() {
+  var pass = $('sharepass').value.trim();
+  if (!pass) return null;
+  if (pass.length < PASS_MIN) return false;
+  return { pass: pass, expires: $('shareexp').value, once: $('shareonce').checked };
+}
+function expiryWords(pr) { return pr.expires === 'never' ? 'no expiry' : 'expires in ' + (pr.expires === '24h' ? '24 hours' : '7 days'); }
 function copyShareLink() {
   if (needAck()) return;
   if (!shareSel.size) { toast('Tick at least one file to share.'); return; }
+  var pr = readProtection();
+  if (pr === false) { toast(SEAL_ERRORS.weak); $('sharepass').focus(); return; }
+  if (!pr && !$('sharepermit').checked) { toast(SHARE_ERRORS.noprotect); $('sharepass').focus(); return; }
   function give(m) {
     var inp = $('sharelink'); inp.value = m.url;
     $('sharelinkrow').hidden = false;
-    copyText(m.url, 'Share link copied. Anyone who has it can read the ' + shareSel.size + ' file' + (shareSel.size === 1 ? '' : 's') + ' inside.');
+    copyText(m.url, m.sealed
+      ? 'Protected link copied (' + expiryWords(pr) + (pr.once ? ', opens once' : '') + '). Send the passphrase separately, not in the same message.'
+      : 'Permanent link copied. Anyone who has it can read the ' + shareSel.size + ' file' + (shareSel.size === 1 ? '' : 's') + ' inside, for as long as they keep it.');
     inp.focus(); inp.select();
     track({ type: 'share_link', files: shareSel.size }); /* opt-in usage log: a count, never the link */
   }
-  /* reuse the measurement when it is current, so the copy stays inside the click */
-  if (shareLast && shareLast.paths.length === shareSel.size) {
-    if (shareLast.m.fits) give(shareLast.m); else toast(SHARE_ERRORS.toolong);
-    return;
-  }
-  createShareLink(Array.from(shareSel)).then(give).catch(function (e) { toast((e && e.friendly) || SHARE_ERRORS.toolong); });
+  /* reuse the measurement when it is current (plain links), so the copy stays inside the click */
+  if (!pr && shareLast && shareLast.paths.length === shareSel.size && shareLast.m.url) { give(shareLast.m); return; }
+  createShareLink(Array.from(shareSel), pr || undefined).then(give).catch(function (e) { toast((e && e.friendly) || SHARE_ERRORS.toolong); });
 }
 function downloadBundle() {
   if (needAck()) return;
   if (!shareSel.size) { toast('Tick at least one file to share.'); return; }
+  var pr = readProtection();
+  if (pr === false) { toast(SEAL_ERRORS.weak); $('sharepass').focus(); return; }
   var payload = buildSharePayload(Array.from(shareSel));
   var fname = (payload.name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'project') + '.meridian';
+  var n = payload.files.length, plural = n + ' file' + (n === 1 ? '' : 's');
+  if (pr) {
+    sealedBundleText(payload, pr.pass, pr).then(function (text) {
+      download(fname, 'application/json', text);
+      track({ type: 'share_bundle', files: n });
+      toast('Protected bundle saved as ' + fname + ' (' + expiryWords(pr) + (pr.once ? ', opens once' : '') + '). Send the passphrase separately.');
+    }).catch(function (e) { toast((e && e.friendly) || 'Could not protect the bundle.'); });
+    return;
+  }
   download(fname, 'application/json', bundleText(payload));
-  track({ type: 'share_bundle', files: payload.files.length });
-  toast('Bundle saved as ' + fname + '. Anyone who has the file can read the ' + payload.files.length + ' file' + (payload.files.length === 1 ? '' : 's') + ' inside.');
+  track({ type: 'share_bundle', files: n });
+  toast('Bundle saved as ' + fname + '. It is not protected: anyone who has the file can read the ' + plural + ' inside.');
 }
 function openShare() {
   if (!st.files.size) { toast('Load a project first.'); return; }
   $('shareack').checked = false;
   $('sharelinkrow').hidden = true; $('sharelink').value = '';
+  $('sharepass').value = ''; $('shareexp').value = '7d'; $('shareonce').checked = false; $('sharepermit').checked = false;
   shareSel = new Set(); shareLast = null;
   $('sharelist').innerHTML = '';
   $('sharetxt').textContent = 'LINK · choosing files that fit…';
@@ -474,7 +620,7 @@ function closeShare() {
   returnFocus();
 }
 
-export { BUNDLE_NOTE, FILE_FIELDS, PAYLOAD_FIELDS, SHARE_LINK_MAX_CHARS, bundleText, buildSharePayload, closeShare, createShareLink, decodeShareData, defaultSharePaths, encodeShareData, isSecretish, measureLink, openBundleFile, openShare, openShareFromHash, parseBundleText, payloadEntries, readBundleFile, shareveil, syncSharedUI };
+export { SEALED_PREFIX, encodeSealedData, parseBundleAny, sealedBundleText, BUNDLE_NOTE, FILE_FIELDS, PAYLOAD_FIELDS, SHARE_LINK_MAX_CHARS, bundleText, buildSharePayload, closeShare, createShareLink, decodeShareData, defaultSharePaths, encodeShareData, isSecretish, measureLink, openBundleFile, openShare, openShareFromHash, parseBundleText, payloadEntries, readBundleFile, shareveil, syncSharedUI };
 
 export function initShare() {
   $('sharebtn').addEventListener('click', openShare);
@@ -482,6 +628,12 @@ export function initShare() {
   shareveil.addEventListener('click', function (e) { if (e.target === shareveil) closeShare(); });
   $('sharecopy').addEventListener('click', copyShareLink);
   $('sharebundle').addEventListener('click', downloadBundle);
+  $('sharegen').addEventListener('click', function () {
+    var t = generateToken(); $('sharepass').value = t;
+    toast('Token generated: ' + t + '. Copy it now and send it separately from the link.');
+    remeasure();
+  });
+  $('sharepass').addEventListener('change', remeasure);
   $('shareall').addEventListener('click', function () { shareSel = new Set(sortedPaths()); renderShareList(); remeasure(); });
   $('sharenone').addEventListener('click', function () { shareSel = new Set(); renderShareList(); remeasure(); });
   $('sharefit').addEventListener('click', function () {
