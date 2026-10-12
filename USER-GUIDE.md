@@ -388,6 +388,24 @@ shell command.
 
 ---
 
+### The evidence check (model answers)
+
+After every model answer, MERIDIAN checks the citations it can see, with no model involved:
+the cited file is loaded, the line range exists, and any quoted snippet really sits inside
+the cited range (whitespace and quote style are forgiven; `...` in a quote skips text). It
+reads citations in the trace **and** in the prose (`src/app.js:12-14`, `app.js line 12`),
+so it still works when the model ignored the trace format.
+
+- **`✓ EVIDENCE VERIFIED`**: every citation checked out. That means the evidence exists where
+  claimed, not that the model's reasoning from it is right.
+- **`✗ UNVERIFIED`**: at least one citation failed. The strip lists each one (missing file,
+  range past the end of the file, quote not in that range and where it actually is). Use
+  **[ RE-GROUND & RETRY ]** to re-run the deterministic investigation and ask again, stricter.
+- **`○ UNCITED`**: nothing to check. Treat the answer as unsupported by the loaded code.
+
+The verdict is included in the Markdown export. LOCAL answers are deterministic and are not
+post-checked.
+
 ## 9. Control what gets sent (AI only)
 
 - **CONTEXT: SMART vs FULL**
@@ -456,7 +474,23 @@ which files go in, then either copy a **link** or download a **bundle**.
   address after `#`. Browsers never send that part to a server, so GitHub Pages
   never receives it, and neither do we. **Anyone who has the link can read those
   files**, and so can the chat app or inbox you paste it into. There is no server,
-  so a link can't be revoked or expired.
+  so a link that has been copied can't be recalled by anyone.
+- **Protect it.** The **PROTECTION** box sets a passphrase (8+ characters) or
+  generates a random token, an expiry (**24 hours, 7 days or never**) and
+  optionally **self-destruct after the first open**. The files are then encrypted
+  in your browser (AES-GCM, key derived from the passphrase) and the link carries
+  only ciphertext plus a small readable header: a random id, the expiry, the
+  one-time flag. Editing the header (to extend an expiry, say) breaks the link
+  instead of extending it. **Send the passphrase by a different channel than the
+  link.** A link with no passphrase is a *permanent, unprotected link* and needs
+  its own checkbox; don't use that for company code.
+- **What protection does not do.** It is not revocation. Expiry and "opens once"
+  are enforced by the opener's Meridian, on that browser's clock and that
+  browser's storage (it remembers the id of a one-time share in `localStorage`,
+  nothing else). They stop old links resurfacing in chat history; they do not stop
+  a recipient who kept the link and passphrase and tampers with their own copy of
+  the page. The passphrase is the real lock. For true revocation, share through a
+  system you operate.
 - **Links have a size limit: 32,000 characters.** The panel shows the live size
   against the limit. Everything is ticked by default when it fits; otherwise
   **[ FIT TO LINK ]** picks the most important files that do (READMEs, manifests,
@@ -465,6 +499,8 @@ which files go in, then either copy a **link** or download a **bundle**.
 - **Too big for a link? Download a bundle.** A `.meridian` file holds the same
   data as readable JSON (open it in a text editor to see what's inside)
   and is not held to the link limit, so it suits big projects. Send it as a file.
+  Set a passphrase and the bundle is encrypted the same way as a link (the file
+  then shows a readable note and ciphertext only); without one it is plain text.
   Opening one is held to the same limits as any load: 512 KB per file, the file
   cap, 64 MB of text in total, and a 96 MB bundle file.
 - **Never included:** API keys, provider settings, the conversation, saved
@@ -480,7 +516,9 @@ which files go in, then either copy a **link** or download a **bundle**.
 the `.meridian` file on the drop zone). The project loads **read-only**, badged
 `SHARED · READ-ONLY`: it lives in that tab's memory only, isn't saved (save
 project is blocked), and leaves nothing in browser storage. The `#share=…` part is
-removed from the address bar once loaded, so it isn't passed on by accident. Ask
+removed from the address bar once loaded, so it isn't passed on by accident. A
+protected share asks for its passphrase first; an expired link, a wrong
+passphrase or a one-time link already opened in this browser each say so plainly. Ask
 questions as usual, with **LOCAL** (no key) or your own key. Loading your own
 folder replaces it.
 
@@ -613,6 +651,11 @@ The app is plain browser files with **no build step**, but it must be served ove
 Any static host works; GitHub Pages needs no configuration. Editing is
 edit-refresh-ship, with no compile step.
 
+**Offline and air-gapped use, containers, zip packaging, an internal model gateway and an audit-log
+collector** are covered in [docs/AIRGAPPED.md](docs/AIRGAPPED.md). Short version: serve the folder
+over `http://localhost` (not `file://`), the LOCAL engine and protected shares need no network, and
+`deploy/Dockerfile` gives you a non-root nginx with real security headers.
+
 ### Point it at a private model endpoint
 
 The hosted page's CSP only allows network to `api.anthropic.com`,
@@ -642,6 +685,16 @@ endpoint). Neither does the landing page.
 
 ## 14. Troubleshooting & FAQ
 
+- **"Indexing" stays in the status bar.** Large projects index in a background worker; the overview shows
+  a partial count until it finishes. *Cancel background indexing* in the palette keeps the partial index.
+  Add `?noworker=1` to the URL to force the in-page indexer. *Diagnostics* (palette) reports whether the
+  worker ran or fell back.
+- **"This share link has expired" / "already opened in this browser" / "does not open this share".** Protected
+  shares check the expiry on your clock, remember one-time ids in this browser, and need the exact
+  passphrase. Ask the sender for a new share; see [§10](#10-save-reload-export).
+- **UNVERIFIED on a good-looking answer.** A citation failed the check: open the list under the answer. The
+  model may have mis-numbered lines or paraphrased a quote; re-ground and retry.
+- **Counts differ from last time.** The v0.7 indexer is more accurate; see [MIGRATION.md](MIGRATION.md).
 - **"The engine won't load."** You opened the file directly (`file://`). Serve it
   over `http://` ([§13](#13-run-it-on-your-own-machine)).
 - **"Send does nothing / it asks for a key."** You're on an AI provider with no key
@@ -681,7 +734,8 @@ endpoint). Neither does the landing page.
   third-party scripts**.
 - **Share links and bundles contain your code.** The link's code sits after `#`,
   which never reaches any server (GitHub Pages included), but whoever holds the
-  link or `.meridian` file can read the files in it. Keys and settings are never
+  link or `.meridian` file can read the files in it unless you protected it with a
+  passphrase (and then they need that too). Keys and settings are never
   included. See [§10](#10-save-reload-export).
 - **Usage analytics are opt-in and local.** Off by default. When on, a usage log
   (question kind, provider, timings, counts; never code, paths or keys; question
