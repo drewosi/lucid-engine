@@ -127,9 +127,18 @@ function partialNote(idx) {
 /* honest-labeling note for graph answers: the indexer skips >400-char lines, so
    import edges on them are invisible — orphans/broken must say so, not imply certainty */
 function longLineNote(idx) {
-  if (!idx.longLineCount) return '';
-  return '\n\nNote: ' + plural(idx.longLineCount, 'line') + ' over 400 chars in ' + plural(Object.keys(idx.longLinesByFile).length, 'file')
-    + ' were not indexed (minified/one-line content): imports on those lines are invisible, so such files can appear orphaned or their targets unresolved.';
+  var out = '';
+  if (idx.longLineCount) {
+    out += '\n\nNote: ' + plural(idx.longLineCount, 'line') + ' over 400 chars in ' + plural(Object.keys(idx.longLinesByFile).length, 'file')
+      + ' were not indexed (minified/one-line content): imports on those lines are invisible, so such files can appear orphaned or their targets unresolved.';
+    var pct = idx.lineCount ? idx.longLineCount * 100 / idx.lineCount : 0;
+    if (pct > 10) out += '\n\n**Warning:** ' + Math.round(pct) + '% of all lines were skipped as over-long. This index is unreliable for this project; treat counts and graph answers as lower bounds.';
+  }
+  if (idx.generated && idx.generated.length) {
+    out += '\n\nNote: ' + plural(idx.generated.length, 'generated/minified/vendored file') + ' (e.g. `' + idx.generated.slice(0, 3).map(function (g) { return g.file; }).join('`, `')
+      + '`) were not mined for symbols or imports.';
+  }
+  return out;
 }
 
 /* shared evidence-gathering used by plain + reason: term search → ranked files.

@@ -94,6 +94,30 @@ function carryState(ln, state) {
   var q = quoteStateAt(ln, ln.length, state);
   return q === '`' || q === '/*' ? q : '';
 }
+/* Generated / vendored / minified files: their "symbols" and "imports" are noise
+   (a bundler's output, protobuf stubs, a vendored library). They stay loaded and
+   searchable, but are not mined for definitions or edges, and the index lists them
+   so answers can say what was left out. Path patterns first (cheap), then a content
+   sniff: a generator banner in the head, or a few very long lines. */
+var GENERATED_PATH_RE = /(\.min\.(?:js|css|mjs)$|\.bundle\.(?:js|mjs)$|(?:^|\/)(?:dist|vendor|third[_-]party|node_modules)\/|\.pb\.go$|_pb2?(?:_grpc)?\.(?:py|js|ts)$|\.generated\.|_generated\.|\.g\.dart$|\.designer\.cs$|-lock\.|\.lock$)/i;
+var GENERATED_HEAD_RE = /(@generated|\bcode generated\b[^\n]*\bdo not edit\b|\bauto-?generated\b[^\n]*\b(?:do not|don't) (?:edit|modify)\b|\bthis file (?:is|was) (?:auto-?)?generated\b)/i;
+function generatedReason(path, content, longLine) {
+  if (GENERATED_PATH_RE.test(path)) return 'path';
+  if (GENERATED_HEAD_RE.test(content.slice(0, 600))) return 'banner';
+  /* minified without a .min name: a big file whose first lines are mostly over the cap */
+  if (content.length > 2000) {
+    var sample = content.slice(0, 6000).split('\n'), long = 0;
+    for (var i = 0; i < sample.length; i++) if (sample[i].length > longLine) long++;
+    if (long >= 2 && long / sample.length > 0.5) return 'minified';
+  }
+  return '';
+}
+/* multi-line JS/TS import/export lists: the specifier lives on the closing line,
+   `} from 'x'`. Only honored after a line opened a brace list with import/export. */
+var JS_BRACE_OPEN_RE = /^\s*(?:import|export)\s+(?:type\s+)?(?:[\w$]+\s*,\s*)?\{[^}]*$/;
+var JS_BRACE_CLOSE_RE = /^\s*\}\s*from\s+['"]([^'"]+)['"]/;
+var BRACE_LOOKBACK = 400;
+
 /* code-health scans, same single pass */
 var TODO_RE = /\b(TODO|FIXME|HACK|XXX)\b/;
 var ENV_RE = /\bprocess\.env\.([A-Z_][A-Z0-9_]*)|\bprocess\.env\[['"]([A-Z_][A-Z0-9_]*)['"]\]|\bimport\.meta\.env\.([A-Z_][A-Z0-9_]*)|\bos\.environ(?:\.get)?\s*[([]\s*['"]([A-Z_][A-Z0-9_]*)['"]|\bos\.getenv\(\s*['"]([A-Z_][A-Z0-9_]*)['"]|\bos\.Getenv\(\s*"([A-Z_][A-Z0-9_]*)"|\benv::var\(\s*"([A-Z_][A-Z0-9_]*)"|\bENV\[['"]([A-Z_][A-Z0-9_]*)['"]\]/;
@@ -408,6 +432,7 @@ function buildIndexCore(files, opts) {
   var symCountByFile = Object.create(null); /* file -> definition count */
   var entries = [], tests = [], configs = [], docs = [], byExt = Object.create(null), langs = Object.create(null);
   var csNamespaces = Object.create(null), csNsCount = 0; /* C# namespace -> first declaring file */
+  var generated = [], totalLines = 0; /* generated/minified files left unmined · lines seen */
   var longLinesByFile = Object.create(null), longLineCount = 0; /* >400-char lines the scanner skipped */
   var paths = Array.from(F.keys()).sort(), symbolCount = 0, importCount = 0;
   buildResolvers(paths);
@@ -443,9 +468,12 @@ function buildIndexCore(files, opts) {
     if (README_NAMES.test(name) || DOCS_PATH.test(p) || /\.(md|mdx|rst)$/i.test(name)) docs.push(p);
     if (ENTRY_NAMES.test(name) && !TEST_PATH.test(p)) entries.push(p);
 
-    var isGo = ext === 'go', inGoImport = false;
+    var genWhy = generatedReason(p, f.content, skipLong);
+    if (genWhy) { generated.push({ file: p, why: genWhy }); totalLines += f.content.split('\n').length; continue; }
+    var isGo = ext === 'go', inGoImport = false, braceOpenAt = -1;
     var carry = JS_CARRY_LANGS[lang] ? '' : null; /* null: no cross-line state for this language */
     var lines = f.content.split('\n');
+    totalLines += lines.length;
     for (var i = 0; i < lines.length; i++) {
       var ln = lines[i];
       if (ln.length > skipLong) { /* skip minified/one-liners — but count, so answers can disclose */
@@ -555,6 +583,15 @@ function buildIndexCore(files, opts) {
           recordImport(p, im[1], i + 1); break;
         }
       }
+      /* multi-line brace lists (JS-family): remember where one opened, claim its `} from` */
+      if (JS_CARRY_LANGS[lang] && carry === '') {
+        if (JS_BRACE_OPEN_RE.test(ln)) braceOpenAt = i;
+        else if (braceOpenAt !== -1) {
+          var bc = JS_BRACE_CLOSE_RE.exec(ln);
+          if (bc && i - braceOpenAt <= BRACE_LOOKBACK) { recordImport(p, bc[1], braceOpenAt + 1); braceOpenAt = -1; }
+          else if (/\}/.test(ln) || i - braceOpenAt > BRACE_LOOKBACK) braceOpenAt = -1;
+        }
+      }
       if (carry !== null) carry = carryState(ln, carry);
     }
   }
@@ -581,7 +618,8 @@ function buildIndexCore(files, opts) {
       exportsByFile: exportsByFile, todos: todos, envVars: envVars, symCountByFile: symCountByFile,
       entries: entries, tests: tests, configs: configs, docs: docs,
       byExt: byExt, langs: langs, packages: detectPackages(paths, F),
-      longLinesByFile: longLinesByFile, longLineCount: longLineCount, partial: partialFlag
+      longLinesByFile: longLinesByFile, longLineCount: longLineCount, partial: partialFlag,
+      generated: generated, lineCount: totalLines
     };
   }
   var result = assemble(paths.length, false);
