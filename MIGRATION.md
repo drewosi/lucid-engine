@@ -47,5 +47,10 @@ projects are untouched, the LOCAL engine still needs no key, and old share links
 - The index scan moved to `app/index-core.js` (pure, no DOM). `app/indexer.js` is now the thin main-thread wrapper
   and `app/index-run.js` owns the worker. Path classifiers live in `app/paths.js`.
 - New self-test files: `selftest-index.js`, `selftest-seal.js`, `selftest-verify.js`, `selftest-diag.js`,
-  `selftest-parity.js`. They are run from `selftest.js`.
+  `selftest-parity.js`, plus the areas split out of `selftest.js`: `selftest-ingest.js`, `selftest-share.js`,
+  `selftest-workspace.js`, `selftest-demo.js`, `selftest-routing.js`, `selftest-wire.js`, `selftest-smart.js`,
+  `selftest-analytics.js` and the shared `selftest-fixture.js`. They are all run from `selftest.js`.
+- `intents.js` now assembles the LOCAL intent registry from `intents-overview.js`, `intents-health.js`,
+  `intents-inventory.js`, `intents-symbols.js` and `intents-fallback.js` (array order is still the routing
+  cascade); shared helpers moved to `intents-core.js`. The exports of `intents.js` are unchanged.
 - `scripts/eval-index.mjs` scores the indexer against real repositories (see the README).

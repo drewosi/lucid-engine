@@ -622,7 +622,7 @@ tag, the app also runs a **frame-buster** and refuses to run inside an iframe.
 (Residual risk: no CSP directive restricts top-level navigation. CSP narrows
 the attack surface; it doesn't make key theft impossible.)
 
-**Self-tests.** A deterministic suite (**350+ checks**) exercises the index,
+**Self-tests.** A deterministic suite (**520+ checks**) exercises the index,
 smart packer, intent router, the analyses/instruments, the resolvers, the ingest
 caps, the bounded search, share links, workspaces, usage analytics (off by
 default, no writes while off, nothing sensitive stored, export, clear, no
@@ -774,6 +774,12 @@ your browser's network inspector.
   turns so repeat input costs far less (Anthropic).
 - **CORS**: the browser rule a server must satisfy to accept requests from another
   origin; a custom endpoint must allow MERIDIAN's origin.
+
+---
+
+**License and terms.** The source code is [MIT](LICENSE) licensed; run your own copy and the license
+is all that governs it. The hosted [Terms](terms.html) and [Privacy](privacy.html) cover only the public demo
+at drewosi.github.io.
 
 ---
 
