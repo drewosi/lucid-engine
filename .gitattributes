@@ -1,0 +1,8 @@
+# Committed media is binary: never diffed, merged or line-ending converted.
+# Large files here bloat every clone for good (history is permanent), so new
+# binaries over 1 MB need a conversation first. See docs/MEDIA.md.
+media/*.gif binary
+media/*.mp4 binary
+media/*.jpg binary
+media/*.png binary
+media/*.webp binary
