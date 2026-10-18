@@ -3,7 +3,7 @@ import { LS, PROVIDERS } from './config.js';
 import { APP_VERSION } from './version.js';
 import { detectLang } from './index-core.js';
 import { indexRunInfo, indexingState } from './index-run.js';
-import { lsGet, rememberFocus, returnFocus, toast, trap, copyText } from './helpers.js';
+import { lsGet, rememberFocus, returnFocus, trap, copyText } from './helpers.js';
 /* ============ DIAGNOSTICS (REDACTED, NO SOURCE, NO PATHS) ============
    A report a user can paste into a support ticket: version, counts, language mix,
    index stats, the last error, browser capabilities and settings flags.

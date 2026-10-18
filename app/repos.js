@@ -31,11 +31,6 @@ function repoOf(p) {
   var r = p.slice(0, i);
   return hasRepo(r) ? r : LOOSE;
 }
-/* the path inside its repo, label stripped */
-function relOf(p) {
-  var r = repoOf(p);
-  return r === LOOSE ? p : p.slice(r.length + 1);
-}
 /* registered repos with live file counts, plus the loose pseudo-repo when it has
    files and a real repo exists. Cached until the next invalidateAll(). */
 function repoList() {
@@ -348,5 +343,5 @@ function workspaceFacts(idx) {
   return { repos: list.map(function (r) { return stats[r.label]; }), sharedDeps: sharedDeps, links: links, crossImports: crossImports, sharedNames: sharedNames };
 }
 
-export { LOOSE, activeRepo, citeText, cleanLabel, displayPath, displayText, dropRepoFiles, fullFiles, hasRepo, inScopedCall, isMulti, manifestDeps, registerRepo, relOf, remapRoot,
+export { LOOSE, activeRepo, citeText, cleanLabel, displayPath, displayText, dropRepoFiles, fullFiles, hasRepo, inScopedCall, isMulti, manifestDeps, registerRepo, remapRoot,
   repoList, repoName, repoOf, resetWorkspace, resolveCitePath, scopeFilter, scopeRepo, uniqueLabel, withFull, withRepo, withScope, workspaceFacts, workspaceNote };
