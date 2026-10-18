@@ -18,7 +18,8 @@ needs no key and is the default start. MIT licensed; hosted terms/privacy cover 
 
 ## Structure
 - app/: ES modules. index-core.js is the pure indexer (no DOM); indexer.js is the main-thread wrapper; index-run.js
-  owns the worker; paths.js holds path classifiers. selftest.js runs selftest-*.js.
+  owns the worker; paths.js holds path classifiers. selftest.js runs selftest-*.js. intents.js assembles the LOCAL intent registry
+  from intents-*.js groups (array order = routing cascade; shared helpers in intents-core.js).
 - index.html (landing), app.html (app), dna.html (design DNA), one-pager.html, privacy.html, terms.html.
 - scripts/: demo recording, screenshot capture, eval, packaging. media/: committed demo mp4/gif plus poster and
   screenshot jpgs.
